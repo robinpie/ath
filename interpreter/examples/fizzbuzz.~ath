@@ -1,0 +1,23 @@
+// FizzBuzz in !~ATH
+
+RITE fizzbuzz(n, max) {
+    SHOULD n <= max {
+        SHOULD n % 15 == 0 {
+            UTTER("FizzBuzz");
+        } LEST SHOULD n % 3 == 0 {
+            UTTER("Fizz");
+        } LEST SHOULD n % 5 == 0 {
+            UTTER("Buzz");
+        } LEST {
+            UTTER(n);
+        }
+
+        // Chain to next iteration via timer
+        import timer T(1ms);
+        ~ATH(T) {
+        } EXECUTE(fizzbuzz(n + 1, max));
+    }
+}
+
+fizzbuzz(1, 97);
+THIS.DIE();

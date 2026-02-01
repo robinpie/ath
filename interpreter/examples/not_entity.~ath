@@ -1,0 +1,13 @@
+// Test NOT entity (dies when entity is created)
+
+import timer T(1s);
+
+// This should execute immediately since T exists
+~ATH(!T) {
+} EXECUTE(UTTER("Timer T was created!"));
+
+// Wait for actual timer
+~ATH(T) {
+} EXECUTE(UTTER("Timer T expired after 1 second"));
+
+THIS.DIE();

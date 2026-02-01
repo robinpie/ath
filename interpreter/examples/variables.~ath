@@ -1,0 +1,57 @@
+// Variable and expression test
+
+import timer T(1ms);
+
+~ATH(T) {
+} EXECUTE(
+    // Basic variables
+    BIRTH x WITH 5;
+    BIRTH y WITH 10;
+    UTTER("x =", x, ", y =", y);
+
+    // Arithmetic
+    BIRTH sum WITH x + y;
+    BIRTH product WITH x * y;
+    UTTER("sum =", sum, ", product =", product);
+
+    // String operations
+    BIRTH name WITH "Karkat";
+    BIRTH greeting WITH "Hello, " + name + "!";
+    UTTER(greeting);
+
+    // Arrays
+    BIRTH arr WITH [1, 2, 3, 4, 5];
+    UTTER("Array:", arr);
+    UTTER("First:", FIRST(arr));
+    UTTER("Last:", LAST(arr));
+    UTTER("Length:", LENGTH(arr));
+
+    // Maps
+    BIRTH person WITH {name: "Sollux", age: 6};
+    UTTER("Person:", person);
+    UTTER("Name:", person.name);
+    UTTER("Age:", person["age"]);
+
+    // Conditionals
+    SHOULD x < y {
+        UTTER("x is less than y");
+    } LEST {
+        UTTER("x is not less than y");
+    }
+
+    // Constants
+    ENTOMB PI WITH 3.14159;
+    UTTER("PI =", PI);
+
+    // Rites (functions)
+    RITE factorial(n) {
+        SHOULD n <= 1 {
+            BEQUEATH 1;
+        }
+        BEQUEATH n * factorial(n - 1);
+    }
+
+    UTTER("5! =", factorial(5));
+);
+
+THIS.DIE();
