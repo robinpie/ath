@@ -73,9 +73,93 @@ The interpreter follows a classic pipeline: **Lexer → Parser → Interpreter**
 - **Bifurcation** creates concurrent branches via `asyncio.create_task()`
 - **Entity reuse**: When re-importing an entity with the same name, the old one is killed and replaced
 
+## JavaScript Interpreter
+
+A browser-compatible JavaScript implementation of the !~ATH interpreter is in `js-interpreter/`. This is a complete port of the Python version, excluding features that require OS access.
+
+### Features & Limitations
+
+**Included**:
+- All lexer, parser, and interpreter functionality
+- Timer entities (using `setTimeout`)
+- Bifurcation and branch entities
+- All built-in rites except SCRY/INSCRIBE
+- Full expression language with rites, conditionals, try-catch
+- Entity combinations (&&, ||, !)
+- 301 test cases (all passing)
+
+**Excluded** (browser limitations):
+- `ProcessEntity` - Cannot spawn OS processes
+- `ConnectionEntity` - No raw TCP sockets
+- `WatcherEntity` - No file system access
+- `SCRY` builtin - No file reading
+- `INSCRIBE` builtin - No file writing
+
+### Running Tests
+
+From project root:
+```bash
+# Run all 301 tests (lexer, parser, interpreter, builtins, edge-cases)
+node --test js-interpreter/test/*.test.js
+
+# Run specific test file
+node --test js-interpreter/test/interpreter.test.js
+```
+
+### Directory Structure
+
+```
+js-interpreter/
+├── package.json
+├── src/
+│   ├── index.js          # Public API (TildeAth class)
+│   ├── errors.js         # Error hierarchy
+│   ├── tokens.js         # TokenType enum, Token class
+│   ├── lexer.js          # Tokenizer
+│   ├── parser.js         # Recursive descent parser
+│   ├── ast.js            # AST node factories
+│   ├── entities.js       # Entity classes (uses Promise-based DeathEvent)
+│   ├── scope.js          # Scope and UserRite classes
+│   ├── builtins.js       # Built-in rites
+│   └── interpreter.js    # Async interpreter engine
+└── test/
+    ├── lexer.test.js     # 60+ tokenizer tests
+    ├── parser.test.js    # 100+ parser tests
+    ├── interpreter.test.js   # 63 runtime behavior tests
+    ├── builtins.test.js  # 70+ built-in function tests
+    └── edge-cases.test.js    # Complex scenario tests
+```
+
+### Usage
+
+```javascript
+import { TildeAth } from './js-interpreter/src/index.js';
+
+const output = [];
+const runtime = new TildeAth({
+  onOutput: (text) => output.push(text),
+});
+
+await runtime.run(`
+  import timer T(1ms);
+  ~ATH(T) { } EXECUTE(UTTER("Hello from !~ATH!"));
+  THIS.DIE();
+`);
+
+console.log(output); // ["Hello from !~ATH!"]
+```
+
+### Key Implementation Details
+
+- **Promise-based death signaling**: Uses custom `DeathEvent` class (Promise wrapper) instead of Python's `asyncio.Event`
+- **Entity entity starts**: Timers use `setTimeout`, entity start methods return Promises tracked in `_pendingPromises`
+- **Cleanup**: Interpreter's finally block kills all entities to ensure pending timers don't hang
+- **Test framework**: Node.js built-in `node:test` module with no external dependencies
+- **Module type**: ESM (ECMAScript modules)
+
 ## Known Gotchas
 
-- The directory name `!~ath dev` contains `!` which causes bash escaping issues. Be careful to use proper escaping when running shell commands.
+- The directory name `!~ath dev` contains `!` which causes bash escaping issues. Always refer to file paths from the perspective of the project directory (use relative paths like `js-interpreter/test/foo.js` rather than trying to cd into directories with special characters).
 - In !~ATH, bare expressions like `1 + 2;` are not valid at the top level; must be wrapped in statements.
 
 # !~ATH Spec
