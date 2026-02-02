@@ -77,6 +77,12 @@ The interpreter follows a classic pipeline: **Lexer → Parser → Interpreter**
 
 A browser-compatible JavaScript implementation of the !~ATH interpreter is in `js-interpreter/`. This is a complete port of the Python version, excluding features that require OS access.
 
+**IMPORTANT:** The interpreter is bundled in two locations:
+- `js-interpreter/` - ES modules version (for Node.js, testing)
+- `webpage/tildeath.js` - IIFE bundle (for browser, works with `file:///`)
+
+When making changes to the JS interpreter that are applicable to both, **update both locations** to keep them in sync.
+
 ### Features & Limitations
 
 **Included**:
