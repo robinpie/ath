@@ -1,0 +1,1 @@
+BIRTH q WITH "BIRTH q WITH PLACEHOLDER; BIRTH e WITH REPLACE(REPLACE(q, \"\\\\\", \"\\\\\\\\\"), \"\\\"\", \"\\\\\\\"\"); UTTER(REPLACE(q, \"PLACE\" + \"HOLDER\", \"\\\"\" + e + \"\\\"\")); THIS.DIE();"; BIRTH e WITH REPLACE(REPLACE(q, "\\", "\\\\"), "\"", "\\\""); UTTER(REPLACE(q, "PLACE" + "HOLDER", "\"" + e + "\"")); THIS.DIE();

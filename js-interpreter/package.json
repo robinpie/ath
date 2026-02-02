@@ -1,0 +1,25 @@
+{
+  "name": "tilde-ath",
+  "version": "1.0.0",
+  "description": "JavaScript interpreter for the !~ATH esoteric programming language",
+  "main": "src/index.js",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "interpreter",
+    "esoteric",
+    "programming-language",
+    "tilde-ath",
+    "homestuck"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
