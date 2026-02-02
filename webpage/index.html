@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>!~ATH Interpreter</title>
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #535353;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 14px;
+  color: #000;
+  padding: 20px;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.card {
+  background: #eeeeee;
+  border: 3px solid #000;
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+h1 {
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.subtitle a {
+  color: #000;
+}
+
+.editor-label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+textarea {
+  width: 100%;
+  height: 300px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 13px;
+  border: 2px solid #000;
+  padding: 8px;
+  resize: vertical;
+  background: #fff;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #000;
+}
+
+.button-row {
+  margin-top: 10px;
+  text-align: center;
+}
+
+button {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 14px;
+  font-weight: bold;
+  background: #fff;
+  border: 2px solid #000;
+  padding: 8px 20px;
+  cursor: pointer;
+  margin: 0 5px;
+}
+
+button:hover {
+  background: #ddd;
+}
+
+button:active {
+  background: #bbb;
+}
+
+button:disabled {
+  background: #ccc;
+  color: #666;
+  cursor: not-allowed;
+}
+
+#output {
+  width: 100%;
+  height: 200px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 13px;
+  border: 2px solid #000;
+  padding: 8px;
+  background: #fff;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.output-label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.input-section {
+  margin-top: 15px;
+}
+
+.input-label {
+  font-weight: bold;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+#input {
+  width: 100%;
+  height: 72px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 13px;
+  border: 2px solid #000;
+  padding: 4px 8px;
+  resize: vertical;
+  background: #fff;
+}
+
+#input:focus {
+  outline: none;
+  border-color: #000;
+}
+
+.status {
+  text-align: center;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.status.running {
+  color: #006600;
+}
+
+.status.error {
+  color: #cc0000;
+}
+
+.status.done {
+  color: #000;
+}
+
+.examples {
+  font-size: 12px;
+}
+
+.examples-label {
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.example-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.example-buttons button {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.info {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.info h2 {
+  font-size: 14px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #000;
+  padding-bottom: 5px;
+}
+
+.info h3 {
+  font-size: 12px;
+  margin-top: 12px;
+  margin-bottom: 6px;
+}
+
+.info p {
+  margin-bottom: 8px;
+}
+
+.info code {
+  background: #fff;
+  padding: 1px 4px;
+  border: 1px solid #000;
+}
+
+.info pre {
+  background: #fff;
+  border: 1px solid #000;
+  padding: 6px 8px;
+  margin: 6px 0;
+  overflow-x: auto;
+}
+
+.info .unavailable {
+  color: #888;
+  font-style: italic;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<div class="card">
+<h1>!~ATH INTERPRETER</h1>
+<div class="subtitle">
+an esoteric language where everything is about death
+</div>
+<div class="subtitle">
+inspired by <em><a href="https://homestuck.com/">Homestuck</a></em>'s fictional ~ATH
+</div>
+</div>
+
+<div class="card">
+<div class="editor-label">CODE:</div>
+<textarea id="code" spellcheck="false" placeholder="Write !~ATH code here..."></textarea>
+
+<div class="input-section">
+<div class="input-label">INPUT (stdin for HEED):</div>
+<textarea id="input" spellcheck="false" rows="1" placeholder="One line per HEED() call..."></textarea>
+</div>
+
+<div class="button-row">
+<button id="run-btn" onclick="runCode()">> RUN</button>
+<button onclick="stopCode()">> STOP</button>
+</div>
+
+<div class="status" id="status"></div>
+</div>
+
+<div class="card">
+<div class="output-label">OUTPUT:</div>
+<div id="output"></div>
+</div>
+
+<div class="card examples">
+<div class="examples-label">EXAMPLE PROGRAMS:</div>
+<div class="example-buttons">
+<button onclick="loadExample('hello')">Hello World</button>
+<button onclick="loadExample('countdown')">Countdown</button>
+<button onclick="loadExample('fizzbuzz')">FizzBuzz</button>
+<button onclick="loadExample('concurrent')">Concurrent Timers</button>
+<button onclick="loadExample('factorial')">Factorial</button>
+<button onclick="loadExample('arrays')">Arrays &amp; Maps</button>
+<button onclick="loadExample('quine')">Quine</button>
+<button onclick="loadExample('input')">Input Demo</button>
+</div>
+</div>
+
+<div class="card info">
+<h2>LANGUAGE REFERENCE</h2>
+
+<p>
+<strong>!~ATH</strong> (pronounced "until death") is an esoteric programming language where
+all control flow is predicated on waiting for things to <strong>die</strong>. Inspired by
+the fictional ~ATH language from Homestuck. Everything is about death. Loops wait
+for entities to die. Computation happens in death callbacks. The language is
+deliberately inconvenient.
+</p>
+
+<h3>ENTITIES</h3>
+<p>
+Entities are mortal things that can be waited upon. Each entity is either
+<strong>alive</strong> or <strong>dead</strong>. Create entities with <code>import</code>:
+</p>
+<pre>import timer T(1s);        // dies after 1 second
+import timer T2(500ms);    // dies after 500 milliseconds</pre>
+<p>
+<span class="unavailable">import process P("cmd");   // dies when process exits [NOT IN BROWSER]</span><br>
+<span class="unavailable">import connection C("host", 80); // dies when connection closes [NOT IN BROWSER]</span><br>
+<span class="unavailable">import watcher W("file.txt");    // dies when file is deleted [NOT IN BROWSER]</span>
+</p>
+<p>
+<code>THIS</code> is an implicit entity representing the program itself.
+Kill entities manually with <code>.DIE()</code>. The program ends when
+<code>THIS.DIE();</code> is called.
+</p>
+
+<h3>~ATH LOOPS</h3>
+<p>
+The fundamental control structure. Waits for an entity to die, then runs the
+EXECUTE clause:
+</p>
+<pre>import timer T(1s);
+~ATH(T) {
+} EXECUTE(UTTER("Timer died!"));
+THIS.DIE();</pre>
+<p>
+Combine entities with <code>&amp;&amp;</code> (both must die), <code>||</code>
+(either dies), or <code>!</code> (dies immediately when created):
+</p>
+<pre>~ATH(T1 &amp;&amp; T2) { } EXECUTE(...);  // wait for both
+~ATH(T1 || T2) { } EXECUTE(...);  // wait for either
+~ATH(!T) { } EXECUTE(...);        // runs immediately</pre>
+
+<h3>BIFURCATION</h3>
+<p>
+Split execution into concurrent branches:
+</p>
+<pre>bifurcate THIS[LEFT, RIGHT];
+
+~ATH(LEFT) {
+    // code for left branch
+} EXECUTE(VOID);
+
+~ATH(RIGHT) {
+    // code for right branch
+} EXECUTE(VOID);
+
+[LEFT, RIGHT].DIE();</pre>
+
+<h3>VARIABLES</h3>
+<pre>BIRTH x WITH 5;           // mutable variable
+ENTOMB PI WITH 3.14159;   // constant (immutable)
+x = x + 1;                // reassignment</pre>
+
+<h3>DATA TYPES</h3>
+<pre>42, -7                    // INTEGER
+3.14, -0.5                // FLOAT
+"hello\nworld"            // STRING (escapes: \\ \" \n \t)
+ALIVE, DEAD               // BOOLEAN (truthy/falsy)
+VOID                      // absence of value
+[1, 2, 3]                 // ARRAY
+{name: "Karkat", age: 6}  // MAP</pre>
+
+<h3>OPERATORS</h3>
+<pre>+ - * / %                 // arithmetic (/ is integer div for ints)
+== != &lt; &gt; &lt;= &gt;=           // comparison
+AND OR NOT                // logical (short-circuit)
+arr[0]  map["key"]  map.key   // indexing</pre>
+
+<h3>CONTROL FLOW</h3>
+<pre>SHOULD condition {
+    // if truthy
+} LEST {
+    // else
+}</pre>
+<p>
+<strong>No loops in the expression language.</strong> Use ~ATH with timers for iteration:
+</p>
+<pre>RITE countdown(n) {
+    SHOULD n &gt; 0 {
+        UTTER(n);
+        import timer T(1s);
+        ~ATH(T) { } EXECUTE(countdown(n - 1));
+    }
+}
+countdown(5);
+THIS.DIE();</pre>
+
+<h3>FUNCTIONS (RITES)</h3>
+<pre>RITE add(a, b) {
+    BEQUEATH a + b;       // return value
+}
+BIRTH sum WITH add(2, 3);</pre>
+
+<h3>ERROR HANDLING</h3>
+<pre>ATTEMPT {
+    BIRTH x WITH PARSE_INT("bad");
+} SALVAGE error {
+    UTTER("Error: " + error);
+}
+
+CONDEMN "Something went wrong";  // throw error</pre>
+
+<h3>BUILT-IN RITES</h3>
+<p><strong>I/O:</strong></p>
+<pre>UTTER("Hello", x);        // print (space-separated, newline appended)
+BIRTH line WITH HEED();   // read line from input</pre>
+<p>
+<span class="unavailable">SCRY("file.txt")          // read file [NOT IN BROWSER]</span><br>
+<span class="unavailable">INSCRIBE("file.txt", s)   // write file [NOT IN BROWSER]</span>
+</p>
+
+<p><strong>Type operations:</strong></p>
+<pre>TYPEOF(x)                 // "INTEGER", "FLOAT", "STRING", etc.
+LENGTH(arr), LENGTH(str)  // length of array or string
+PARSE_INT("42")           // string to integer
+PARSE_FLOAT("3.14")       // string to float
+STRING(42)                // value to string
+INT(3.7)                  // float to integer (truncates)
+FLOAT(42)                 // integer to float</pre>
+
+<p><strong>Array operations:</strong></p>
+<pre>APPEND(arr, val)          // add to end (returns new array)
+PREPEND(arr, val)         // add to start
+SLICE(arr, start, end)    // subsequence
+FIRST(arr), LAST(arr)     // first/last element
+CONCAT(arr1, arr2)        // concatenate arrays</pre>
+
+<p><strong>Map operations:</strong></p>
+<pre>KEYS(map), VALUES(map)    // get keys/values as arrays
+HAS(map, key)             // check if key exists
+SET(map, key, val)        // set key (returns new map)
+DELETE(map, key)          // remove key</pre>
+
+<p><strong>String operations:</strong></p>
+<pre>SPLIT("a,b,c", ",")       // split to array
+JOIN(arr, ",")            // join array to string
+SUBSTRING(s, start, end)  // extract substring
+UPPERCASE(s), LOWERCASE(s), TRIM(s)
+REPLACE(s, old, new)      // replace all occurrences</pre>
+
+<p><strong>Utility:</strong></p>
+<pre>RANDOM()                  // random float 0 to 1
+RANDOM_INT(min, max)      // random integer in range
+TIME()                    // Unix timestamp in ms</pre>
+</div>
+
+</div>
+
+<script src="tildeath.js"></script>
+<script>
+var currentRuntime = null;
+var isRunning = false;
+
+var examples = {
+  hello: `// Hello World in !~ATH
+import timer T(1ms);
+
+~ATH(T) {
+} EXECUTE(UTTER("Hello, world!"));
+
+THIS.DIE();`,
+
+  countdown: `// Countdown using chained timers
+RITE countdown(n) {
+    SHOULD n > 0 {
+        UTTER(n);
+        import timer T(1s);
+        ~ATH(T) {
+        } EXECUTE(countdown(n - 1));
+    } LEST {
+        UTTER("Liftoff!");
+    }
+}
+
+countdown(5);
+THIS.DIE();`,
+
+  fizzbuzz: `// FizzBuzz using recursion with timer chains
+RITE fizzbuzz(n, max) {
+    SHOULD n <= max {
+        SHOULD n % 15 == 0 {
+            UTTER("FizzBuzz");
+        } LEST SHOULD n % 3 == 0 {
+            UTTER("Fizz");
+        } LEST SHOULD n % 5 == 0 {
+            UTTER("Buzz");
+        } LEST {
+            UTTER(n);
+        }
+
+        import timer T(50ms);
+        ~ATH(T) {
+        } EXECUTE(fizzbuzz(n + 1, max));
+    }
+}
+
+fizzbuzz(1, 20);
+THIS.DIE();`,
+
+  concurrent: `// Concurrent execution with bifurcation
+bifurcate THIS[LEFT, RIGHT];
+
+~ATH(LEFT) {
+    import timer T1(1s);
+    ~ATH(T1) {
+    } EXECUTE(UTTER("Left: 1 second"));
+
+    import timer T2(1s);
+    ~ATH(T2) {
+    } EXECUTE(UTTER("Left: 2 seconds"));
+} EXECUTE(UTTER("Left branch complete"));
+
+~ATH(RIGHT) {
+    import timer T3(1500ms);
+    ~ATH(T3) {
+    } EXECUTE(UTTER("Right: 1.5 seconds"));
+} EXECUTE(UTTER("Right branch complete"));
+
+[LEFT, RIGHT].DIE();`,
+
+  factorial: `// Recursive factorial
+RITE factorial(n) {
+    SHOULD n <= 1 {
+        BEQUEATH 1;
+    }
+    BEQUEATH n * factorial(n - 1);
+}
+
+BIRTH result WITH factorial(10);
+UTTER("10! = " + STRING(result));
+
+THIS.DIE();`,
+
+  arrays: `// Working with arrays and maps
+BIRTH arr WITH [1, 2, 3, 4, 5];
+UTTER("Array: " + STRING(arr));
+UTTER("Length: " + STRING(LENGTH(arr)));
+UTTER("First: " + STRING(FIRST(arr)));
+UTTER("Last: " + STRING(LAST(arr)));
+
+arr = APPEND(arr, 6);
+UTTER("After append: " + STRING(arr));
+
+BIRTH person WITH {name: "Karkat", age: 6, title: "Knight of Blood"};
+UTTER("Map: " + STRING(person));
+UTTER("Name: " + person.name);
+UTTER("Keys: " + STRING(KEYS(person)));
+
+THIS.DIE();`,
+
+  input: `// Demo of HEED() for reading input
+// Put some lines in the INPUT box below, then run!
+
+UTTER("What is your name?");
+BIRTH name WITH HEED();
+UTTER("Hello, " + name + "!");
+
+UTTER("What is your favorite number?");
+BIRTH numStr WITH HEED();
+BIRTH num WITH PARSE_INT(numStr);
+UTTER("Your number doubled is: " + STRING(num * 2));
+
+THIS.DIE();`,
+
+  quine: `BIRTH q WITH "BIRTH q WITH PLACEHOLDER; BIRTH e WITH REPLACE(REPLACE(q, \\"\\\\\\\\\\", \\"\\\\\\\\\\\\\\\\\\"), \\"\\\\\\"\\", \\"\\\\\\\\\\\\\\"\\"\\"); UTTER(REPLACE(q, \\"PLACE\\" + \\"HOLDER\\", \\"\\\\\\"\\" + e + \\"\\\\\\"\\")); THIS.DIE();"; BIRTH e WITH REPLACE(REPLACE(q, "\\\\", "\\\\\\\\"), "\\"", "\\\\\\""); UTTER(REPLACE(q, "PLACE" + "HOLDER", "\\"" + e + "\\"")); THIS.DIE();`
+};
+
+var exampleInputs = {
+  input: "Karkat\n42"
+};
+
+function loadExample(name) {
+  document.getElementById('code').value = examples[name];
+  document.getElementById('input').value = exampleInputs[name] || '';
+  clearOutput();
+}
+
+function appendOutput(text) {
+  var output = document.getElementById('output');
+  output.textContent += text + '\n';
+  output.scrollTop = output.scrollHeight;
+}
+
+function clearOutput() {
+  document.getElementById('output').textContent = '';
+  document.getElementById('status').textContent = '';
+  document.getElementById('status').className = 'status';
+}
+
+function setStatus(text, type) {
+  var status = document.getElementById('status');
+  status.textContent = text;
+  status.className = 'status ' + type;
+}
+
+function stopCode() {
+  if (currentRuntime) {
+    // Can't truly stop async code, but we can ignore further output
+    currentRuntime = null;
+    isRunning = false;
+    document.getElementById('run-btn').disabled = false;
+    setStatus('Stopped.', 'done');
+  }
+}
+
+async function runCode() {
+  if (isRunning) return;
+
+  clearOutput();
+  isRunning = true;
+  document.getElementById('run-btn').disabled = true;
+  setStatus('Running...', 'running');
+
+  var code = document.getElementById('code').value;
+  var inputText = document.getElementById('input').value;
+  var inputLines = inputText ? inputText.split('\n') : [];
+  var runtimeId = {};
+  currentRuntime = runtimeId;
+
+  var runtime = new TildeAth({
+    onOutput: function(text) {
+      if (currentRuntime === runtimeId) {
+        appendOutput(text);
+      }
+    },
+    inputQueue: inputLines
+  });
+
+  try {
+    await runtime.run(code);
+    if (currentRuntime === runtimeId) {
+      setStatus('Done.', 'done');
+    }
+  } catch (e) {
+    if (currentRuntime === runtimeId) {
+      appendOutput('ERROR: ' + e.message);
+      setStatus('Error!', 'error');
+    }
+  } finally {
+    if (currentRuntime === runtimeId) {
+      isRunning = false;
+      document.getElementById('run-btn').disabled = false;
+      currentRuntime = null;
+    }
+  }
+}
+</script>
+
+</body>
+</html>
