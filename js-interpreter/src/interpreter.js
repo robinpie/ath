@@ -118,18 +118,30 @@ export class Interpreter {
   _durationToMs(duration) {
     const value = duration.value;
     const unit = duration.unit;
+    let ms;
     switch (unit) {
       case 'ms':
-        return value;
+        ms = value;
+        break;
       case 's':
-        return value * 1000;
+        ms = value * 1000;
+        break;
       case 'm':
-        return value * 60 * 1000;
+        ms = value * 60 * 1000;
+        break;
       case 'h':
-        return value * 60 * 60 * 1000;
+        ms = value * 60 * 60 * 1000;
+        break;
       default:
-        return value;  // Default to ms
+        ms = value;  // Default to ms
     }
+
+    // Enforce minimum duration of 1ms
+    if (ms < 1) {
+      throw new RuntimeError(`Timer duration must be at least 1ms (got ${ms}ms)`, duration.line, duration.column);
+    }
+
+    return ms;
   }
 
   async execBifurcate(node) {

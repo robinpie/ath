@@ -118,13 +118,13 @@ Map keys are identifiers (unquoted) or strings (quoted). Both refer to string ke
 
 ### Duration Literals
 
-Used in timer imports:
+Used in timer imports. The minimum duration is 1 millisecond:
 
 ```
-100ms    // milliseconds
-5s       // seconds
-2m       // minutes
-1h       // hours
+1ms      // milliseconds
+5s       // seconds (= 5000ms)
+2m       // minutes (= 120000ms)
+1h       // hours (= 3600000ms)
 100      // no unit = milliseconds (default)
 ```
 

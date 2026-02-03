@@ -198,14 +198,21 @@ class Interpreter:
         value = duration.value
         unit = duration.unit
         if unit == 'ms':
-            return value
-        if unit == 's':
-            return value * 1000
-        if unit == 'm':
-            return value * 60 * 1000
-        if unit == 'h':
-            return value * 60 * 60 * 1000
-        return value  # Default to ms
+            ms = value
+        elif unit == 's':
+            ms = value * 1000
+        elif unit == 'm':
+            ms = value * 60 * 1000
+        elif unit == 'h':
+            ms = value * 60 * 60 * 1000
+        else:
+            ms = value  # Default to ms
+
+        # Enforce minimum duration of 1ms
+        if ms < 1:
+            raise RuntimeError(f"Timer duration must be at least 1ms (got {ms}ms)", duration.line, duration.column)
+
+        return ms
 
     async def exec_bifurcate(self, node: BifurcateStmt):
         """Execute a bifurcation statement."""
