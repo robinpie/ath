@@ -1,0 +1,13 @@
+// Demo of HEED() for reading input
+// Put some lines in the INPUT box below, then run!
+
+UTTER("What is your name?");
+BIRTH name WITH HEED();
+UTTER("Hello, " + name + "!");
+
+UTTER("What is your favorite number?");
+BIRTH numStr WITH HEED();
+BIRTH num WITH PARSE_INT(numStr);
+UTTER("Your number doubled is: " + STRING(num * 2));
+
+THIS.DIE();

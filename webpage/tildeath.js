@@ -1254,11 +1254,19 @@
 
     _durationToMs(duration) {
       const value = duration.value, unit = duration.unit;
-      if (unit === 'ms') return value;
-      if (unit === 's') return value * 1000;
-      if (unit === 'm') return value * 60 * 1000;
-      if (unit === 'h') return value * 60 * 60 * 1000;
-      return value;
+      let ms;
+      if (unit === 'ms') ms = value;
+      else if (unit === 's') ms = value * 1000;
+      else if (unit === 'm') ms = value * 60 * 1000;
+      else if (unit === 'h') ms = value * 60 * 60 * 1000;
+      else ms = value;
+
+      // Enforce minimum duration of 1ms
+      if (ms < 1) {
+        throw new RuntimeError(`Timer duration must be at least 1ms (got ${ms}ms)`, duration.line, duration.column);
+      }
+
+      return ms;
     }
 
     async execBifurcate(node) {
