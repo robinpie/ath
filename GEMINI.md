@@ -1,6 +1,6 @@
-# CLAUDE.md
+# GEMII.md
 
-This file provides guidance to Claude Code when working with code in this repository.
+This file provides guidance to Google agents when working with code in this repository.
 
 ## Project Overview
 
