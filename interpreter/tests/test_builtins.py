@@ -3,6 +3,7 @@
 import unittest
 import sys
 import os
+import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from untildeath.builtins import Builtins, stringify, type_name, is_truthy
@@ -356,6 +357,115 @@ class TestBuiltinUtility(unittest.TestCase):
     def test_time_is_int(self):
         result = self.builtins.time()
         self.assertIsInstance(result, int)
+
+
+class TestBuiltinFileOperations(unittest.TestCase):
+    """Test built-in file I/O operations (SCRY and INSCRIBE)."""
+
+    def setUp(self):
+        self.builtins = Builtins(None)
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up temporary files."""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_scry_simple_file(self):
+        """Test reading a simple text file."""
+        test_file = os.path.join(self.temp_dir, "test.txt")
+        test_content = "Hello, world!"
+        with open(test_file, 'w') as f:
+            f.write(test_content)
+
+        result = self.builtins.scry(test_file)
+        self.assertEqual(result, test_content)
+
+    def test_scry_multiline_file(self):
+        """Test reading a multiline file."""
+        test_file = os.path.join(self.temp_dir, "multiline.txt")
+        test_content = "line 1\nline 2\nline 3"
+        with open(test_file, 'w') as f:
+            f.write(test_content)
+
+        result = self.builtins.scry(test_file)
+        self.assertEqual(result, test_content)
+
+    def test_scry_empty_file(self):
+        """Test reading an empty file."""
+        test_file = os.path.join(self.temp_dir, "empty.txt")
+        with open(test_file, 'w') as f:
+            pass
+
+        result = self.builtins.scry(test_file)
+        self.assertEqual(result, "")
+
+    def test_scry_file_not_found(self):
+        """Test SCRY with non-existent file."""
+        nonexistent_file = os.path.join(self.temp_dir, "nonexistent.txt")
+        with self.assertRaises(RuntimeError) as context:
+            self.builtins.scry(nonexistent_file)
+        self.assertIn("File not found", str(context.exception))
+
+    def test_scry_invalid_argument_type(self):
+        """Test SCRY with non-string argument."""
+        with self.assertRaises(RuntimeError) as context:
+            self.builtins.scry(42)
+        self.assertIn("expects string path", str(context.exception))
+
+    def test_scry_utf8_content(self):
+        """Test reading file with UTF-8 content."""
+        test_file = os.path.join(self.temp_dir, "utf8.txt")
+        test_content = "Hello, 世界! 🌍"
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write(test_content)
+
+        result = self.builtins.scry(test_file)
+        self.assertEqual(result, test_content)
+
+    def test_inscribe_creates_file(self):
+        """Test INSCRIBE creates a new file."""
+        test_file = os.path.join(self.temp_dir, "output.txt")
+        test_content = "Hello, world!"
+
+        self.builtins.inscribe(test_file, test_content)
+
+        with open(test_file, 'r') as f:
+            self.assertEqual(f.read(), test_content)
+
+    def test_inscribe_overwrites_file(self):
+        """Test INSCRIBE overwrites existing file."""
+        test_file = os.path.join(self.temp_dir, "overwrite.txt")
+
+        # Create initial file
+        with open(test_file, 'w') as f:
+            f.write("old content")
+
+        # Overwrite with INSCRIBE
+        new_content = "new content"
+        self.builtins.inscribe(test_file, new_content)
+
+        with open(test_file, 'r') as f:
+            self.assertEqual(f.read(), new_content)
+
+    def test_inscribe_converts_non_string(self):
+        """Test INSCRIBE converts non-string values."""
+        test_file = os.path.join(self.temp_dir, "nonstring.txt")
+
+        self.builtins.inscribe(test_file, 42)
+
+        with open(test_file, 'r') as f:
+            self.assertEqual(f.read(), "42")
+
+    def test_scry_inscribe_roundtrip(self):
+        """Test writing and reading back a file."""
+        test_file = os.path.join(self.temp_dir, "roundtrip.txt")
+        original_content = "The quick brown fox\njumps over the lazy dog"
+
+        self.builtins.inscribe(test_file, original_content)
+        result = self.builtins.scry(test_file)
+
+        self.assertEqual(result, original_content)
 
 
 if __name__ == '__main__':
