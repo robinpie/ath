@@ -25,7 +25,7 @@ body {
 
 .card {
   background: #eeeeee;
-  border: 3px solid #000;
+  border: 8px solid #c6c6c6;
   padding: 15px;
   margin-bottom: 15px;
 }
@@ -128,6 +128,24 @@ button:disabled {
 
 #input {
   width: 100%;
+  height: auto;
+  min-height: 28px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 13px;
+  border: 2px solid #000;
+  padding: 4px 8px;
+  resize: none;
+  background: #fff;
+  overflow-y: hidden;
+}
+
+#input:focus {
+  outline: none;
+  border-color: #000;
+}
+
+.scry-input {
+  width: 100%;
   height: 72px;
   font-family: "Courier New", Courier, monospace;
   font-size: 13px;
@@ -135,9 +153,10 @@ button:disabled {
   padding: 4px 8px;
   resize: vertical;
   background: #fff;
+  margin-bottom: 5px;
 }
 
-#input:focus {
+.scry-input:focus {
   outline: none;
   border-color: #000;
 }
@@ -258,8 +277,20 @@ inspired by <em><a href="https://homestuck.com/">Homestuck</a></em>'s fictional 
 <textarea id="code" spellcheck="false" placeholder="Write !~ATH code here..."></textarea>
 
 <div class="input-section">
-<div class="input-label">INPUT for HEED(), newline separates inputs:</div>
+<div class="input-label">INPUT for HEED(), one line per call:</div>
 <textarea id="input" spellcheck="false" rows="1" placeholder="One line per HEED() call..."></textarea>
+</div>
+
+<div class="input-section">
+<div class="input-label">INPUT for SCRY(VOID), one box per call):</div>
+<div id="scry-container">
+<textarea class="scry-input" spellcheck="false" placeholder="Content for SCRY(VOID)..."></textarea>
+</div>
+<div style="margin-top: 5px;">
+<button onclick="addScryInput()" style="font-size: 11px; padding: 4px 8px;">+</button>
+<button id="remove-scry-btn" onclick="removeScryInput()" style="font-size: 11px; padding: 4px 8px; display: none;">-</button>
+<button onclick="resetScryInputs()" style="font-size: 11px; padding: 4px 8px;">RESET</button>
+</div>
 </div>
 
 <div class="button-row">
@@ -287,12 +318,13 @@ inspired by <em><a href="https://homestuck.com/">Homestuck</a></em>'s fictional 
 <button onclick="loadExample('arrays')">Arrays &amp; Maps</button>
 <button onclick="loadExample('quine')">Quine</button>
 <button onclick="loadExample('input')">Input Demo</button>
+<button onclick="loadExample('scry')">SCRY Input</button>
 <button onclick="loadExample('brainfuck')">Brainfuck</button>
 </div>
 </div>
 
 <div class="card download">
-<strong>DOWNLOAD:</strong> Run !~ATH programs locally with the <a href="https://drive.google.com/file/d/1A66AB3N9H0vzIITMHhuB63y86T9uxxhh/view?usp=sharing">Python interpreter</a> (includes process, connection, watcher entities and file I/O)
+<strong>DOWNLOAD:</strong> Run !~ATH programs locally with the <a href="https://drive.google.com/file/d/1jyjjpKICLAyNfGFPcSL2iKOPAczK9TaB/view?usp=sharing">Python interpreter</a> (includes process, connection, watcher entities and file I/O)
 </div>
 
 <div class="card info">
@@ -414,9 +446,9 @@ CONDEMN "Something went wrong";  // throw error</pre>
 <h3>BUILT-IN RITES</h3>
 <p><strong>I/O:</strong></p>
 <pre>UTTER("Hello", x);        // print (space-separated, newline appended)
-BIRTH line WITH HEED();   // read line from input</pre>
+BIRTH line WITH HEED();   // read line from input
+BIRTH s WITH SCRY(VOID);  // read STDIN until EOF. in the Python interpreter, can also read files with SCRY("filename")</pre>
 <p>
-<span class="unavailable">SCRY("file.txt")          // read file [NOT IN BROWSER]</span><br>
 <span class="unavailable">INSCRIBE("file.txt", s)   // write file [NOT IN BROWSER]</span>
 </p>
 
@@ -573,6 +605,21 @@ UTTER("Your number doubled is: " + STRING(num * 2));
 
 THIS.DIE();`,
 
+  scry: `// Reading from STDIN using SCRY(VOID)
+// Add text to the SCRY input boxes below!
+// Each SCRY(VOID) call consumes one input box.
+
+UTTER("Reading first SCRY input...");
+BIRTH content1 WITH SCRY(VOID);
+UTTER("First content length: " + STRING(LENGTH(content1)));
+UTTER("First content preview: " + SUBSTRING(content1, 0, 20) + "...");
+
+UTTER("Reading second SCRY input...");
+BIRTH content2 WITH SCRY(VOID);
+UTTER("Second content length: " + STRING(LENGTH(content2)));
+
+THIS.DIE();`,
+
   quine: `BIRTH q WITH "BIRTH q WITH PLACEHOLDER; BIRTH e WITH REPLACE(REPLACE(q, \\"\\\\\\\\\\", \\"\\\\\\\\\\\\\\\\\\"), \\"\\\\\\"\\", \\"\\\\\\\\\\\\\\"\\"\\"); UTTER(REPLACE(q, \\"PLACE\\" + \\"HOLDER\\", \\"\\\\\\"\\" + e + \\"\\\\\\"\\")); THIS.DIE();"; BIRTH e WITH REPLACE(REPLACE(q, "\\\\", "\\\\\\\\"), "\\"", "\\\\\\""); UTTER(REPLACE(q, "PLACE" + "HOLDER", "\\"" + e + "\\"")); THIS.DIE();`,
 
   brainfuck: `// An interpreter for the Brainfuck esoteric programming language.\n//\n// Takes two inputs, where:\n//   - the first input is the string of Brainfuck commands (+-[]<>.,)\n//   - the second input is the string of ASCII input to the program.\n//\n// The interpreter outputs the result via UTTER when execution completes.\n// =============================================================================\n\n// --- ASCII Lookup Tables ---\n// !~ATH has no built-in chr/ord, so we need explicit mappings\n\nENTOMB CHAR_TO_CODE WITH {\n    "\\n": 10, "\\t": 9,\n    " ": 32, "!": 33, "\\"": 34, "#": 35, "$": 36, "%": 37, "&": 38, "'": 39,\n    "(": 40, ")": 41, "*": 42, "+": 43, ",": 44, "-": 45, ".": 46, "/": 47,\n    "0": 48, "1": 49, "2": 50, "3": 51, "4": 52, "5": 53, "6": 54, "7": 55,\n    "8": 56, "9": 57, ":": 58, ";": 59, "<": 60, "=": 61, ">": 62, "?": 63,\n    "@": 64, "A": 65, "B": 66, "C": 67, "D": 68, "E": 69, "F": 70, "G": 71,\n    "H": 72, "I": 73, "J": 74, "K": 75, "L": 76, "M": 77, "N": 78, "O": 79,\n    "P": 80, "Q": 81, "R": 82, "S": 83, "T": 84, "U": 85, "V": 86, "W": 87,\n    "X": 88, "Y": 89, "Z": 90, "[": 91, "\\\\": 92, "]": 93, "^": 94, "_": 95,\n    "\`": 96, "a": 97, "b": 98, "c": 99, "d": 100, "e": 101, "f": 102, "g": 103,\n    "h": 104, "i": 105, "j": 106, "k": 107, "l": 108, "m": 109, "n": 110, "o": 111,\n    "p": 112, "q": 113, "r": 114, "s": 115, "t": 116, "u": 117, "v": 118, "w": 119,\n    "x": 120, "y": 121, "z": 122, "{": 123, "|": 124, "}": 125, "~": 126\n};\n\n// Code to character mapping (keys must be strings for map lookup)\nENTOMB CODE_TO_CHAR WITH {\n    "10": "\\n", "9": "\\t",\n    "32": " ", "33": "!", "34": "\\"", "35": "#", "36": "$", "37": "%", "38": "&", "39": "'",\n    "40": "(", "41": ")", "42": "*", "43": "+", "44": ",", "45": "-", "46": ".", "47": "/",\n    "48": "0", "49": "1", "50": "2", "51": "3", "52": "4", "53": "5", "54": "6", "55": "7",\n    "56": "8", "57": "9", "58": ":", "59": ";", "60": "<", "61": "=", "62": ">", "63": "?",\n    "64": "@", "65": "A", "66": "B", "67": "C", "68": "D", "69": "E", "70": "F", "71": "G",\n    "72": "H", "73": "I", "74": "J", "75": "K", "76": "L", "77": "M", "78": "N", "79": "O",\n    "80": "P", "81": "Q", "82": "R", "83": "S", "84": "T", "85": "U", "86": "V", "87": "W",\n    "88": "X", "89": "Y", "90": "Z", "91": "[", "92": "\\\\", "93": "]", "94": "^", "95": "_",\n    "96": "\`", "97": "a", "98": "b", "99": "c", "100": "d", "101": "e", "102": "f", "103": "g",\n    "104": "h", "105": "i", "106": "j", "107": "k", "108": "l", "109": "m", "110": "n", "111": "o",\n    "112": "p", "113": "q", "114": "r", "115": "s", "116": "t", "117": "u", "118": "v", "119": "w",\n    "120": "x", "121": "y", "122": "z", "123": "{", "124": "|", "125": "}", "126": "~"\n};\n\n// --- Global State ---\n// All interpreter state is stored globally so async operations can access it\n\nBIRTH G_code WITH "";\nBIRTH G_input WITH "";\nBIRTH G_tape WITH [];\nBIRTH G_ptr WITH 0;\nBIRTH G_ip WITH 0;\nBIRTH G_inputPos WITH 0;\nBIRTH G_output WITH "";\nBIRTH G_brackets WITH {};\nBIRTH G_bracketStack WITH [];\nBIRTH G_bracketIdx WITH 0;\nBIRTH G_tapeChunksLeft WITH 0;\n\n// --- Tape Operations ---\n// Arrays are immutable in !~ATH, so we need to create new arrays for modifications\n\nRITE setCell(tape, idx, val) {\n    BEQUEATH CONCAT(\n        CONCAT(SLICE(tape, 0, idx), [val]),\n        SLICE(tape, idx + 1, LENGTH(tape))\n    );\n}\n\nRITE incCell(tape, ptr) {\n    BIRTH val WITH tape[ptr];\n    BIRTH newVal WITH (val + 1) % 256;\n    BEQUEATH setCell(tape, ptr, newVal);\n}\n\nRITE decCell(tape, ptr) {\n    BIRTH val WITH tape[ptr];\n    BIRTH newVal WITH (val + 255) % 256;\n    BEQUEATH setCell(tape, ptr, newVal);\n}\n\n// --- Tape Initialization ---\n// Build tape in chunks using timer-chained recursion to avoid stack overflow\n\nENTOMB TAPE_CHUNK WITH [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];\n\nRITE buildTapeStep() {\n    SHOULD G_tapeChunksLeft > 0 {\n        G_tape = CONCAT(G_tape, TAPE_CHUNK);\n        G_tapeChunksLeft = G_tapeChunksLeft - 1;\n        import timer T(1);\n        ~ATH(!T) { } EXECUTE(buildTapeStep());\n    } LEST {\n        // Tape complete, start bracket building\n        buildBracketsStep();\n    }\n}\n\n// --- Bracket Matching (Async) ---\n// Pre-compute matching brackets using timer-chained recursion\n\nRITE buildBracketsStep() {\n    BIRTH len WITH LENGTH(G_code);\n\n    SHOULD G_bracketIdx < len {\n        BIRTH char WITH G_code[G_bracketIdx];\n\n        SHOULD char == "[" {\n            G_bracketStack = APPEND(G_bracketStack, G_bracketIdx);\n        } LEST SHOULD char == "]" {\n            SHOULD LENGTH(G_bracketStack) == 0 {\n                CONDEMN "Unmatched ] at position " + STRING(G_bracketIdx);\n            }\n            BIRTH openPos WITH LAST(G_bracketStack);\n            G_bracketStack = SLICE(G_bracketStack, 0, LENGTH(G_bracketStack) - 1);\n            G_brackets = SET(G_brackets, STRING(openPos), G_bracketIdx);\n            G_brackets = SET(G_brackets, STRING(G_bracketIdx), openPos);\n        }\n\n        G_bracketIdx = G_bracketIdx + 1;\n\n        import timer T(1);\n        ~ATH(!T) { } EXECUTE(buildBracketsStep());\n    } LEST {\n        SHOULD LENGTH(G_bracketStack) > 0 {\n            CONDEMN "Unmatched [ at position " + STRING(FIRST(G_bracketStack));\n        }\n        // Bracket map complete, start execution\n        startExecution();\n    }\n}\n\n// --- Core Execution ---\n// Main execution loop using timer-chained recursion\n\nRITE startExecution() {\n    G_ptr = 0;\n    G_ip = 0;\n    G_inputPos = 0;\n    G_output = "";\n    runStep();\n}\n\nRITE runStep() {\n    BIRTH len WITH LENGTH(G_code);\n\n    // Check if execution is complete\n    SHOULD G_ip >= len {\n        UTTER(G_output);\n        BEQUEATH VOID;\n    }\n\n    BIRTH cmd WITH G_code[G_ip];\n\n    SHOULD cmd == "+" {\n        G_tape = incCell(G_tape, G_ptr);\n        G_ip = G_ip + 1;\n    } LEST SHOULD cmd == "-" {\n        G_tape = decCell(G_tape, G_ptr);\n        G_ip = G_ip + 1;\n    } LEST SHOULD cmd == ">" {\n        G_ptr = G_ptr + 1;\n        G_ip = G_ip + 1;\n    } LEST SHOULD cmd == "<" {\n        G_ptr = G_ptr - 1;\n        G_ip = G_ip + 1;\n    } LEST SHOULD cmd == "." {\n        BIRTH cellVal WITH G_tape[G_ptr];\n        BIRTH key WITH STRING(cellVal);\n        SHOULD HAS(CODE_TO_CHAR, key) {\n            G_output = G_output + CODE_TO_CHAR[key];\n        } LEST {\n            G_output = G_output + "?";\n        }\n        G_ip = G_ip + 1;\n    } LEST SHOULD cmd == "," {\n        SHOULD G_inputPos < LENGTH(G_input) {\n            BIRTH inputChar WITH G_input[G_inputPos];\n            SHOULD HAS(CHAR_TO_CODE, inputChar) {\n                G_tape = setCell(G_tape, G_ptr, CHAR_TO_CODE[inputChar]);\n            } LEST {\n                G_tape = setCell(G_tape, G_ptr, 0);\n            }\n            G_inputPos = G_inputPos + 1;\n        } LEST {\n            G_tape = setCell(G_tape, G_ptr, 0);\n        }\n        G_ip = G_ip + 1;\n    } LEST SHOULD cmd == "[" {\n        SHOULD G_tape[G_ptr] == 0 {\n            G_ip = G_brackets[STRING(G_ip)] + 1;\n        } LEST {\n            G_ip = G_ip + 1;\n        }\n    } LEST SHOULD cmd == "]" {\n        SHOULD G_tape[G_ptr] != 0 {\n            G_ip = G_brackets[STRING(G_ip)] + 1;\n        } LEST {\n            G_ip = G_ip + 1;\n        }\n    } LEST {\n        // Unknown character, skip\n        G_ip = G_ip + 1;\n    }\n\n    // Timer-chain to next step (prevents stack overflow)\n    import timer T(1);\n    ~ATH(!T) { } EXECUTE(runStep());\n}\n\n// --- Main Entry Point ---\n\nRITE runBrainfuck(code, input) {\n    // Initialize global state\n    G_code = code;\n    G_input = input;\n    G_tape = [];\n    G_brackets = {};\n    G_bracketStack = [];\n    G_bracketIdx = 0;\n\n    // Build tape (300 chunks of 100 = 30000 cells)\n    G_tapeChunksLeft = 300;\n    buildTapeStep();\n}\n\n// Read brainfuck code and input from HEED()\nBIRTH code WITH HEED();\nBIRTH input WITH HEED();\nrunBrainfuck(code, input);\n\nTHIS.DIE();`
@@ -580,13 +627,78 @@ THIS.DIE();`,
 
 var exampleInputs = {
   input: "Karkat\n612",
-  brainfuck: ",[.,]\nHello, World!"
+  brainfuck: ",[.,]\nHello, World!",
+  scry: ["This is the first file content.", "And this is the second."]
 };
+
+function autoExpand(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+}
+
+document.getElementById('input').addEventListener('input', function() {
+    autoExpand(this);
+});
 
 function loadExample(name) {
   document.getElementById('code').value = examples[name];
-  document.getElementById('input').value = exampleInputs[name] || '';
+  
+  if (name === 'scry') {
+      document.getElementById('input').value = '';
+      resetScryInputs();
+      var inputs = exampleInputs[name];
+      if (inputs && inputs.length > 0) {
+          // Set first box
+          document.querySelector('.scry-input').value = inputs[0];
+          // Add subsequent boxes
+          for (var i = 1; i < inputs.length; i++) {
+              addScryInput(inputs[i]);
+          }
+      }
+  } else {
+      document.getElementById('input').value = exampleInputs[name] || '';
+      resetScryInputs();
+  }
+
+  autoExpand(document.getElementById('input'));
   clearOutput();
+}
+
+function updateRemoveScryButton() {
+    var container = document.getElementById('scry-container');
+    var inputs = container.getElementsByClassName('scry-input');
+    var btn = document.getElementById('remove-scry-btn');
+    if (inputs.length > 1) {
+        btn.style.display = 'inline-block';
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+function addScryInput(value) {
+    var container = document.getElementById('scry-container');
+    var ta = document.createElement('textarea');
+    ta.className = 'scry-input';
+    ta.spellcheck = false;
+    ta.placeholder = 'Content for SCRY(VOID)...';
+    if (value) ta.value = value;
+    container.appendChild(ta);
+    updateRemoveScryButton();
+}
+
+function removeScryInput() {
+    var container = document.getElementById('scry-container');
+    var inputs = container.getElementsByClassName('scry-input');
+    if (inputs.length > 1) {
+        container.removeChild(inputs[inputs.length - 1]);
+    }
+    updateRemoveScryButton();
+}
+
+function resetScryInputs() {
+    var container = document.getElementById('scry-container');
+    container.innerHTML = '<textarea class="scry-input" spellcheck="false" placeholder="Content for SCRY(VOID)..."></textarea>';
+    updateRemoveScryButton();
 }
 
 function appendOutput(text) {
@@ -628,6 +740,13 @@ async function runCode() {
   var code = document.getElementById('code').value;
   var inputText = document.getElementById('input').value;
   var inputLines = inputText ? inputText.split('\n') : [];
+  
+  var scryInputs = [];
+  var scryElements = document.getElementsByClassName('scry-input');
+  for (var i = 0; i < scryElements.length; i++) {
+      scryInputs.push(scryElements[i].value);
+  }
+  
   var runtimeId = {};
   currentRuntime = runtimeId;
 
@@ -637,7 +756,8 @@ async function runCode() {
         appendOutput(text);
       }
     },
-    inputQueue: inputLines
+    inputQueue: inputLines,
+    scryQueue: scryInputs
   });
 
   try {
@@ -704,6 +824,7 @@ function shareCode() {
   if (input) {
     try {
       document.getElementById('input').value = atou(input);
+      autoExpand(document.getElementById('input'));
     } catch (e) {}
   }
 })();

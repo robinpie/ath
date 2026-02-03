@@ -1,6 +1,7 @@
 """Built-in rites (functions) for !~ATH."""
 
 import random
+import sys
 import time
 from typing import Any, List
 
@@ -126,10 +127,13 @@ class Builtins:
         except EOFError:
             return ""
 
-    def scry(self, path: str) -> str:
-        """Read file contents."""
+    def scry(self, path: Any) -> str:
+        """Read file contents or stdin."""
+        if path is None:
+            return sys.stdin.read()
+
         if not isinstance(path, str):
-            raise RuntimeError(f"SCRY expects string path, got {type_name(path)}")
+            raise RuntimeError(f"SCRY expects string path or VOID, got {type_name(path)}")
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 return f.read()

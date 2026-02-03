@@ -37,12 +37,14 @@ export class TildeAth {
    * @param {Function} [options.onOutput] - Callback for UTTER output. Defaults to console.log.
    * @param {Function} [options.onInput] - Callback for HEED input. Called when inputQueue is empty.
    * @param {Array<string>} [options.inputQueue] - Pre-populated input queue for HEED.
+   * @param {Array<string>} [options.scryQueue] - Pre-populated input queue for SCRY(VOID).
    */
   constructor(options = {}) {
     this.options = {
       onOutput: options.onOutput || ((text) => console.log(text)),
       onInput: options.onInput || null,
       inputQueue: options.inputQueue || [],
+      scryQueue: options.scryQueue || [],
     };
   }
 

@@ -174,7 +174,7 @@ The rest of this file is the full !~ATH spec in "!~ATH spec.md" (sans implementa
 
 # !~ATH Language Specification
 
-Version 1.0
+Version 1.1
 
 ## Overview
 
@@ -921,9 +921,10 @@ BIRTH input WITH HEED();     // blocks until line entered
 ```
 Returns the line as a STRING (without trailing newline).
 
-**SCRY(path)** — Read file contents
+**SCRY(path)** — Read file contents or stdin
 ```
 BIRTH contents WITH SCRY("./data.txt");
+BIRTH stdin WITH SCRY(VOID); // read from stdin until EOF
 ```
 Returns file contents as a STRING. Throws error if file doesn't exist or can't be read.
 

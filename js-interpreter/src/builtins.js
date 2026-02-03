@@ -86,6 +86,8 @@ export class Builtins {
     this.onInput = options.onInput || null;
     this.inputQueue = options.inputQueue || [];
     this._inputIndex = 0;
+    this.scryQueue = options.scryQueue || [];
+    this._scryIndex = 0;
   }
 
   get(name) {
@@ -93,6 +95,7 @@ export class Builtins {
       // I/O
       'UTTER': (...args) => this.utter(...args),
       'HEED': () => this.heed(),
+      'SCRY': (path) => this.scry(path),
 
       // Type operations
       'TYPEOF': (value) => this.typeof_(value),
@@ -149,6 +152,16 @@ export class Builtins {
     }
     if (this.onInput) {
       return this.onInput();
+    }
+    return '';
+  }
+
+  scry(path) {
+    if (path !== null && path !== undefined) {
+      throw new RuntimeError(`SCRY expects VOID (for stdin), got ${typeName(path)}`);
+    }
+    if (this.scryQueue.length > this._scryIndex) {
+      return this.scryQueue[this._scryIndex++];
     }
     return '';
   }

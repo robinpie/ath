@@ -1070,6 +1070,8 @@
       this.onInput = options.onInput || null;
       this.inputQueue = options.inputQueue || [];
       this._inputIndex = 0;
+      this.scryQueue = options.scryQueue || [];
+      this._scryIndex = 0;
     }
     get(name) {
       const builtins = {
@@ -1077,6 +1079,11 @@
         'HEED': () => {
           if (this.inputQueue.length > this._inputIndex) return this.inputQueue[this._inputIndex++];
           if (this.onInput) return this.onInput();
+          return '';
+        },
+        'SCRY': (path) => {
+          if (path !== null && path !== undefined) throw new RuntimeError(`SCRY expects VOID (for stdin), got ${typeName(path)}`);
+          if (this.scryQueue.length > this._scryIndex) return this.scryQueue[this._scryIndex++];
           return '';
         },
         'TYPEOF': (value) => typeName(value),
@@ -1575,6 +1582,7 @@
         onOutput: options.onOutput || ((text) => console.log(text)),
         onInput: options.onInput || null,
         inputQueue: options.inputQueue || [],
+        scryQueue: options.scryQueue || [],
       };
     }
 
