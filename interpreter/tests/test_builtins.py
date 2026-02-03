@@ -4,6 +4,8 @@ import unittest
 import sys
 import os
 import tempfile
+import io
+from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from untildeath.builtins import Builtins, stringify, type_name, is_truthy
@@ -411,7 +413,7 @@ class TestBuiltinFileOperations(unittest.TestCase):
         """Test SCRY with non-string argument."""
         with self.assertRaises(RuntimeError) as context:
             self.builtins.scry(42)
-        self.assertIn("expects string path", str(context.exception))
+        self.assertIn("expects string path or VOID", str(context.exception))
 
     def test_scry_utf8_content(self):
         """Test reading file with UTF-8 content."""
@@ -466,6 +468,13 @@ class TestBuiltinFileOperations(unittest.TestCase):
         result = self.builtins.scry(test_file)
 
         self.assertEqual(result, original_content)
+
+    def test_scry_stdin(self):
+        """Test SCRY(VOID) reading from stdin."""
+        test_content = "Input from stdin\nLine 2"
+        with patch('sys.stdin', io.StringIO(test_content)):
+            result = self.builtins.scry(None)
+            self.assertEqual(result, test_content)
 
 
 if __name__ == '__main__':
