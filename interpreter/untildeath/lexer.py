@@ -285,7 +285,25 @@ class Lexer:
                 continue
 
             # Number (including negative)
-            if ch.isdigit() or (ch == '-' and self.peek(1) is not None and self.peek(1).isdigit()):
+            is_negative = False
+            if ch == '-' and self.peek(1) is not None and self.peek(1).isdigit():
+                # Check if this is unary minus (part of number) or binary minus (subtraction)
+                # If preceded by an expression terminator, it's subtraction (not negative number)
+                is_subtraction = False
+                if self.tokens:
+                    last = self.tokens[-1].type
+                    if last in (
+                        TokenType.IDENTIFIER,
+                        TokenType.INTEGER, TokenType.FLOAT, TokenType.STRING, TokenType.DURATION,
+                        TokenType.ALIVE, TokenType.DEAD, TokenType.VOID,
+                        TokenType.RPAREN, TokenType.RBRACKET
+                    ):
+                        is_subtraction = True
+                
+                if not is_subtraction:
+                    is_negative = True
+
+            if ch.isdigit() or is_negative:
                 self.tokens.append(self.read_number())
                 continue
 
