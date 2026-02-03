@@ -1,0 +1,267 @@
+import timer T(1ms);
+
+BIRTH input WITH SCRY(VOID);
+BIRTH len WITH LENGTH(input);
+BIRTH i WITH 0;
+BIRTH out WITH "";
+BIRTH stack WITH [];
+
+// Helpers
+RITE get_char(idx) {
+    BEQUEATH SUBSTRING(input, idx, idx + 1);
+}
+
+RITE find_char(start, char) {
+    BIRTH sub WITH SUBSTRING(input, start, len);
+    BIRTH parts WITH SPLIT(sub, char);
+    SHOULD LENGTH(parts) > 1 {
+       BEQUEATH start + LENGTH(parts[0]);
+    }
+    BEQUEATH -1;
+}
+
+RITE parse_tag(idx) {
+    BIRTH res WITH {valid: DEAD};
+    SHOULD get_char(idx) != "[" { BEQUEATH res; }
+    
+    BIRTH close_bracket WITH find_char(idx, "]");
+    SHOULD close_bracket == -1 { BEQUEATH res; }
+    
+    BIRTH raw WITH SUBSTRING(input, idx + 1, close_bracket);
+    SHOULD LENGTH(raw) == 0 { BEQUEATH res; }
+    
+    BIRTH is_closing WITH DEAD;
+    BIRTH name_start WITH 0;
+    
+    SHOULD SUBSTRING(raw, 0, 1) == "/" {
+        is_closing = ALIVE;
+        name_start = 1;
+    }
+    
+    BIRTH content WITH SUBSTRING(raw, name_start, LENGTH(raw));
+    BIRTH parts WITH SPLIT(content, "=");
+    BIRTH name WITH LOWERCASE(parts[0]);
+    BIRTH attr WITH VOID;
+    
+    SHOULD LENGTH(parts) > 1 {
+        attr = SUBSTRING(content, LENGTH(parts[0]) + 1, LENGTH(content));
+    }
+    
+    res = SET(res, "valid", ALIVE);
+    res = SET(res, "name", name);
+    res = SET(res, "close", is_closing);
+    res = SET(res, "attr", attr);
+    res = SET(res, "end", close_bracket + 1);
+    BEQUEATH res;
+}
+
+RITE find_block_closer(start, tag_name) {
+    SHOULD tag_name == "code" {
+        RITE scan_code(p, depth) {
+            BIRTH next_open WITH find_char(p, "[");
+            SHOULD next_open == -1 { BEQUEATH -1; }
+            
+            BIRTH tag WITH parse_tag(next_open);
+            SHOULD tag["valid"] == DEAD {
+                BEQUEATH scan_code(next_open + 1, depth);
+            }
+            
+            BIRTH tname WITH tag["name"];
+            BIRTH new_depth WITH depth;
+            
+            SHOULD tname == "code" {
+                SHOULD tag["close"] {
+                    new_depth = depth - 1;
+                    SHOULD new_depth == 0 { BEQUEATH next_open; }
+                } LEST {
+                    new_depth = depth + 1;
+                }
+            }
+            
+            BEQUEATH scan_code(tag["end"], new_depth);
+        }
+        BEQUEATH scan_code(start, 1);
+    }
+
+    BIRTH pos WITH start;
+    BIRTH sub WITH SUBSTRING(input, pos, len);
+    BIRTH sub_lower WITH LOWERCASE(sub);
+    BIRTH needle WITH "[/" + tag_name + "]";
+    BIRTH parts WITH SPLIT(sub_lower, needle);
+    SHOULD LENGTH(parts) > 1 {
+       BEQUEATH pos + LENGTH(parts[0]);
+    }
+    BEQUEATH -1;
+}
+
+RITE check_balance(start, target_name) {
+   BIRTH pos WITH start;
+   BIRTH depth WITH 1;
+   
+   RITE scanner(p, d) {
+       SHOULD d == 0 { BEQUEATH ALIVE; }
+       SHOULD p >= len { BEQUEATH DEAD; }
+       
+       BIRTH next_open WITH find_char(p, "[");
+       SHOULD next_open == -1 { BEQUEATH DEAD; }
+       
+       BIRTH tag WITH parse_tag(next_open);
+       SHOULD tag["valid"] == DEAD {
+          BEQUEATH scanner(next_open + 1, d);
+       }
+       
+       BIRTH tname WITH tag["name"];
+       
+       SHOULD (tname == "code" OR tname == "img") AND tag["close"] == DEAD {
+           BIRTH closer_idx WITH find_block_closer(tag["end"], tname);
+           SHOULD closer_idx != -1 {
+               BIRTH end_tag WITH parse_tag(closer_idx);
+               BEQUEATH scanner(end_tag["end"], d);
+           }
+       }
+       
+       SHOULD tname == target_name {
+           SHOULD tag["close"] { d = d - 1; }
+           LEST { d = d + 1; }
+       }
+       
+       BEQUEATH scanner(tag["end"], d);
+   }
+   
+   BEQUEATH scanner(start, depth);
+}
+
+RITE is_known(name) {
+    BIRTH k WITH ["b", "i", "u", "s", "code", "url", "img", "quote", "color", "size"];
+    BIRTH idx WITH 0;
+    RITE check(x) {
+        SHOULD x >= LENGTH(k) { BEQUEATH DEAD; }
+        SHOULD k[x] == name { BEQUEATH ALIVE; }
+        BEQUEATH check(x + 1);
+    }
+    BEQUEATH check(0);
+}
+
+RITE process_step() {
+    BIRTH next_bracket WITH find_char(i, "[");
+    
+    SHOULD next_bracket == -1 {
+        out = out + SUBSTRING(input, i, len);
+        i = len;
+        BEQUEATH VOID;
+    }
+    
+    out = out + SUBSTRING(input, i, next_bracket);
+    i = next_bracket;
+    
+    BIRTH tag WITH parse_tag(i);
+    
+    SHOULD tag["valid"] == DEAD {
+        out = out + "[";
+        i = i + 1;
+        BEQUEATH VOID;
+    }
+    
+    BIRTH name WITH tag["name"];
+    
+    // Check if known
+    SHOULD is_known(name) == DEAD {
+        out = out + SUBSTRING(input, i, tag["end"]);
+        i = tag["end"];
+        BEQUEATH VOID;
+    }
+    
+    SHOULD tag["close"] == DEAD {
+        // Block Tags
+        SHOULD name == "code" {
+            BIRTH closer WITH find_block_closer(tag["end"], "code");
+            SHOULD closer != -1 {
+                BIRTH content WITH SUBSTRING(input, tag["end"], closer);
+                out = out + "<code>" + content + "</code>";
+                BIRTH closing_tag WITH parse_tag(closer);
+                i = closing_tag["end"];
+                BEQUEATH VOID;
+            }
+        }
+        
+        SHOULD name == "img" {
+             BIRTH closer WITH find_block_closer(tag["end"], "img");
+             SHOULD closer != -1 {
+                 BIRTH content WITH SUBSTRING(input, tag["end"], closer);
+                 out = out + "<img src=\"" + content + "\">";
+                 BIRTH closing_tag WITH parse_tag(closer);
+                 i = closing_tag["end"];
+                 BEQUEATH VOID;
+             }
+        }
+        
+        SHOULD name == "url" AND tag["attr"] == VOID {
+             BIRTH closer WITH find_block_closer(tag["end"], "url");
+             SHOULD closer != -1 {
+                 BIRTH content WITH SUBSTRING(input, tag["end"], closer);
+                 out = out + "<a href=\"" + content + "\">" + content + "</a>";
+                 BIRTH closing_tag WITH parse_tag(closer);
+                 i = closing_tag["end"];
+                 BEQUEATH VOID;
+             }
+        }
+        
+        // Opening Tags (Recursive/Stack)
+        BIRTH balanced WITH check_balance(tag["end"], name);
+        SHOULD balanced {
+            stack = APPEND(stack, name);
+            SHOULD name == "b" { out = out + "<strong>"; }
+            SHOULD name == "i" { out = out + "<em>"; }
+            SHOULD name == "u" { out = out + "<u>"; }
+            SHOULD name == "s" { out = out + "<s>"; }
+            SHOULD name == "quote" {
+                out = out + "<blockquote>";
+                SHOULD tag["attr"] != VOID {
+                    out = out + "<cite>" + tag["attr"] + "</cite>";
+                }
+            }
+            SHOULD name == "color" { out = out + "<span style=\"color:" + tag["attr"] + "\">"; }
+            SHOULD name == "size" { out = out + "<span style=\"font-size:" + tag["attr"] + "\">"; }
+            SHOULD name == "url" { out = out + "<a href=\"" + tag["attr"] + "\">"; }
+            
+            i = tag["end"];
+            BEQUEATH VOID;
+        }
+    }
+    
+    SHOULD tag["close"] {
+        SHOULD LENGTH(stack) > 0 {
+             BIRTH top WITH LAST(stack);
+             SHOULD top == name {
+                 stack = SLICE(stack, 0, LENGTH(stack) - 1);
+                 
+                 SHOULD name == "b" { out = out + "</strong>"; }
+                 SHOULD name == "i" { out = out + "</em>"; }
+                 SHOULD name == "u" { out = out + "</u>"; }
+                 SHOULD name == "s" { out = out + "</s>"; }
+                 SHOULD name == "quote" { out = out + "</blockquote>"; }
+                 SHOULD name == "color" OR name == "size" { out = out + "</span>"; }
+                 SHOULD name == "url" { out = out + "</a>"; }
+                 
+                 i = tag["end"];
+                 BEQUEATH VOID;
+             }
+        }
+    }
+    
+    // Literal
+    out = out + SUBSTRING(input, i, tag["end"]);
+    i = tag["end"];
+}
+
+RITE loop() {
+    SHOULD i < len {
+        process_step();
+        import timer next(1ms);
+        ~ATH(next) {} EXECUTE(loop());
+    } LEST {
+        UTTER(out);
+    }
+}
+
+~ATH(T) {} EXECUTE(loop());
