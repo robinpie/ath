@@ -25,7 +25,7 @@ Use the JavaScript interpreter at `js-interpreter/ath.js`.
 
 Both the Python and JavaScript interpreters include a stepping debugger that pauses after each statement, allowing you to inspect variables, entities, and async tasks.
 
-#### Debugger Commands
+#### Debugger commands
 
 |   Command   |   Shortcut    |                Action                 |
 |-------------|---------------|---------------------------------------|
@@ -36,7 +36,7 @@ Both the Python and JavaScript interpreters include a stepping debugger that pau
 | `tasks`     | `t`           | Show pending async tasks              |
 | `quit`      | `q`           | Quit the debugger and program         |
 
-#### Python Interpreter
+#### Python interpreter
 
 Use the `--step` (or `-d`) flag:
 
@@ -46,7 +46,7 @@ python3 untildeath.py --step examples/hello.~ath
 
 In the REPL, type `:step` to toggle debugging for the next execution.
 
-### JavaScript Interpreter
+### JavaScript interpreter
 
 Use the `ath.js` CLI script with the `--step` flag:
 
