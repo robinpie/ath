@@ -78,6 +78,12 @@ class StdoutRedirector:
         sys.stdout = self.original_stdout
 
 
+class StaticHeader(Header):
+    """A Header that does not expand on click."""
+    def on_click(self):
+        pass
+
+
 class AthDebuggerApp(App):
     """The Textual TUI Application."""
 
@@ -136,7 +142,7 @@ class AthDebuggerApp(App):
         self.interpreter_task: Optional[asyncio.Task] = None
 
     def compose(self) -> ComposeResult:
-        yield Header(icon="♊")
+        yield StaticHeader(icon="♊")
         
         # Left column: Source Code
         yield Container(
