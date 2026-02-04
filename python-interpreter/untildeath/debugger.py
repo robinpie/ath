@@ -91,7 +91,9 @@ class Debugger:
                         cmd = self.last_command
                     else:
                         cmd = cmd_input.lower()
-                        self.last_command = cmd
+                        # Only update last_command for execution actions
+                        if cmd in ('s', 'step', 'c', 'continue'):
+                            self.last_command = cmd
 
                     await self.process_command(cmd, scope, interpreter)
                 except EOFError:

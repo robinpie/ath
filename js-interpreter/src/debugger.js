@@ -66,7 +66,10 @@ export class Debugger {
             cmd = this.lastCommand;
           } else {
             cmd = cmdInput.toLowerCase();
-            this.lastCommand = cmd;
+            // Only update lastCommand for execution actions
+            if (['s', 'step', 'c', 'continue'].includes(cmd)) {
+              this.lastCommand = cmd;
+            }
           }
 
           await this.processCommand(cmd, scope, interpreter);
