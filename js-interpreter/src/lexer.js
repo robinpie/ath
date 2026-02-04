@@ -198,7 +198,33 @@ export class Lexer {
       }
 
       // Number (including negative)
-      if (/\d/.test(ch) || (ch === '-' && this.peek(1) !== null && /\d/.test(this.peek(1)))) {
+      let isNegative = false;
+      if (ch === '-' && this.peek(1) !== null && /\d/.test(this.peek(1))) {
+        let isSubtraction = false;
+        if (this.tokens.length > 0) {
+          const last = this.tokens[this.tokens.length - 1].type;
+          if (
+            last === TokenType.IDENTIFIER ||
+            last === TokenType.INTEGER ||
+            last === TokenType.FLOAT ||
+            last === TokenType.STRING ||
+            last === TokenType.DURATION ||
+            last === TokenType.ALIVE ||
+            last === TokenType.DEAD ||
+            last === TokenType.VOID ||
+            last === TokenType.RPAREN ||
+            last === TokenType.RBRACKET
+          ) {
+            isSubtraction = true;
+          }
+        }
+
+        if (!isSubtraction) {
+          isNegative = true;
+        }
+      }
+
+      if (/\d/.test(ch) || isNegative) {
         this.tokens.push(this.readNumber());
         continue;
       }

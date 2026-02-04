@@ -289,7 +289,6 @@ inspired by <em><a href="https://homestuck.com/">Homestuck</a></em>'s fictional 
 <div style="margin-top: 5px;">
 <button onclick="addScryInput()" style="font-size: 11px; padding: 4px 8px;">+</button>
 <button id="remove-scry-btn" onclick="removeScryInput()" style="font-size: 11px; padding: 4px 8px; display: none;">-</button>
-<button onclick="resetScryInputs()" style="font-size: 11px; padding: 4px 8px;">RESET</button>
 </div>
 </div>
 
@@ -324,7 +323,7 @@ inspired by <em><a href="https://homestuck.com/">Homestuck</a></em>'s fictional 
 </div>
 
 <div class="card download">
-<strong>DOWNLOAD:</strong> Run !~ATH programs locally with the <a href="https://drive.google.com/file/d/1jyjjpKICLAyNfGFPcSL2iKOPAczK9TaB/view?usp=sharing">Python interpreter</a> (includes process, connection, watcher entities and file I/O)
+<strong>DOWNLOAD:</strong> Run !~ATH programs locally with the <a href="https://drive.google.com/file/d/1C-_2jQ3b49d555nrb36DRXqXHEWJ5hm-/view?usp=sharing">Python interpreter</a> (includes process, connection, watcher entities and file I/O)
 </div>
 
 <div class="card info">
@@ -796,6 +795,21 @@ function shareCode() {
   if (code) params.set('code', utoa(code));
   if (input) params.set('input', utoa(input));
 
+  // Collect SCRY inputs
+  var scryInputs = [];
+  var scryElements = document.getElementsByClassName('scry-input');
+  var hasScryContent = false;
+  for (var i = 0; i < scryElements.length; i++) {
+    var val = scryElements[i].value;
+    scryInputs.push(val);
+    if (val) hasScryContent = true;
+  }
+  
+  // Only share if there's content or multiple boxes
+  if (hasScryContent || scryInputs.length > 1) {
+    params.set('scry', utoa(JSON.stringify(scryInputs)));
+  }
+
   var url = window.location.origin + window.location.pathname;
   if (params.toString()) {
     url += '?' + params.toString();
@@ -815,6 +829,7 @@ function shareCode() {
   var params = new URLSearchParams(window.location.search);
   var code = params.get('code');
   var input = params.get('input');
+  var scry = params.get('scry');
 
   if (code) {
     try {
@@ -825,6 +840,18 @@ function shareCode() {
     try {
       document.getElementById('input').value = atou(input);
       autoExpand(document.getElementById('input'));
+    } catch (e) {}
+  }
+  if (scry) {
+    try {
+      var scryData = JSON.parse(atou(scry));
+      if (Array.isArray(scryData) && scryData.length > 0) {
+        resetScryInputs();
+        document.querySelector('.scry-input').value = scryData[0];
+        for (var i = 1; i < scryData.length; i++) {
+          addScryInput(scryData[i]);
+        }
+      }
     } catch (e) {}
   }
 })();
