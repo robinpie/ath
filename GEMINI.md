@@ -6,11 +6,11 @@ This file provides guidance to agents when working with code in this repository.
 
 This is an interpreter for **!~ATH**, an esoteric programming language where all control flow is predicated on waiting for things to die. The language is inspired by the fictional ~ATH language from Homestuck.
 
-The specification is in `!~ATH spec.md`. The Python interpreter is in `interpreter/`.
+The specification is in `!~ATH spec.md`. The Python interpreter is in `python-interpreter/`.
 
 ## Commands
 
-All commands run from `interpreter/` directory:
+All commands run from `python-interpreter/` directory:
 
 ```bash
 # Run all tests (336 tests)
