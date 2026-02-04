@@ -44,3 +44,8 @@ class BequeathError(Exception):
     def __init__(self, value):
         self.value = value
         super().__init__()
+
+
+class DebuggerQuitException(Exception):
+    """Raised when user quits the debugger."""
+    pass

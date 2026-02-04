@@ -2,6 +2,7 @@
 
 import asyncio
 from typing import Any, Dict, List, Optional, Set
+import contextvars
 
 from .ast_nodes import (
     Program, ImportStmt, BifurcateStmt, AthLoop, DieStmt,
@@ -12,12 +13,21 @@ from .ast_nodes import (
     Literal, Identifier, BinaryOp, UnaryOp, CallExpr,
     IndexExpr, MemberExpr, ArrayLiteral, MapLiteral, Duration
 )
+
+# Context variable for tracking current branch
+current_branch_var = contextvars.ContextVar('current_branch', default="MAIN")
+
 from .entities import (
     Entity, ThisEntity, TimerEntity, ProcessEntity,
     ConnectionEntity, WatcherEntity, BranchEntity, CompositeEntity
 )
 from .builtins import Builtins, is_truthy, stringify
-from .errors import RuntimeError, CondemnError, BequeathError
+from .errors import RuntimeError, CondemnError, BequeathError, DebuggerQuitException
+
+# Avoid circular import for type hinting
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .debugger import Debugger, DebuggerState
 
 
 class Scope:
@@ -72,7 +82,7 @@ class UserRite:
 class Interpreter:
     """!~ATH interpreter with async execution."""
 
-    def __init__(self):
+    def __init__(self, debugger: 'Optional[Debugger]' = None):
         self.global_scope = Scope()
         self.current_scope = self.global_scope
         self.entities: Dict[str, Entity] = {}
@@ -80,6 +90,8 @@ class Interpreter:
         self.builtins = Builtins(self)
         self.this_entity: Optional[ThisEntity] = None
         self._pending_tasks: List[asyncio.Task] = []
+        self.debugger = debugger
+        # self._current_branch is now managed via contextvars
 
     async def run(self, program: Program):
         """Execute a program."""
@@ -107,6 +119,17 @@ class Interpreter:
 
     async def execute(self, node):
         """Execute a statement or expression."""
+        if self.debugger:
+            # Need to import locally to check state enum if not imported at top
+            from .debugger import DebuggerState
+            if self.debugger.state == DebuggerState.STEPPING:
+                branch_context = current_branch_var.get()
+                should_continue = await self.debugger.step_hook(
+                    node, self.current_scope, branch_context, self
+                )
+                if not should_continue:
+                    raise DebuggerQuitException()
+
         if isinstance(node, ImportStmt):
             return await self.exec_import(node)
         if isinstance(node, BifurcateStmt):
@@ -267,6 +290,7 @@ class Interpreter:
             raise RuntimeError(f"{branch_name} is not a branch entity", node.line, node.column)
 
         async def run_branch():
+            token = current_branch_var.set(branch_name)
             try:
                 # Execute body
                 for stmt in node.body:
@@ -280,6 +304,8 @@ class Interpreter:
             except Exception as e:
                 branch_entity.complete()
                 raise
+            finally:
+                current_branch_var.reset(token)
 
         # Schedule branch to run
         task = asyncio.create_task(run_branch())

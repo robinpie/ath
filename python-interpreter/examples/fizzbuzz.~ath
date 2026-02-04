@@ -14,10 +14,10 @@ RITE fizzbuzz(n, max) {
 
         // Chain to next iteration via timer
         import timer T(1ms);
-        ~ATH(T) {
+        ~ATH(!T) {
         } EXECUTE(fizzbuzz(n + 1, max));
     }
 }
 
-fizzbuzz(1, 97);
+fizzbuzz(1, 100);
 THIS.DIE();

@@ -15,6 +15,41 @@ python3 untildeath.py
 pip install -e .
 ```
 
+Use the JavaScript interpreter at `js-interpreter/ath.js`.
+
+## Debugging !~ATH programs
+
+Both the Python and JavaScript interpreters include a stepping debugger that pauses after each statement, allowing you to inspect variables, entities, and async tasks.
+
+### Debugger Commands
+
+|   Command   |   Shortcut    |                Action                 |
+|-------------|---------------|---------------------------------------|
+| `step`      | `s` / `Enter` | Step to the next statement            |
+| `continue`  | `c`           | Continue execution freely             |
+| `variables` | `v`           | Show variables in current scope chain |
+| `entities`  | `e`           | Show status of all entities           |
+| `tasks`     | `t`           | Show pending async tasks              |
+| `quit`      | `q`           | Quit the debugger and program         |
+
+### Python Interpreter
+
+Use the `--step` (or `-d`) flag:
+
+```
+python3 untildeath.py --step examples/hello.~ath
+```
+
+In the REPL, type `:step` to toggle debugging for the next execution.
+
+### JavaScript Interpreter
+
+Use the `ath.js` CLI script with the `--step` flag:
+
+```
+node js-interpreter/ath.js --step examples/hello.~ath
+```
+
 ## Spec and Reference
 
 The full !~ATH spec is located at /athSpec.md, but a quick reference is located below.

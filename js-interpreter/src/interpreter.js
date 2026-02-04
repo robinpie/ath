@@ -16,6 +16,7 @@ export class Interpreter {
     this.builtins = new Builtins(this, options);
     this.thisEntity = null;
     this._pendingPromises = [];
+    this.debugger = options.debugger || null;
   }
 
   async run(program) {
@@ -26,7 +27,7 @@ export class Interpreter {
     try {
       // Execute all statements
       for (const stmt of program.statements) {
-        await this.execute(stmt);
+        await this.execute(stmt, 'MAIN');
       }
 
       // Wait for all pending async operations
@@ -48,17 +49,31 @@ export class Interpreter {
       for (const entity of this.entities.values()) {
         entity.die();
       }
+      if (this.debugger) {
+          this.debugger.close();
+      }
     }
   }
 
-  async execute(node) {
+  async execute(node, branchContext = 'MAIN') {
+    if (this.debugger) {
+        const shouldContinue = await this.debugger.stepHook(node, this.currentScope, this, branchContext);
+        if (!shouldContinue) {
+            // How to quit cleanly? Throwing an error or just returning?
+            // If we return, we skip the statement.
+            // But we want to stop the whole program.
+            // Throwing a specialized error is best.
+            throw new Error('DEBUGGER_QUIT');
+        }
+    }
+
     switch (node.type) {
       case 'ImportStmt':
         return this.execImport(node);
       case 'BifurcateStmt':
         return this.execBifurcate(node);
       case 'AthLoop':
-        return this.execAthLoop(node);
+        return this.execAthLoop(node, branchContext);
       case 'DieStmt':
         return this.execDie(node);
       case 'VarDecl':
@@ -70,9 +85,9 @@ export class Interpreter {
       case 'RiteDef':
         return this.execRiteDef(node);
       case 'Conditional':
-        return this.execConditional(node);
+        return this.execConditional(node, branchContext);
       case 'AttemptSalvage':
-        return this.execAttemptSalvage(node);
+        return this.execAttemptSalvage(node, branchContext);
       case 'CondemnStmt':
         return this.execCondemn(node);
       case 'BequeathStmt':
@@ -168,7 +183,7 @@ export class Interpreter {
     this.branchEntities.add(branch2Name);
   }
 
-  async execAthLoop(node) {
+  async execAthLoop(node, branchContext) {
     const entityExpr = node.entityExpr;
 
     // Check if this is branch mode
@@ -183,7 +198,7 @@ export class Interpreter {
     await entity.waitForDeath();
 
     // Execute the EXECUTE clause
-    await this.execStatements(node.execute);
+    await this.execStatements(node.execute, branchContext);
   }
 
   async execBranchMode(node, branchName) {
@@ -196,17 +211,19 @@ export class Interpreter {
       try {
         // Execute body
         for (const stmt of node.body) {
-          await this.execute(stmt);
+          await this.execute(stmt, branchName);
         }
 
         // Execute EXECUTE clause
-        await this.execStatements(node.execute);
+        await this.execStatements(node.execute, branchName);
 
         // Mark branch as complete
         branchEntity.complete();
       } catch (e) {
         branchEntity.complete();
-        throw e;
+        if (e.message !== 'DEBUGGER_QUIT') {
+            throw e;
+        }
       }
     };
 
@@ -218,6 +235,7 @@ export class Interpreter {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
 
+  // ... resolveEntityExpr ...
   async resolveEntityExpr(expr) {
     switch (expr.type) {
       case 'EntityIdent': {
@@ -332,19 +350,19 @@ export class Interpreter {
     this.currentScope.define(node.name, rite, true);
   }
 
-  async execConditional(node) {
+  async execConditional(node, branchContext) {
     const condition = await this.evaluate(node.condition);
 
     if (isTruthy(condition)) {
-      await this.execStatements(node.thenBranch);
+      await this.execStatements(node.thenBranch, branchContext);
     } else if (node.elseBranch) {
-      await this.execStatements(node.elseBranch);
+      await this.execStatements(node.elseBranch, branchContext);
     }
   }
 
-  async execAttemptSalvage(node) {
+  async execAttemptSalvage(node, branchContext) {
     try {
-      await this.execStatements(node.attemptBody);
+      await this.execStatements(node.attemptBody, branchContext);
     } catch (e) {
       if (e instanceof RuntimeError || e instanceof CondemnError) {
         // Create new scope for salvage block with error variable
@@ -352,7 +370,7 @@ export class Interpreter {
         this.currentScope = new Scope(oldScope);
         this.currentScope.define(node.errorName, e.tildeAthMessage || String(e));
         try {
-          await this.execStatements(node.salvageBody);
+          await this.execStatements(node.salvageBody, branchContext);
         } finally {
           this.currentScope = oldScope;
         }
@@ -375,9 +393,9 @@ export class Interpreter {
     throw new BequeathError(value);
   }
 
-  async execStatements(statements) {
+  async execStatements(statements, branchContext = 'MAIN') {
     for (const stmt of statements) {
-      await this.execute(stmt);
+      await this.execute(stmt, branchContext);
     }
   }
 

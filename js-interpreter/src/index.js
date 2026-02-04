@@ -64,6 +64,7 @@ export class TildeAth {
       onInput: options.onInput || null,
       inputQueue: options.inputQueue || [],
       scryQueue: options.scryQueue || [],
+      debugger: options.debugger || null,
     };
   }
 
