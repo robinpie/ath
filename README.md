@@ -38,10 +38,18 @@ Both the Python and JavaScript interpreters include a stepping debugger that pau
 
 #### Python interpreter
 
+**CLI Debugger:**
 Use the `--step` (or `-d`) flag:
 
 ```
-python3 untildeath.py --step examples/hello.~ath
+python3 untildeath.py --step ./examples/hello.~ath
+```
+
+**TUI Debugger (Textual):**
+For a richer graphical interface in the terminal, use the `--tui` flag:
+
+```
+python3 untildeath.py --tui ./examples/hello.~ath
 ```
 
 In the REPL, type `:step` to toggle debugging for the next execution.
@@ -51,7 +59,7 @@ In the REPL, type `:step` to toggle debugging for the next execution.
 Use the `ath.js` CLI script with the `--step` flag:
 
 ```
-node js-interpreter/ath.js --step examples/hello.~ath
+node js-interpreter/ath.js --step ./examples/hello.~ath
 ```
 
 ## Spec and Reference
