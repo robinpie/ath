@@ -10,7 +10,7 @@ All commands for the Python interpreter run from the `python-interpreter/` direc
 
 ```
 # Run a !~ATH program
-python3 untildeath.py examples/hello.~ath
+python3 untildeath.py ./examples/hello.~ath
 
 # Start the REPL
 python3 untildeath.py
