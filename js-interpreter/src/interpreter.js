@@ -33,6 +33,11 @@ export class Interpreter {
       if (this._pendingPromises.length > 0) {
         await Promise.allSettled(this._pendingPromises);
       }
+
+      // Check if program ended without THIS.DIE()
+      if (this.thisEntity && this.thisEntity.isAlive) {
+        console.error('Warning: Program ended without THIS.DIE();');
+      }
     } catch (e) {
       if (e instanceof CondemnError) {
         throw e;

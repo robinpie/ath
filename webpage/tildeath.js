@@ -1256,6 +1256,9 @@
       try {
         for (const stmt of program.statements) await this.execute(stmt);
         if (this._pendingPromises.length > 0) await Promise.allSettled(this._pendingPromises);
+        if (this.thisEntity && this.thisEntity.isAlive) {
+          console.error('Warning: Program ended without THIS.DIE();');
+        }
       } finally {
         for (const entity of this.entities.values()) entity.die();
       }
