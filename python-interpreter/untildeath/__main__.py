@@ -140,12 +140,42 @@ def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="!~ATH Interpreter")
     parser.add_argument("file", nargs="?", help="Source file to run")
-    parser.add_argument("--step", "-d", "--debug", action="store_true", help="Enable stepping debugger")
+    parser.add_argument("--step", "-d", "--debug", action="store_true", help="Enable stepping debugger (CLI)")
+    parser.add_argument("--tui", action="store_true", help="Enable TUI debugger (Textual)")
     
     args = parser.parse_args()
     
     if args.file:
-        sys.exit(run_file(args.file, debug=args.step))
+        if args.tui:
+            # Run TUI
+            from .tui import AthDebuggerApp
+            from .lexer import Lexer
+            from .parser import Parser
+            from .interpreter import Interpreter
+            
+            try:
+                path = Path(args.file)
+                if not path.exists():
+                    print(f"Error: File not found: {args.file}", file=sys.stderr)
+                    sys.exit(1)
+                
+                source = path.read_text(encoding='utf-8')
+                
+                # Parse first
+                lexer = Lexer(source)
+                tokens = lexer.tokenize()
+                parser = Parser(tokens)
+                program = parser.parse()
+                
+                # Run App
+                app = AthDebuggerApp(source, program, Interpreter)
+                app.run()
+                sys.exit(0)
+            except Exception as e:
+                print(f"Error starting TUI: {e}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            sys.exit(run_file(args.file, debug=args.step))
     else:
         run_repl()
 
