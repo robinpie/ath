@@ -4,6 +4,7 @@
   "description": "JavaScript interpreter for the !~ATH esoteric programming language",
   "main": "src/index.js",
   "type": "module",
+  "license": "GPL-2.0-only",
   "exports": {
     ".": "./src/index.js"
   },
