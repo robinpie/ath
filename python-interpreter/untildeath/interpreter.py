@@ -96,6 +96,11 @@ class Interpreter:
             if self._pending_tasks:
                 await asyncio.gather(*self._pending_tasks, return_exceptions=True)
 
+            # Check if program ended without THIS.DIE()
+            if self.this_entity and self.this_entity.is_alive:
+                import sys
+                print("Warning: Program ended without THIS.DIE();", file=sys.stderr)
+
         except CondemnError as e:
             print(f"Uncaught error: {e.message}")
             raise
