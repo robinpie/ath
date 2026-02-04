@@ -86,22 +86,15 @@ class AthDebuggerApp(App):
     CSS = """
     Screen {
         layout: grid;
-        grid-size: 2;
+        grid-size: 2 2;
         grid-columns: 2fr 1fr;
-        grid-rows: 2fr 1fr;
+        grid-rows: 1fr 1fr;
     }
 
     #source-container {
-        row-span: 1;
-        column-span: 1;
-        border: solid green;
-        background: $surface;
-    }
-
-    #variables-container {
         row-span: 2;
         column-span: 1;
-        border: solid blue;
+        border: solid green;
         background: $surface;
     }
 
@@ -109,6 +102,13 @@ class AthDebuggerApp(App):
         row-span: 1;
         column-span: 1;
         border: solid yellow;
+        background: $surface;
+    }
+
+    #variables-container {
+        row-span: 1;
+        column-span: 1;
+        border: solid blue;
         background: $surface;
     }
 
@@ -126,34 +126,38 @@ class AthDebuggerApp(App):
         Binding("q", "quit", "Quit"),
     ]
 
-    def __init__(self, source_code: str, program_ast, interpreter_cls):
+    def __init__(self, source_code: str, program_ast, interpreter_cls, filename: str = "Unknown"):
         super().__init__()
         self.source_code = source_code
         self.program_ast = program_ast
         self.interpreter_cls = interpreter_cls
+        self.sub_title = filename
         self.debugger: Optional[TextualDebugger] = None
         self.interpreter_task: Optional[asyncio.Task] = None
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield Header(icon="♊")
         
+        # Left column: Source Code
         yield Container(
             Static("Source Code", classes="box-title"),
             Static(id="source-view", expand=True),
             id="source-container"
         )
 
+        # Top Right: Program Output
+        yield Container(
+            Static("Program Output", classes="box-title"),
+            RichLog(id="program-output", highlight=True, markup=True),
+            id="output-container"
+        )
+
+        # Bottom Right: Variables & Entities
         yield Container(
             Static("Variables & Entities", classes="box-title"),
             Tree("Scope", id="scope-tree"),
             DataTable(id="entities-table"),
             id="variables-container"
-        )
-
-        yield Container(
-            Static("Program Output", classes="box-title"),
-            RichLog(id="program-output", highlight=True, markup=True),
-            id="output-container"
         )
 
         yield Footer()

@@ -168,7 +168,7 @@ def main():
                 program = parser.parse()
                 
                 # Run App
-                app = AthDebuggerApp(source, program, Interpreter)
+                app = AthDebuggerApp(source, program, Interpreter, filename=args.file)
                 app.run()
                 sys.exit(0)
             except Exception as e:
