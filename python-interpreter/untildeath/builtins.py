@@ -80,6 +80,10 @@ class Builtins:
             'STRING': self.string,
             'INT': self.int_,
             'FLOAT': self.float_,
+            'CHAR': self.char,
+            'CODE': self.code,
+            'BIN': self.bin,
+            'HEX': self.hex,
 
             # Array operations
             'APPEND': self.append,
@@ -205,6 +209,35 @@ class Builtins:
         if isinstance(value, (int, float)):
             return float(value)
         raise RuntimeError(f"FLOAT expects number, got {type_name(value)}")
+
+    def char(self, value: int) -> str:
+        """Convert integer code point to character."""
+        if not isinstance(value, int):
+            raise RuntimeError(f"CHAR expects integer, got {type_name(value)}")
+        try:
+            return chr(value)
+        except ValueError:
+            raise RuntimeError(f"Invalid code point: {value}")
+
+    def code(self, value: str) -> int:
+        """Get integer code point of first character."""
+        if not isinstance(value, str):
+            raise RuntimeError(f"CODE expects string, got {type_name(value)}")
+        if len(value) == 0:
+            raise RuntimeError("CODE called on empty string")
+        return ord(value[0])
+
+    def bin(self, value: int) -> str:
+        """Convert integer to binary string."""
+        if not isinstance(value, int):
+            raise RuntimeError(f"BIN expects integer, got {type_name(value)}")
+        return bin(value)[2:]  # Strip '0b' prefix
+
+    def hex(self, value: int) -> str:
+        """Convert integer to hex string."""
+        if not isinstance(value, int):
+            raise RuntimeError(f"HEX expects integer, got {type_name(value)}")
+        return hex(value)[2:].upper()  # Strip '0x' prefix and uppercase
 
     # ============ Array Operations ============
 

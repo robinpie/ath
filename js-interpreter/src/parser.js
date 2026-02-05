@@ -646,7 +646,7 @@ export class Parser {
   }
 
   parseComparison() {
-    let left = this.parseTerm();
+    let left = this.parseBitwiseOr();
 
     while (this.check(TokenType.LT, TokenType.GT, TokenType.LE, TokenType.GE)) {
       const token = this.advance();
@@ -656,8 +656,57 @@ export class Parser {
         [TokenType.LE]: '<=',
         [TokenType.GE]: '>=',
       };
-      const right = this.parseTerm();
+      const right = this.parseBitwiseOr();
       left = ast.createBinaryOp(opMap[token.type], left, right, token.line, token.column);
+    }
+
+    return left;
+  }
+
+  parseBitwiseOr() {
+    let left = this.parseBitwiseXor();
+
+    while (this.match(TokenType.PIPE)) {
+      const token = this.tokens[this.pos - 1];
+      const right = this.parseBitwiseXor();
+      left = ast.createBinaryOp('|', left, right, token.line, token.column);
+    }
+
+    return left;
+  }
+
+  parseBitwiseXor() {
+    let left = this.parseBitwiseAnd();
+
+    while (this.match(TokenType.CARET)) {
+      const token = this.tokens[this.pos - 1];
+      const right = this.parseBitwiseAnd();
+      left = ast.createBinaryOp('^', left, right, token.line, token.column);
+    }
+
+    return left;
+  }
+
+  parseBitwiseAnd() {
+    let left = this.parseShift();
+
+    while (this.match(TokenType.AMP)) {
+      const token = this.tokens[this.pos - 1];
+      const right = this.parseShift();
+      left = ast.createBinaryOp('&', left, right, token.line, token.column);
+    }
+
+    return left;
+  }
+
+  parseShift() {
+    let left = this.parseTerm();
+
+    while (this.check(TokenType.LSHIFT, TokenType.RSHIFT)) {
+      const token = this.advance();
+      const op = token.type === TokenType.LSHIFT ? '<<' : '>>';
+      const right = this.parseTerm();
+      left = ast.createBinaryOp(op, left, right, token.line, token.column);
     }
 
     return left;
@@ -704,6 +753,12 @@ export class Parser {
       const token = this.tokens[this.pos - 1];
       const operand = this.parseUnary();
       return ast.createUnaryOp('-', operand, token.line, token.column);
+    }
+
+    if (this.match(TokenType.TILDE)) {
+      const token = this.tokens[this.pos - 1];
+      const operand = this.parseUnary();
+      return ast.createUnaryOp('~', operand, token.line, token.column);
     }
 
     return this.parsePostfix();

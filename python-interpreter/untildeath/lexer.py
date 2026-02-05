@@ -59,6 +59,14 @@ class TokenType(Enum):
     LE = auto()
     GE = auto()
     ASSIGN = auto()
+    
+    # Bitwise Operators
+    AMP = auto()    # &
+    PIPE = auto()   # |
+    CARET = auto()  # ^
+    TILDE = auto()  # ~
+    LSHIFT = auto() # <<
+    RSHIFT = auto() # >>
 
     # Entity operators (only valid in entity expressions)
     AMPAMP = auto()  # &&
@@ -324,6 +332,19 @@ class Lexer:
                 self.advance()
                 self.tokens.append(Token(TokenType.PIPEPIPE, '||', start_line, start_col))
                 continue
+            
+            # Shift operators
+            if ch == '<' and self.peek(1) == '<':
+                self.advance()
+                self.advance()
+                self.tokens.append(Token(TokenType.LSHIFT, '<<', start_line, start_col))
+                continue
+
+            if ch == '>' and self.peek(1) == '>':
+                self.advance()
+                self.advance()
+                self.tokens.append(Token(TokenType.RSHIFT, '>>', start_line, start_col))
+                continue
 
             if ch == '=' and self.peek(1) == '=':
                 self.advance()
@@ -360,6 +381,10 @@ class Lexer:
                 '>': TokenType.GT,
                 '=': TokenType.ASSIGN,
                 '!': TokenType.BANG,
+                '&': TokenType.AMP,
+                '|': TokenType.PIPE,
+                '^': TokenType.CARET,
+                '~': TokenType.TILDE,
                 '(': TokenType.LPAREN,
                 ')': TokenType.RPAREN,
                 '{': TokenType.LBRACE,

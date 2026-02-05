@@ -147,6 +147,7 @@ VOID                      // absence of value
 
 ```ath
 + - * / %                     // arithmetic (/ is integer div for ints)
+& | ^ ~ << >>                 // bitwise (AND, OR, XOR, NOT, shifts)
 == != < > <= >=               // comparison
 AND OR NOT                    // logical (short-circuit)
 arr[0]  map["key"]  map.key   // indexing
@@ -219,6 +220,8 @@ PARSE_FLOAT("3.14")       // string to float
 STRING(42)                // value to string
 INT(3.7)                  // float to integer (truncates)
 FLOAT(42)                 // integer to float
+CHAR(65), CODE("A")       // int to char / char to int code
+BIN(10), HEX(255)         // int to binary/hex string
 ```
 
 **Array operations:**

@@ -568,6 +568,32 @@ class Interpreter:
         if op == '>=':
             return left >= right
 
+        # Bitwise operators
+        if op == '&':
+            if isinstance(left, int) and isinstance(right, int):
+                return left & right
+            raise RuntimeError(f"Bitwise AND expects integers", node.line, node.column)
+
+        if op == '|':
+            if isinstance(left, int) and isinstance(right, int):
+                return left | right
+            raise RuntimeError(f"Bitwise OR expects integers", node.line, node.column)
+
+        if op == '^':
+            if isinstance(left, int) and isinstance(right, int):
+                return left ^ right
+            raise RuntimeError(f"Bitwise XOR expects integers", node.line, node.column)
+
+        if op == '<<':
+            if isinstance(left, int) and isinstance(right, int):
+                return left << right
+            raise RuntimeError(f"Bitwise shift expects integers", node.line, node.column)
+
+        if op == '>>':
+            if isinstance(left, int) and isinstance(right, int):
+                return left >> right
+            raise RuntimeError(f"Bitwise shift expects integers", node.line, node.column)
+
         raise RuntimeError(f"Unknown operator: {op}", node.line, node.column)
 
     async def eval_unary_op(self, node: UnaryOp) -> Any:
@@ -581,6 +607,11 @@ class Interpreter:
             if isinstance(operand, (int, float)):
                 return -operand
             raise RuntimeError(f"Cannot negate {stringify(operand)}", node.line, node.column)
+
+        if node.operator == '~':
+            if isinstance(operand, int):
+                return ~operand
+            raise RuntimeError(f"Bitwise NOT expects integer", node.line, node.column)
 
         raise RuntimeError(f"Unknown unary operator: {node.operator}", node.line, node.column)
 

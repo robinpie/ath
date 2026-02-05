@@ -421,6 +421,30 @@ class TestParserExpressions(unittest.TestCase):
         program = parse("BIRTH r WITH -x;")
         self.assertEqual(program.statements[0].value.operator, "-")
 
+    def test_unary_bitwise_not(self):
+        program = parse("BIRTH r WITH ~x;")
+        expr = program.statements[0].value
+        self.assertIsInstance(expr, UnaryOp)
+        self.assertEqual(expr.operator, "~")
+
+    def test_bitwise_and(self):
+        program = parse("BIRTH r WITH x & y;")
+        self.assertEqual(program.statements[0].value.operator, "&")
+
+    def test_bitwise_or(self):
+        program = parse("BIRTH r WITH x | y;")
+        self.assertEqual(program.statements[0].value.operator, "|")
+
+    def test_bitwise_xor(self):
+        program = parse("BIRTH r WITH x ^ y;")
+        self.assertEqual(program.statements[0].value.operator, "^")
+
+    def test_bitwise_shift(self):
+        program = parse("BIRTH r WITH x << y;")
+        self.assertEqual(program.statements[0].value.operator, "<<")
+        program = parse("BIRTH r WITH x >> y;")
+        self.assertEqual(program.statements[0].value.operator, ">>")
+
     def test_call_no_args(self):
         program = parse("func();")
         expr = program.statements[0].expression
@@ -500,6 +524,17 @@ class TestParserPrecedence(unittest.TestCase):
         # Should be a OR (b AND c)
         self.assertEqual(expr.operator, "OR")
         self.assertEqual(expr.right.operator, "AND")
+
+    def test_bitwise_precedence(self):
+        # Shift > And > Xor > Or
+        # 1 | 2 ^ 3 & 4 << 5
+        # Expected: 1 | (2 ^ (3 & (4 << 5)))
+        program = parse("BIRTH x WITH 1 | 2 ^ 3 & 4 << 5;")
+        expr = program.statements[0].value
+        self.assertEqual(expr.operator, "|")
+        self.assertEqual(expr.right.operator, "^")
+        self.assertEqual(expr.right.right.operator, "&")
+        self.assertEqual(expr.right.right.right.operator, "<<")
 
 
 class TestParserErrors(unittest.TestCase):

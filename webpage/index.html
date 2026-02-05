@@ -327,6 +327,7 @@ inspired by <em><a href="https://homestuck.com/">Homestuck</a></em>'s fictional 
 <button onclick="loadExample('quine')">Quine</button>
 <button onclick="loadExample('input')">Input Demo</button>
 <button onclick="loadExample('scry')">SCRY Input</button>
+<button onclick="loadExample('bitwise')">Bitwise Ops</button>
 <button onclick="loadExample('brainfuck')">Brainfuck</button>
 </div>
 </div>
@@ -416,7 +417,8 @@ VOID                      // absence of value
 
 <h3>OPERATORS</h3>
 <pre>+ - * / %                     // arithmetic (/ is integer div for ints)
-== != &lt; &gt; &lt;= &gt;=               // comparison
+& | ^ ~ << >>                 // bitwise (AND, OR, XOR, NOT, shifts)
+== != < > <= >=               // comparison
 AND OR NOT                    // logical (short-circuit)
 arr[0]  map["key"]  map.key   // indexing</pre>
 
@@ -470,7 +472,9 @@ PARSE_INT("42")           // string to integer
 PARSE_FLOAT("3.14")       // string to float
 STRING(42)                // value to string
 INT(3.7)                  // float to integer (truncates)
-FLOAT(42)                 // integer to float</pre>
+FLOAT(42)                 // integer to float
+CHAR(65), CODE("A")       // int to char / char to int code
+BIN(10), HEX(255)         // int to binary/hex string</pre>
 
 <p><strong>Array operations:</strong></p>
 <pre>APPEND(arr, val)          // add to end (returns new array)
@@ -632,6 +636,31 @@ UTTER("First content preview: " + SUBSTRING(content1, 0, 20) + "...");
 UTTER("Reading second SCRY input...");
 BIRTH content2 WITH SCRY(VOID);
 UTTER("Second content length: " + STRING(LENGTH(content2)));
+
+THIS.DIE();`,
+
+  bitwise: `// Bitwise Operations Demo
+UTTER("Bitwise AND: 60 & 13 = " + STRING(60 & 13)); // 12
+UTTER("Bitwise OR:  60 | 13 = " + STRING(60 | 13)); // 61
+UTTER("Bitwise XOR: 60 ^ 13 = " + STRING(60 ^ 13)); // 49
+UTTER("Bitwise NOT: ~60 = " + STRING(~60));         // -61
+UTTER("Left Shift:  60 << 2 = " + STRING(60 << 2)); // 240
+UTTER("Right Shift: 60 >> 2 = " + STRING(60 >> 2)); // 15
+
+UTTER("");
+UTTER("--- Conversions ---");
+
+BIRTH charCode WITH 65;
+UTTER("CHAR(" + charCode + ") = " + CHAR(charCode));
+
+BIRTH charStr WITH "B";
+UTTER("CODE(\\"" + charStr + "\\") = " + STRING(CODE(charStr)));
+
+BIRTH binVal WITH 10;
+UTTER("BIN(" + binVal + ") = " + BIN(binVal));
+
+BIRTH hexVal WITH 255;
+UTTER("HEX(" + hexVal + ") = " + HEX(hexVal));
 
 THIS.DIE();`,
 

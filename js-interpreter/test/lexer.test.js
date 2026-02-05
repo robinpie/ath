@@ -358,6 +358,22 @@ describe('Lexer Operators', () => {
     const tokens = lexer.tokenize();
     assert.strictEqual(tokens[0].type, TokenType.ASSIGN);
   });
+
+  it('bitwise operators', () => {
+    const operators = [
+      ['&', TokenType.AMP],
+      ['|', TokenType.PIPE],
+      ['^', TokenType.CARET],
+      ['~', TokenType.TILDE],
+      ['<<', TokenType.LSHIFT],
+      ['>>', TokenType.RSHIFT],
+    ];
+    for (const [op, expected] of operators) {
+      const lexer = new Lexer(op);
+      const tokens = lexer.tokenize();
+      assert.strictEqual(tokens[0].type, expected, `Failed for ${op}`);
+    }
+  });
 });
 
 describe('Lexer Punctuation', () => {

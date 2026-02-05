@@ -355,6 +355,21 @@ class TestLexerOperators(unittest.TestCase):
                 tokens = lexer.tokenize()
                 self.assertEqual(tokens[0].type, expected)
 
+    def test_bitwise_operators(self):
+        operators = [
+            ("&", TokenType.AMP),
+            ("|", TokenType.PIPE),
+            ("^", TokenType.CARET),
+            ("~", TokenType.TILDE),
+            ("<<", TokenType.LSHIFT),
+            (">>", TokenType.RSHIFT),
+        ]
+        for op, expected in operators:
+            with self.subTest(operator=op):
+                lexer = Lexer(op)
+                tokens = lexer.tokenize()
+                self.assertEqual(tokens[0].type, expected)
+
     def test_assignment(self):
         lexer = Lexer("=")
         tokens = lexer.tokenize()

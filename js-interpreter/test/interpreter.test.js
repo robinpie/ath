@@ -237,6 +237,82 @@ describe('Interpreter Comparison', () => {
   });
 });
 
+describe('Interpreter Bitwise', () => {
+  it('bitwise AND', async () => {
+    const source = `
+      import timer T(1ms);
+      ~ATH(T) { } EXECUTE(UTTER(60 & 13));
+      THIS.DIE();
+    `;
+    const output = await runProgram(source);
+    assert.strictEqual(output.trim(), '12');
+  });
+
+  it('bitwise OR', async () => {
+    const source = `
+      import timer T(1ms);
+      ~ATH(T) { } EXECUTE(UTTER(60 | 13));
+      THIS.DIE();
+    `;
+    const output = await runProgram(source);
+    assert.strictEqual(output.trim(), '61');
+  });
+
+  it('bitwise XOR', async () => {
+    const source = `
+      import timer T(1ms);
+      ~ATH(T) { } EXECUTE(UTTER(60 ^ 13));
+      THIS.DIE();
+    `;
+    const output = await runProgram(source);
+    assert.strictEqual(output.trim(), '49');
+  });
+
+  it('bitwise NOT', async () => {
+    const source = `
+      import timer T(1ms);
+      ~ATH(T) { } EXECUTE(UTTER(~60));
+      THIS.DIE();
+    `;
+    const output = await runProgram(source);
+    assert.strictEqual(output.trim(), '-61');
+  });
+
+  it('left shift', async () => {
+    const source = `
+      import timer T(1ms);
+      ~ATH(T) { } EXECUTE(UTTER(60 << 2));
+      THIS.DIE();
+    `;
+    const output = await runProgram(source);
+    assert.strictEqual(output.trim(), '240');
+  });
+
+  it('right shift', async () => {
+    const source = `
+      import timer T(1ms);
+      ~ATH(T) { } EXECUTE(UTTER(60 >> 2));
+      THIS.DIE();
+    `;
+    const output = await runProgram(source);
+    assert.strictEqual(output.trim(), '15');
+  });
+
+  it('bitwise precedence', async () => {
+    const source = `
+      import timer T(1ms);
+      ~ATH(T) { } EXECUTE(
+        UTTER(1 | 2 & 3);
+        UTTER(1 & 3 << 1);
+      );
+      THIS.DIE();
+    `;
+    const output = await runProgram(source);
+    const lines = output.trim().split('\n');
+    assert.deepStrictEqual(lines, ['3', '0']);
+  });
+});
+
 describe('Interpreter Logical', () => {
   it('AND true', async () => {
     const source = `

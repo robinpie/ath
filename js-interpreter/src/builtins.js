@@ -105,6 +105,10 @@ export class Builtins {
       'STRING': (value) => this.string(value),
       'INT': (value) => this.int(value),
       'FLOAT': (value) => this.float(value),
+      'CHAR': (value) => this.char(value),
+      'CODE': (value) => this.code(value),
+      'BIN': (value) => this.bin(value),
+      'HEX': (value) => this.hex(value),
 
       // Array operations
       'APPEND': (arr, value) => this.append(arr, value),
@@ -220,6 +224,41 @@ export class Builtins {
       return value;
     }
     throw new RuntimeError(`FLOAT expects number, got ${typeName(value)}`);
+  }
+
+  char(value) {
+    if (!Number.isInteger(value)) {
+      throw new RuntimeError(`CHAR expects integer, got ${typeName(value)}`);
+    }
+    try {
+      return String.fromCodePoint(value);
+    } catch (e) {
+      throw new RuntimeError(`Invalid code point: ${value}`);
+    }
+  }
+
+  code(value) {
+    if (typeof value !== 'string') {
+      throw new RuntimeError(`CODE expects string, got ${typeName(value)}`);
+    }
+    if (value.length === 0) {
+      throw new RuntimeError('CODE called on empty string');
+    }
+    return value.codePointAt(0);
+  }
+
+  bin(value) {
+    if (!Number.isInteger(value)) {
+      throw new RuntimeError(`BIN expects integer, got ${typeName(value)}`);
+    }
+    return (value >>> 0).toString(2); // Unsigned binary string representation
+  }
+
+  hex(value) {
+    if (!Number.isInteger(value)) {
+      throw new RuntimeError(`HEX expects integer, got ${typeName(value)}`);
+    }
+    return (value >>> 0).toString(16).toUpperCase(); // Unsigned hex string
   }
 
   // ============ Array Operations ============

@@ -406,3 +406,44 @@ describe('Builtin Utility', () => {
     assert.ok(Number.isInteger(result));
   });
 });
+
+describe('Builtin Bitwise Conversions', () => {
+  const builtins = new Builtins(null);
+
+  it('char', () => {
+    assert.strictEqual(builtins.char(65), 'A');
+    assert.strictEqual(builtins.char(9786), '☺');
+  });
+
+  it('char invalid', () => {
+    assert.throws(() => builtins.char('A'), RuntimeError);
+  });
+
+  it('code', () => {
+    assert.strictEqual(builtins.code('A'), 65);
+    assert.strictEqual(builtins.code('☺'), 9786);
+  });
+
+  it('code invalid', () => {
+    assert.throws(() => builtins.code(65), RuntimeError);
+    assert.throws(() => builtins.code(''), RuntimeError);
+  });
+
+  it('bin', () => {
+    assert.strictEqual(builtins.bin(10), '1010');
+    assert.strictEqual(builtins.bin(0), '0');
+  });
+
+  it('bin invalid', () => {
+    assert.throws(() => builtins.bin('10'), RuntimeError);
+  });
+
+  it('hex', () => {
+    assert.strictEqual(builtins.hex(255), 'FF');
+    assert.strictEqual(builtins.hex(10), 'A');
+  });
+
+  it('hex invalid', () => {
+    assert.throws(() => builtins.hex('255'), RuntimeError);
+  });
+});
