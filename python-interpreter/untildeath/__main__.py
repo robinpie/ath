@@ -142,6 +142,7 @@ def main():
     parser.add_argument("file", nargs="?", help="Source file to run")
     parser.add_argument("--step", "-d", "--debug", action="store_true", help="Enable stepping debugger (CLI)")
     parser.add_argument("--tui", action="store_true", help="Enable TUI debugger (Textual)")
+    parser.add_argument("--trace", action="store_true", help="Enable non-interactive JSON trace mode")
     
     args = parser.parse_args()
     
@@ -175,7 +176,7 @@ def main():
                 print(f"Error starting TUI: {e}", file=sys.stderr)
                 sys.exit(1)
         else:
-            sys.exit(run_file(args.file, debug=args.step))
+            sys.exit(run_file(args.file, debug=args.step, trace=args.trace))
     else:
         run_repl()
 

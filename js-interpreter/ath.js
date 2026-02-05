@@ -2,25 +2,33 @@
 
 import fs from 'fs';
 import { TildeAth } from './src/index.js';
-import { Debugger } from './src/debugger.js';
+import { Debugger, TraceDebugger } from './src/debugger.js';
 
 const args = process.argv.slice(2);
+
+// Check for flags
 const stepIndex = args.findIndex(arg => arg === '--step' || arg === '-d' || arg === '--debug');
 let debugMode = false;
-let filename = null;
-
 if (stepIndex !== -1) {
   debugMode = true;
   args.splice(stepIndex, 1);
 }
 
+const traceIndex = args.findIndex(arg => arg === '--trace');
+let traceMode = false;
+if (traceIndex !== -1) {
+  traceMode = true;
+  args.splice(traceIndex, 1);
+}
+
+let filename = null;
 if (args.length > 0) {
   filename = args[0];
 }
 
 async function main() {
   if (!filename) {
-    console.log('Usage: node ath.js [--step] <file>');
+    console.log('Usage: node ath.js [--step] [--trace] <file>');
     // TODO: Implement REPL
     return;
   }
@@ -33,7 +41,9 @@ async function main() {
   const source = fs.readFileSync(filename, 'utf-8');
   
   let dbg = null;
-  if (debugMode) {
+  if (traceMode) {
+    dbg = new TraceDebugger(source);
+  } else if (debugMode) {
     dbg = new Debugger(source);
     console.log(`Debugger enabled for ${filename}`);
   }

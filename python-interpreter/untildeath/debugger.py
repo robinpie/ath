@@ -3,7 +3,8 @@
 import asyncio
 import concurrent.futures
 import sys
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, asdict
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional
 
@@ -264,3 +265,43 @@ class Debugger:
         else:
             print(f"Unknown command: {cmd}")
             self.state = DebuggerState.PAUSED
+
+
+class TraceDebugger(Debugger):
+    """Non-interactive debugger that traces execution to stderr as JSON."""
+
+    async def step_hook(self, node: Any, scope: 'Scope', branch_context: str, interpreter: 'Interpreter') -> bool:
+        if not isinstance(node, STATEMENT_TYPES):
+            return True
+
+        step_info = self._create_step_info(node, branch_context)
+        
+        # Snapshot scope variables
+        variables = {}
+        for name, value in scope.variables.items():
+            # Basic serialization safety
+            try:
+                if isinstance(value, (str, int, float, bool, type(None))):
+                    variables[name] = value
+                else:
+                    variables[name] = str(value)
+            except:
+                variables[name] = "<unserializable>"
+
+        # Snapshot entities
+        entities = {}
+        for name, entity in interpreter.entities.items():
+            entities[name] = {
+                "alive": entity.is_alive,
+                "type": type(entity).__name__
+            }
+
+        trace_data = {
+            "step": asdict(step_info),
+            "variables": variables,
+            "entities": entities,
+            "pending_tasks": len(interpreter._pending_tasks)
+        }
+
+        print(json.dumps(trace_data), file=sys.stderr)
+        return True
