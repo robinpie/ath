@@ -71,7 +71,7 @@ node js-interpreter/ath.js --step ./examples/hello.~ath
 
 ## Spec and Reference
 
-The full !~ATH spec is located at /athSpec.md, but a quick reference is located below.
+The full !~ATH spec is located at ./athSpec.md, but a quick reference is located below.
 
 ### Quick Reference
 
