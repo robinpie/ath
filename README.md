@@ -25,17 +25,6 @@ Use the JavaScript interpreter at `js-interpreter/ath.js`.
 
 Both the Python and JavaScript interpreters include a stepping debugger that pauses after each statement, allowing you to inspect variables, entities, and async tasks.
 
-#### Debugger commands
-
-|   Command   |   Shortcut    |                Action                 |
-|-------------|---------------|---------------------------------------|
-| `step`      | `s` / `Enter` | Step to the next statement            |
-| `continue`  | `c`           | Continue execution freely             |
-| `variables` | `v`           | Show variables in current scope chain |
-| `entities`  | `e`           | Show status of all entities           |
-| `tasks`     | `t`           | Show pending async tasks              |
-| `quit`      | `q`           | Quit the debugger and program         |
-
 #### Python interpreter
 
 **CLI debugger:**
@@ -46,6 +35,17 @@ python3 untildeath.py --step ./examples/hello.~ath
 ```
 
 In the REPL, type `:step` to toggle debugging for the next execution.
+
+##### Debugger commands
+
+|   Command   |   Shortcut    |                Action                 |
+|-------------|---------------|---------------------------------------|
+| `step`      | `s` / `Enter` | Step to the next statement            |
+| `continue`  | `c`           | Continue execution freely             |
+| `variables` | `v`           | Show variables in current scope chain |
+| `entities`  | `e`           | Show status of all entities           |
+| `tasks`     | `t`           | Show pending async tasks              |
+| `quit`      | `q`           | Quit the debugger and program         |
 
 **TUI debugger (Textual):**
 For a richer graphical interface in the terminal, use the `--tui` flag:
@@ -71,7 +71,7 @@ node js-interpreter/ath.js --step ./examples/hello.~ath
 
 ## Spec and Reference
 
-The full !~ATH spec is located at /athSpec.md, but a quick reference is located below.
+The full !~ATH spec is located at ./athSpec.md, but a quick reference is located below.
 
 ### Quick Reference
 
