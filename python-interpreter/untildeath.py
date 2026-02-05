@@ -25,10 +25,10 @@ from untildeath.lexer import Lexer
 from untildeath.parser import Parser
 from untildeath.interpreter import Interpreter
 from untildeath.errors import TildeAthError, DebuggerQuitException
-from untildeath.debugger import Debugger, DebuggerState
+from untildeath.debugger import Debugger, DebuggerState, TraceDebugger
 
 
-def run_file(filepath: str, debug: bool = False) -> int:
+def run_file(filepath: str, debug: bool = False, trace: bool = False) -> int:
     """Run a !~ATH source file."""
     path = Path(filepath)
 
@@ -42,10 +42,10 @@ def run_file(filepath: str, debug: bool = False) -> int:
         print(f"Error reading file: {e}", file=sys.stderr)
         return 1
 
-    return run_source(source, filepath, debug)
+    return run_source(source, filepath, debug, trace)
 
 
-def run_source(source: str, filename: str = "<stdin>", debug: bool = False) -> int:
+def run_source(source: str, filename: str = "<stdin>", debug: bool = False, trace: bool = False) -> int:
     """Run !~ATH source code."""
     try:
         # Lexical analysis
@@ -58,7 +58,9 @@ def run_source(source: str, filename: str = "<stdin>", debug: bool = False) -> i
 
         # Debugger initialization
         debugger = None
-        if debug:
+        if trace:
+            debugger = TraceDebugger(source)
+        elif debug:
             debugger = Debugger(source)
             print(f"Debugger enabled for {filename}")
 
@@ -157,6 +159,7 @@ def main():
     parser.add_argument("file", nargs="?", help="Source file to run")
     parser.add_argument("--step", "-d", "--debug", action="store_true", help="Enable stepping debugger (CLI)")
     parser.add_argument("--tui", action="store_true", help="Enable TUI debugger (Textual)")
+    parser.add_argument("--trace", action="store_true", help="Enable non-interactive JSON trace mode")
     
     args = parser.parse_args()
     
@@ -190,7 +193,7 @@ def main():
                 print(f"Error starting TUI: {e}", file=sys.stderr)
                 sys.exit(1)
         else:
-            sys.exit(run_file(args.file, debug=args.step))
+            sys.exit(run_file(args.file, debug=args.step, trace=args.trace))
     else:
         run_repl()
 

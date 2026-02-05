@@ -54,6 +54,8 @@ python3 untildeath.py --tui ./examples/hello.~ath
 
 In the REPL, type `:step` to toggle debugging for the next execution.
 
+For non-interactive JSON logging to stderr, use `--trace`. Useful for machine-readability. May produce infinite output when in an infinite loop; always use truncation or timeouts in automated/agentic use.
+
 ### JavaScript interpreter
 
 Use the `ath.js` CLI script with the `--step` flag:
@@ -61,6 +63,9 @@ Use the `ath.js` CLI script with the `--step` flag:
 ```
 node js-interpreter/ath.js --step ./examples/hello.~ath
 ```
+
+`--trace` is also available for non-interactive JSON logging.
+
 
 ## Spec and Reference
 

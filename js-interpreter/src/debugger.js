@@ -244,9 +244,68 @@ export class Debugger {
       console.log('  q / quit             : Stop execution');
       console.log('---------------------');
       this.state = DebuggerState.PAUSED;
-    } else {
-      console.log(`Unknown command: ${cmd}`);
-      this.state = DebuggerState.PAUSED;
+        } else {
+          console.log(`Unknown command: ${cmd}`);
+          this.state = DebuggerState.PAUSED;
+        }
+      }
     }
-  }
-}
+    
+    export class TraceDebugger extends Debugger {
+      constructor(sourceCode) {
+        super(sourceCode);
+        // No input handler needed for trace mode
+        if (this.inputHandler) {
+          this.inputHandler.close();
+          this.inputHandler = null;
+        }
+      }
+    
+      async stepHook(node, scope, interpreter, branchContext) {
+        if (!STEP_TYPES.has(node.type)) {
+          return true;
+        }
+    
+        const stepInfo = this._createStepInfo(node, branchContext);
+        
+        // Snapshot scope variables
+        const variables = {};
+        const vars = scope.variables instanceof Map ? Object.fromEntries(scope.variables) : scope.variables;
+        
+        for (const [name, value] of Object.entries(vars)) {
+          try {
+            if (['string', 'number', 'boolean', 'undefined'].includes(typeof value) || value === null) {
+              variables[name] = value;
+            } else {
+              variables[name] = String(value);
+            }
+          } catch (e) {
+            variables[name] = '<unserializable>';
+          }
+        }
+    
+        // Snapshot entities
+        const entities = {};
+        for (const [name, entity] of interpreter.entities) {
+          entities[name] = {
+            alive: entity.isAlive,
+            type: entity.constructor.name
+          };
+        }
+    
+            const traceData = {
+              step: stepInfo,
+              variables,
+              entities,
+              pending_tasks: interpreter._pendingPromises.length
+            };
+        
+            console.error(JSON.stringify(traceData));
+            return true;
+          }
+        
+          close() {
+            // No-op for trace debugger
+          }
+        }
+        
