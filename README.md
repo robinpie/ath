@@ -38,21 +38,23 @@ Both the Python and JavaScript interpreters include a stepping debugger that pau
 
 #### Python interpreter
 
-**CLI Debugger:**
+**CLI debugger:**
 Use the `--step` (or `-d`) flag:
 
 ```
 python3 untildeath.py --step ./examples/hello.~ath
 ```
 
-**TUI Debugger (Textual):**
+In the REPL, type `:step` to toggle debugging for the next execution.
+
+**TUI debugger (Textual):**
 For a richer graphical interface in the terminal, use the `--tui` flag:
 
 ```
 python3 untildeath.py --tui ./examples/hello.~ath
 ```
 
-In the REPL, type `:step` to toggle debugging for the next execution.
+Requires Textual. Just `pip install textual` if not installed.
 
 ### JavaScript interpreter
 
