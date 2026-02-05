@@ -272,6 +272,79 @@ class TestInterpreterComparison(unittest.TestCase):
         self.assertEqual(output.strip(), "yes")
 
 
+class TestInterpreterBitwise(unittest.TestCase):
+    """Test bitwise operations."""
+
+    def test_bitwise_and(self):
+        source = '''
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER(60 & 13));
+        THIS.DIE();
+        '''
+        output = run_program(source)
+        self.assertEqual(output.strip(), "12")
+
+    def test_bitwise_or(self):
+        source = '''
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER(60 | 13));
+        THIS.DIE();
+        '''
+        output = run_program(source)
+        self.assertEqual(output.strip(), "61")
+
+    def test_bitwise_xor(self):
+        source = '''
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER(60 ^ 13));
+        THIS.DIE();
+        '''
+        output = run_program(source)
+        self.assertEqual(output.strip(), "49")
+
+    def test_bitwise_not(self):
+        source = '''
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER(~60));
+        THIS.DIE();
+        '''
+        output = run_program(source)
+        self.assertEqual(output.strip(), "-61")
+
+    def test_left_shift(self):
+        source = '''
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER(60 << 2));
+        THIS.DIE();
+        '''
+        output = run_program(source)
+        self.assertEqual(output.strip(), "240")
+
+    def test_right_shift(self):
+        source = '''
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER(60 >> 2));
+        THIS.DIE();
+        '''
+        output = run_program(source)
+        self.assertEqual(output.strip(), "15")
+
+    def test_bitwise_precedence(self):
+        # 1 | 2 & 3 -> 1 | (2 & 3) = 1 | 2 = 3
+        # 1 & 3 << 1 -> 1 & (3 << 1) = 1 & 6 = 0
+        source = '''
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            UTTER(1 | 2 & 3);
+            UTTER(1 & 3 << 1);
+        );
+        THIS.DIE();
+        '''
+        output = run_program(source)
+        lines = output.strip().split('\n')
+        self.assertEqual(lines, ["3", "0"])
+
+
 class TestInterpreterLogical(unittest.TestCase):
     """Test logical operations."""
 

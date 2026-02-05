@@ -56,6 +56,14 @@ export const TokenType = {
   LE: 'LE',
   GE: 'GE',
   ASSIGN: 'ASSIGN',
+  
+  // Bitwise Operators
+  AMP: 'AMP',
+  PIPE: 'PIPE',
+  CARET: 'CARET',
+  TILDE: 'TILDE',
+  LSHIFT: 'LSHIFT',
+  RSHIFT: 'RSHIFT',
 
   // Entity operators (only valid in entity expressions)
   AMPAMP: 'AMPAMP',    // &&

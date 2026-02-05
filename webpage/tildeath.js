@@ -121,6 +121,12 @@
     LE: 'LE',
     GE: 'GE',
     ASSIGN: 'ASSIGN',
+    AMP: 'AMP',
+    PIPE: 'PIPE',
+    CARET: 'CARET',
+    TILDE: 'TILDE',
+    LSHIFT: 'LSHIFT',
+    RSHIFT: 'RSHIFT',
     AMPAMP: 'AMPAMP',
     PIPEPIPE: 'PIPEPIPE',
     BANG: 'BANG',
@@ -352,6 +358,8 @@
         }
         if (ch === '&' && this.peek(1) === '&') { this.advance(); this.advance(); this.tokens.push(new Token(TokenType.AMPAMP, '&&', startLine, startCol)); continue; }
         if (ch === '|' && this.peek(1) === '|') { this.advance(); this.advance(); this.tokens.push(new Token(TokenType.PIPEPIPE, '||', startLine, startCol)); continue; }
+        if (ch === '<' && this.peek(1) === '<') { this.advance(); this.advance(); this.tokens.push(new Token(TokenType.LSHIFT, '<<', startLine, startCol)); continue; }
+        if (ch === '>' && this.peek(1) === '>') { this.advance(); this.advance(); this.tokens.push(new Token(TokenType.RSHIFT, '>>', startLine, startCol)); continue; }
         if (ch === '=' && this.peek(1) === '=') { this.advance(); this.advance(); this.tokens.push(new Token(TokenType.EQ, '==', startLine, startCol)); continue; }
         if (ch === '!' && this.peek(1) === '=') { this.advance(); this.advance(); this.tokens.push(new Token(TokenType.NE, '!=', startLine, startCol)); continue; }
         if (ch === '<' && this.peek(1) === '=') { this.advance(); this.advance(); this.tokens.push(new Token(TokenType.LE, '<=', startLine, startCol)); continue; }
@@ -364,6 +372,7 @@
           '{': TokenType.LBRACE, '}': TokenType.RBRACE, '[': TokenType.LBRACKET,
           ']': TokenType.RBRACKET, ';': TokenType.SEMICOLON, ',': TokenType.COMMA,
           '.': TokenType.DOT, ':': TokenType.COLON,
+          '&': TokenType.AMP, '|': TokenType.PIPE, '^': TokenType.CARET, '~': TokenType.TILDE,
         };
         if (singleCharTokens[ch]) {
           this.advance();
@@ -797,12 +806,49 @@
       return left;
     }
     parseComparison() {
-      let left = this.parseTerm();
+      let left = this.parseBitwiseOr();
       while (this.check(TokenType.LT, TokenType.GT, TokenType.LE, TokenType.GE)) {
         const token = this.advance();
         const opMap = { [TokenType.LT]: '<', [TokenType.GT]: '>', [TokenType.LE]: '<=', [TokenType.GE]: '>=' };
-        const right = this.parseTerm();
+        const right = this.parseBitwiseOr();
         left = ast.createBinaryOp(opMap[token.type], left, right, token.line, token.column);
+      }
+      return left;
+    }
+    parseBitwiseOr() {
+      let left = this.parseBitwiseXor();
+      while (this.match(TokenType.PIPE)) {
+        const token = this.tokens[this.pos - 1];
+        const right = this.parseBitwiseXor();
+        left = ast.createBinaryOp('|', left, right, token.line, token.column);
+      }
+      return left;
+    }
+    parseBitwiseXor() {
+      let left = this.parseBitwiseAnd();
+      while (this.match(TokenType.CARET)) {
+        const token = this.tokens[this.pos - 1];
+        const right = this.parseBitwiseAnd();
+        left = ast.createBinaryOp('^', left, right, token.line, token.column);
+      }
+      return left;
+    }
+    parseBitwiseAnd() {
+      let left = this.parseShift();
+      while (this.match(TokenType.AMP)) {
+        const token = this.tokens[this.pos - 1];
+        const right = this.parseShift();
+        left = ast.createBinaryOp('&', left, right, token.line, token.column);
+      }
+      return left;
+    }
+    parseShift() {
+      let left = this.parseTerm();
+      while (this.check(TokenType.LSHIFT, TokenType.RSHIFT)) {
+        const token = this.advance();
+        const op = token.type === TokenType.LSHIFT ? '<<' : '>>';
+        const right = this.parseTerm();
+        left = ast.createBinaryOp(op, left, right, token.line, token.column);
       }
       return left;
     }
@@ -836,6 +882,11 @@
         const token = this.tokens[this.pos - 1];
         const operand = this.parseUnary();
         return ast.createUnaryOp('-', operand, token.line, token.column);
+      }
+      if (this.match(TokenType.TILDE)) {
+        const token = this.tokens[this.pos - 1];
+        const operand = this.parseUnary();
+        return ast.createUnaryOp('~', operand, token.line, token.column);
       }
       return this.parsePostfix();
     }
@@ -1149,6 +1200,23 @@
         'FLOAT': (value) => {
           if (typeof value === 'number') return value;
           throw new RuntimeError(`FLOAT expects number, got ${typeName(value)}`);
+        },
+        'CHAR': (value) => {
+          if (!Number.isInteger(value)) throw new RuntimeError(`CHAR expects integer, got ${typeName(value)}`);
+          try { return String.fromCodePoint(value); } catch (e) { throw new RuntimeError(`Invalid code point: ${value}`); }
+        },
+        'CODE': (value) => {
+          if (typeof value !== 'string') throw new RuntimeError(`CODE expects string, got ${typeName(value)}`);
+          if (value.length === 0) throw new RuntimeError('CODE called on empty string');
+          return value.codePointAt(0);
+        },
+        'BIN': (value) => {
+          if (!Number.isInteger(value)) throw new RuntimeError(`BIN expects integer, got ${typeName(value)}`);
+          return (value >>> 0).toString(2);
+        },
+        'HEX': (value) => {
+          if (!Number.isInteger(value)) throw new RuntimeError(`HEX expects integer, got ${typeName(value)}`);
+          return (value >>> 0).toString(16).toUpperCase();
         },
         'APPEND': (arr, value) => {
           if (!Array.isArray(arr)) throw new RuntimeError(`APPEND expects array, got ${typeName(arr)}`);
@@ -1536,6 +1604,21 @@
         case '>': return left > right;
         case '<=': return left <= right;
         case '>=': return left >= right;
+        case '&':
+          if (Number.isInteger(left) && Number.isInteger(right)) return left & right;
+          throw new RuntimeError('Bitwise AND expects integers', node.line, node.column);
+        case '|':
+          if (Number.isInteger(left) && Number.isInteger(right)) return left | right;
+          throw new RuntimeError('Bitwise OR expects integers', node.line, node.column);
+        case '^':
+          if (Number.isInteger(left) && Number.isInteger(right)) return left ^ right;
+          throw new RuntimeError('Bitwise XOR expects integers', node.line, node.column);
+        case '<<':
+          if (Number.isInteger(left) && Number.isInteger(right)) return left << right;
+          throw new RuntimeError('Bitwise shift expects integers', node.line, node.column);
+        case '>>':
+          if (Number.isInteger(left) && Number.isInteger(right)) return left >> right;
+          throw new RuntimeError('Bitwise shift expects integers', node.line, node.column);
         default: throw new RuntimeError(`Unknown operator: ${op}`, node.line, node.column);
       }
     }
@@ -1546,6 +1629,10 @@
       if (node.operator === '-') {
         if (typeof operand === 'number') return -operand;
         throw new RuntimeError(`Cannot negate ${stringify(operand)}`, node.line, node.column);
+      }
+      if (node.operator === '~') {
+        if (Number.isInteger(operand)) return ~operand;
+        throw new RuntimeError('Bitwise NOT expects integer', node.line, node.column);
       }
       throw new RuntimeError(`Unknown unary operator: ${node.operator}`, node.line, node.column);
     }

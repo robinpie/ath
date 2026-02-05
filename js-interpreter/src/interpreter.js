@@ -542,6 +542,36 @@ export class Interpreter {
       case '>=':
         return left >= right;
 
+      case '&':
+        if (Number.isInteger(left) && Number.isInteger(right)) {
+          return left & right;
+        }
+        throw new RuntimeError('Bitwise AND expects integers', node.line, node.column);
+
+      case '|':
+        if (Number.isInteger(left) && Number.isInteger(right)) {
+          return left | right;
+        }
+        throw new RuntimeError('Bitwise OR expects integers', node.line, node.column);
+
+      case '^':
+        if (Number.isInteger(left) && Number.isInteger(right)) {
+          return left ^ right;
+        }
+        throw new RuntimeError('Bitwise XOR expects integers', node.line, node.column);
+
+      case '<<':
+        if (Number.isInteger(left) && Number.isInteger(right)) {
+          return left << right;
+        }
+        throw new RuntimeError('Bitwise shift expects integers', node.line, node.column);
+
+      case '>>':
+        if (Number.isInteger(left) && Number.isInteger(right)) {
+          return left >> right;
+        }
+        throw new RuntimeError('Bitwise shift expects integers', node.line, node.column);
+
       default:
         throw new RuntimeError(`Unknown operator: ${op}`, node.line, node.column);
     }
@@ -559,6 +589,13 @@ export class Interpreter {
         return -operand;
       }
       throw new RuntimeError(`Cannot negate ${stringify(operand)}`, node.line, node.column);
+    }
+
+    if (node.operator === '~') {
+      if (Number.isInteger(operand)) {
+        return ~operand;
+      }
+      throw new RuntimeError('Bitwise NOT expects integer', node.line, node.column);
     }
 
     throw new RuntimeError(`Unknown unary operator: ${node.operator}`, node.line, node.column);

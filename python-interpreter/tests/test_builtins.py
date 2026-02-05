@@ -361,6 +361,47 @@ class TestBuiltinUtility(unittest.TestCase):
         self.assertIsInstance(result, int)
 
 
+class TestBuiltinBitwiseOperations(unittest.TestCase):
+    """Test built-in bitwise conversion rites."""
+
+    def setUp(self):
+        self.builtins = Builtins(None)
+
+    def test_char(self):
+        self.assertEqual(self.builtins.char(65), "A")
+        self.assertEqual(self.builtins.char(9786), "☺")
+
+    def test_char_invalid(self):
+        with self.assertRaises(RuntimeError):
+            self.builtins.char("A")
+
+    def test_code(self):
+        self.assertEqual(self.builtins.code("A"), 65)
+        self.assertEqual(self.builtins.code("☺"), 9786)
+
+    def test_code_invalid(self):
+        with self.assertRaises(RuntimeError):
+            self.builtins.code(65)
+        with self.assertRaises(RuntimeError):
+            self.builtins.code("")
+
+    def test_bin(self):
+        self.assertEqual(self.builtins.bin(10), "1010")
+        self.assertEqual(self.builtins.bin(0), "0")
+
+    def test_bin_invalid(self):
+        with self.assertRaises(RuntimeError):
+            self.builtins.bin("10")
+
+    def test_hex(self):
+        self.assertEqual(self.builtins.hex(255), "FF")
+        self.assertEqual(self.builtins.hex(10), "A")
+
+    def test_hex_invalid(self):
+        with self.assertRaises(RuntimeError):
+            self.builtins.hex("255")
+
+
 class TestBuiltinFileOperations(unittest.TestCase):
     """Test built-in file I/O operations (SCRY and INSCRIBE)."""
 

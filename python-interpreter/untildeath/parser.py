@@ -552,7 +552,7 @@ class Parser:
         return left
 
     def parse_comparison(self):
-        left = self.parse_term()
+        left = self.parse_bitwise_or()
 
         while self.check(TokenType.LT, TokenType.GT, TokenType.LE, TokenType.GE):
             token = self.advance()
@@ -562,8 +562,53 @@ class Parser:
                 TokenType.LE: '<=',
                 TokenType.GE: '>='
             }
-            right = self.parse_term()
+            right = self.parse_bitwise_or()
             left = BinaryOp(operator=op_map[token.type], left=left, right=right,
+                            line=token.line, column=token.column)
+
+        return left
+
+    def parse_bitwise_or(self):
+        left = self.parse_bitwise_xor()
+
+        while self.match(TokenType.PIPE):
+            token = self.tokens[self.pos - 1]
+            right = self.parse_bitwise_xor()
+            left = BinaryOp(operator='|', left=left, right=right,
+                            line=token.line, column=token.column)
+
+        return left
+
+    def parse_bitwise_xor(self):
+        left = self.parse_bitwise_and()
+
+        while self.match(TokenType.CARET):
+            token = self.tokens[self.pos - 1]
+            right = self.parse_bitwise_and()
+            left = BinaryOp(operator='^', left=left, right=right,
+                            line=token.line, column=token.column)
+
+        return left
+
+    def parse_bitwise_and(self):
+        left = self.parse_shift()
+
+        while self.match(TokenType.AMP):
+            token = self.tokens[self.pos - 1]
+            right = self.parse_shift()
+            left = BinaryOp(operator='&', left=left, right=right,
+                            line=token.line, column=token.column)
+
+        return left
+
+    def parse_shift(self):
+        left = self.parse_term()
+
+        while self.check(TokenType.LSHIFT, TokenType.RSHIFT):
+            token = self.advance()
+            op = '<<' if token.type == TokenType.LSHIFT else '>>'
+            right = self.parse_term()
+            left = BinaryOp(operator=op, left=left, right=right,
                             line=token.line, column=token.column)
 
         return left
@@ -606,6 +651,11 @@ class Parser:
             token = self.tokens[self.pos - 1]
             operand = self.parse_unary()
             return UnaryOp(operator='-', operand=operand, line=token.line, column=token.column)
+            
+        if self.match(TokenType.TILDE):
+            token = self.tokens[self.pos - 1]
+            operand = self.parse_unary()
+            return UnaryOp(operator='~', operand=operand, line=token.line, column=token.column)
 
         return self.parse_postfix()
 

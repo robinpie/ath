@@ -451,6 +451,35 @@ describe('Parser Expressions', () => {
     assert.strictEqual(program.statements[0].value.operator, '-');
   });
 
+  it('unary bitwise not', () => {
+    const program = parse('BIRTH r WITH ~x;');
+    const expr = program.statements[0].value;
+    assert.strictEqual(expr.type, 'UnaryOp');
+    assert.strictEqual(expr.operator, '~');
+  });
+
+  it('bitwise AND', () => {
+    const program = parse('BIRTH r WITH x & y;');
+    assert.strictEqual(program.statements[0].value.operator, '&');
+  });
+
+  it('bitwise OR', () => {
+    const program = parse('BIRTH r WITH x | y;');
+    assert.strictEqual(program.statements[0].value.operator, '|');
+  });
+
+  it('bitwise XOR', () => {
+    const program = parse('BIRTH r WITH x ^ y;');
+    assert.strictEqual(program.statements[0].value.operator, '^');
+  });
+
+  it('bitwise shift', () => {
+    let program = parse('BIRTH r WITH x << y;');
+    assert.strictEqual(program.statements[0].value.operator, '<<');
+    program = parse('BIRTH r WITH x >> y;');
+    assert.strictEqual(program.statements[0].value.operator, '>>');
+  });
+
   it('call with no args', () => {
     const program = parse('func();');
     const expr = program.statements[0].expression;
@@ -541,6 +570,18 @@ describe('Parser Precedence', () => {
     // Should be a OR (b AND c)
     assert.strictEqual(expr.operator, 'OR');
     assert.strictEqual(expr.right.operator, 'AND');
+  });
+
+  it('bitwise precedence', () => {
+    // Shift > And > Xor > Or
+    // 1 | 2 ^ 3 & 4 << 5
+    // Expected: 1 | (2 ^ (3 & (4 << 5)))
+    const program = parse('BIRTH x WITH 1 | 2 ^ 3 & 4 << 5;');
+    const expr = program.statements[0].value;
+    assert.strictEqual(expr.operator, '|');
+    assert.strictEqual(expr.right.operator, '^');
+    assert.strictEqual(expr.right.right.operator, '&');
+    assert.strictEqual(expr.right.right.right.operator, '<<');
   });
 });
 

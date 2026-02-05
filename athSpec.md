@@ -1,6 +1,6 @@
 # !~ATH Language Specification
 
-Version 1.1
+Version 1.2
 
 ## Overview
 
@@ -598,16 +598,26 @@ x = x + 1;
 
 **Arithmetic** (INTEGER and FLOAT):
 | Operator |                   Description                    |
-|----------|--------------------------------------------------|
+|----------|------------------------------------------------|
 | `+`      | Addition (also string concatenation)             |
 | `-`      | Subtraction                                      |
 | `*`      | Multiplication                                   |
 | `/`      | Division (integer division for INTEGER operands) |
 | `%`      | Modulo                                           |
 
+**Bitwise** (INTEGER only):
+| Operator |      Description       |
+|---------|------------------------|
+| `&`      | Bitwise AND            |
+| `|`      | Bitwise OR             |
+| `^`      | Bitwise XOR            |
+| `~`      | Bitwise NOT (unary)    |
+| `<<`     | Left shift             |
+| `>>`     | Right shift            |
+
 **Comparison** (returns BOOLEAN):
 | Operator |      Description      |
-|----------|-----------------------|
+|----------|----------------------|
 | `==`     | Equal                 |
 | `!=`     | Not equal             |
 | `<`      | Less than             |
@@ -617,7 +627,7 @@ x = x + 1;
 
 **Logical** (operate on truthiness):
 | Operator |         Description         |
-|----------|-----------------------------|
+|----------|----------------------------|
 | `AND`    | Logical and (short-circuit) |
 | `OR`     | Logical or (short-circuit)  |
 | `NOT`    | Logical negation            |
@@ -631,13 +641,17 @@ map.key         // map access with identifier (equivalent to map["key"])
 
 **Operator Precedence** (highest to lowest):
 1. `.` `[]` (member access, indexing)
-2. `NOT` `-` (unary negation)
+2. `NOT` `-` `~` (unary negation, bitwise NOT)
 3. `*` `/` `%`
 4. `+` `-`
-5. `<` `>` `<=` `>=`
-6. `==` `!=`
-7. `AND`
-8. `OR`
+5. `<<` `>>`
+6. `&`
+7. `^`
+8. `|`
+9. `<` `>` `<=` `>=`
+10. `==` `!=`
+11. `AND`
+12. `OR`
 
 Parentheses override precedence.
 
@@ -809,6 +823,28 @@ INT(-2.9)            // -2
 **FLOAT(value)** — Convert integer to float
 ```
 FLOAT(42)            // 42.0
+```
+
+**CHAR(value)** — Convert integer code point to character string
+```
+CHAR(65)             // "A"
+CHAR(9786)           // "☺"
+```
+
+**CODE(value)** — Get integer code point of first character in string
+```
+CODE("A")            // 65
+CODE("☺")            // 9786
+```
+
+**BIN(value)** — Convert integer to binary string
+```
+BIN(10)              // "1010"
+```
+
+**HEX(value)** — Convert integer to hexadecimal string
+```
+HEX(255)             // "FF"
 ```
 
 #### Array Operations

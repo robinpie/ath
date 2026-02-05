@@ -249,6 +249,19 @@ export class Lexer {
         this.tokens.push(new Token(TokenType.PIPEPIPE, '||', startLine, startCol));
         continue;
       }
+      
+      // Shift operators
+      if (ch === '<' && this.peek(1) === '<') {
+        this.advance(); this.advance();
+        this.tokens.push(new Token(TokenType.LSHIFT, '<<', startLine, startCol));
+        continue;
+      }
+
+      if (ch === '>' && this.peek(1) === '>') {
+        this.advance(); this.advance();
+        this.tokens.push(new Token(TokenType.RSHIFT, '>>', startLine, startCol));
+        continue;
+      }
 
       if (ch === '=' && this.peek(1) === '=') {
         this.advance();
@@ -289,6 +302,10 @@ export class Lexer {
         '>': TokenType.GT,
         '=': TokenType.ASSIGN,
         '!': TokenType.BANG,
+        '&': TokenType.AMP,
+        '|': TokenType.PIPE,
+        '^': TokenType.CARET,
+        '~': TokenType.TILDE,
         '(': TokenType.LPAREN,
         ')': TokenType.RPAREN,
         '{': TokenType.LBRACE,
