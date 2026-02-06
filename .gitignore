@@ -1,3 +1,5 @@
 CLAUDE.md
 GEMINI.md
 .claude
+/python-interpreter/__pycache__/
+*.py[cod]
