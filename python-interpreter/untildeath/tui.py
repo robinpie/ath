@@ -2,11 +2,12 @@
 
 import asyncio
 import sys
+import time
 from typing import Any, Optional
 from io import StringIO
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widgets import Header, Footer, Static, Button, DataTable, Tree, RichLog
 from textual.binding import Binding
 from rich.syntax import Syntax
@@ -25,27 +26,36 @@ class TextualDebugger(Debugger):
         self.app = app
         self._step_event = asyncio.Event()
         self.state = DebuggerState.STEPPING
+        self._last_ui_update = 0.0
+        self._latest_state = None
 
     async def step_hook(self, node: Any, scope: Scope, branch_context: str, interpreter: Interpreter) -> bool:
         """Called by the interpreter before executing a statement."""
         if not isinstance(node, STATEMENT_TYPES):
             return True
 
-        if self.state == DebuggerState.RUNNING:
-            return True
-
-        # Update the UI with current state
         step_info = self._create_step_info(node, branch_context)
-        
-        # Schedule UI update on main thread
+        self._latest_state = (step_info, scope, interpreter)
+
+        if self.state == DebuggerState.RUNNING:
+            # Always log every step to program output
+            self.app.log_step(step_info)
+            # Throttle expensive panel updates (source, scope, entities)
+            now = time.monotonic()
+            if now - self._last_ui_update >= 0.05:
+                self.app.update_panels(step_info, scope, interpreter)
+                self._last_ui_update = now
+            # Always yield so timers fire and keypresses are processed
+            await asyncio.sleep(0)
+            return self.state != DebuggerState.QUIT
+
+        # Stepping mode: schedule update and wait for user input
         self.app.call_later(
-            self.app.update_state, 
-            step_info, 
-            scope, 
+            self.app.update_state,
+            step_info,
+            scope,
             interpreter
         )
-
-        # Wait for user input (Step/Continue)
         self._step_event.clear()
         await self._step_event.wait()
 
@@ -102,6 +112,11 @@ class AthDebuggerApp(App):
         column-span: 1;
         border: solid green;
         background: $surface;
+        layout: vertical;
+    }
+
+    #source-scroll {
+        height: 1fr;
     }
 
     #output-container {
@@ -129,6 +144,7 @@ class AthDebuggerApp(App):
     BINDINGS = [
         Binding("s", "step", "Step"),
         Binding("c", "continue", "Continue"),
+        Binding("r", "reset", "Reset"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -147,7 +163,10 @@ class AthDebuggerApp(App):
         # Left column: Source Code
         yield Container(
             Static("Source Code", classes="box-title"),
-            Static(id="source-view", expand=True),
+            VerticalScroll(
+                Static(id="source-view", expand=True),
+                id="source-scroll",
+            ),
             id="source-container"
         )
 
@@ -172,6 +191,7 @@ class AthDebuggerApp(App):
         """Start the interpreter when the app mounts."""
         # Initialize widgets
         self.source_view = self.query_one("#source-view", Static)
+        self.source_scroll = self.query_one("#source-scroll", VerticalScroll)
         self.scope_tree = self.query_one("#scope-tree", Tree)
         self.entities_table = self.query_one("#entities-table", DataTable)
         self.program_output = self.query_one("#program-output", RichLog)
@@ -187,43 +207,44 @@ class AthDebuggerApp(App):
     async def run_interpreter(self):
         """Run the interpreter with stdout redirection."""
         interpreter = self.interpreter_cls(self.debugger)
-        
+
         # Redirect stdout to our RichLog widget
         with StdoutRedirector(self.program_output):
             try:
                 await interpreter.run(self.program_ast)
+                # Final panel update so panels reflect end state
+                if self.debugger._latest_state:
+                    self.update_panels(*self.debugger._latest_state)
                 self.program_output.write("[bold green]Program finished.[/]")
             except Exception as e:
+                if self.debugger._latest_state:
+                    self.update_panels(*self.debugger._latest_state)
                 self.program_output.write(f"[bold red]Error: {e}[/]")
-            finally:
-                # Disable buttons or indicate finish
-                pass
 
-    def update_state(self, step_info, scope, interpreter):
-        """Update the UI widgets with new state from the debugger."""
+    def log_step(self, step_info):
+        """Log a step to the program output."""
+        self.program_output.write(
+            f"[dim]Step: {step_info.node_type} at line {step_info.line} ({step_info.description})[/]"
+        )
+
+    def update_panels(self, step_info, scope, interpreter):
+        """Update the source view, scope tree, and entities table."""
         # Update Source View with highlighting
-        # highlighting the current line
         lines = self.source_code.splitlines()
-        
-        # Create a Syntax object
         syntax = Syntax(self.source_code, "java", theme="monokai", line_numbers=True)
-        
-        # We can't easily highlight just one line background in standard Syntax
-        # So we'll try to use highlight_lines if available in newer rich, 
-        # or just stick with basic display + a marker in the text if needed.
-        # Textual's Syntax widget wraps Rich's Syntax.
-        
-        # Let's rebuild the text to show the pointer
         if 0 < step_info.line <= len(lines):
             syntax.highlight_lines = {step_info.line}
 
         self.source_view.update(syntax)
-        self.source_view.scroll_to(y=step_info.line - 1)
+        # Scroll the container so the current line is roughly centered
+        visible_height = self.source_scroll.size.height
+        target_y = max(0, step_info.line - 1 - visible_height // 2)
+        self.source_scroll.scroll_to(y=target_y, animate=False)
 
         # Update Scope Tree
         self.scope_tree.clear()
         self.scope_tree.root.expand()
-        
+
         # Walk up scope chain
         current = scope
         depth = 0
@@ -244,15 +265,13 @@ class AthDebuggerApp(App):
         for name, entity in interpreter.entities.items():
             status = "ALIVE" if entity.is_alive else "DEAD"
             kind = type(entity).__name__
-            
-            # Simple styling for status
             status_styled = f"[green]{status}[/]" if status == "ALIVE" else f"[red]{status}[/]"
             self.entities_table.add_row(name, Text.from_markup(status_styled), kind)
 
-        # Log the step
-        self.program_output.write(
-            f"[dim]Step: {step_info.node_type} at line {step_info.line} ({step_info.description})[/]"
-        )
+    def update_state(self, step_info, scope, interpreter):
+        """Update all UI: log the step and refresh panels."""
+        self.log_step(step_info)
+        self.update_panels(step_info, scope, interpreter)
 
     def action_step(self):
         """Handle Step action."""
@@ -265,6 +284,28 @@ class AthDebuggerApp(App):
         if self.debugger:
             self.debugger.state = DebuggerState.RUNNING
             self.debugger.resume()
+
+    def action_reset(self):
+        """Handle Reset action — restart the program from the beginning."""
+        # Stop the current interpreter
+        if self.debugger:
+            self.debugger.state = DebuggerState.QUIT
+            self.debugger.resume()
+        if self.interpreter_task and not self.interpreter_task.done():
+            self.interpreter_task.cancel()
+
+        # Clear UI
+        self.source_view.update("")
+        self.source_scroll.scroll_to(y=0, animate=False)
+        self.scope_tree.clear()
+        self.scope_tree.root.expand()
+        self.entities_table.clear()
+        self.program_output.clear()
+        self.program_output.write("[bold cyan]Program restarted.[/]")
+
+        # Create a fresh debugger and start again
+        self.debugger = TextualDebugger(self.source_code, self)
+        self.interpreter_task = asyncio.create_task(self.run_interpreter())
 
     def action_quit(self):
         """Handle Quit action."""
