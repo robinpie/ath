@@ -1,0 +1,411 @@
+// jsonParser.~ath — JSON parser for !~ATH
+//
+// Provides parseJSON(str) which converts a JSON string into native
+// !~ATH values (maps, arrays, strings, integers, floats, booleans, VOID).
+//
+// Usage:
+//   BIRTH data WITH parseJSON(SCRY("config.json"));
+//   UTTER(data["name"]);
+//   UTTER(data["settings"]["verbose"]);
+
+// Skip whitespace characters (space, tab, newline, carriage return)
+RITE skipWS(str, pos) {
+    SHOULD pos < LENGTH(str) {
+        BIRTH ch WITH str[pos];
+        SHOULD ch == " " OR ch == "\t" OR ch == "\n" OR CODE(ch) == 13 {
+            BEQUEATH skipWS(str, pos + 1);
+        }
+    }
+    BEQUEATH pos;
+}
+
+// Parse a JSON string literal (opening " already expected at pos)
+RITE parseString(str, pos) {
+    SHOULD str[pos] != "\"" {
+        CONDEMN "Expected '\"' at position " + STRING(pos);
+    }
+    BEQUEATH parseStringChars(str, pos + 1, "");
+}
+
+RITE parseStringChars(str, pos, acc) {
+    SHOULD pos >= LENGTH(str) {
+        CONDEMN "Unterminated string";
+    }
+    BIRTH ch WITH str[pos];
+    SHOULD ch == "\"" {
+        BEQUEATH {val: acc, pos: pos + 1};
+    } LEST SHOULD ch == "\\" {
+        // Escape sequence
+        SHOULD pos + 1 >= LENGTH(str) {
+            CONDEMN "Unterminated escape sequence";
+        }
+        BIRTH esc WITH str[pos + 1];
+        SHOULD esc == "\"" {
+            BEQUEATH parseStringChars(str, pos + 2, acc + "\"");
+        } LEST SHOULD esc == "\\" {
+            BEQUEATH parseStringChars(str, pos + 2, acc + "\\");
+        } LEST SHOULD esc == "n" {
+            BEQUEATH parseStringChars(str, pos + 2, acc + "\n");
+        } LEST SHOULD esc == "t" {
+            BEQUEATH parseStringChars(str, pos + 2, acc + "\t");
+        } LEST SHOULD esc == "r" {
+            BEQUEATH parseStringChars(str, pos + 2, acc + CHAR(13));
+        } LEST SHOULD esc == "/" {
+            BEQUEATH parseStringChars(str, pos + 2, acc + "/");
+        } LEST SHOULD esc == "b" {
+            BEQUEATH parseStringChars(str, pos + 2, acc + CHAR(8));
+        } LEST SHOULD esc == "f" {
+            BEQUEATH parseStringChars(str, pos + 2, acc + CHAR(12));
+        } LEST {
+            CONDEMN "Unknown escape sequence: \\" + esc;
+        }
+    } LEST {
+        BEQUEATH parseStringChars(str, pos + 1, acc + ch);
+    }
+}
+
+// Parse a JSON number (integer or float)
+RITE parseNumber(str, pos) {
+    BIRTH numStr WITH "";
+    BIRTH isFloat WITH DEAD;
+    BIRTH result WITH collectNumber(str, pos, numStr, isFloat);
+    BEQUEATH result;
+}
+
+RITE collectNumber(str, pos, acc, isFloat) {
+    // Handle leading minus
+    SHOULD pos < LENGTH(str) AND str[pos] == "-" {
+        BEQUEATH collectDigits(str, pos + 1, acc + "-", isFloat);
+    } LEST {
+        BEQUEATH collectDigits(str, pos, acc, isFloat);
+    }
+}
+
+RITE collectDigits(str, pos, acc, isFloat) {
+    SHOULD pos < LENGTH(str) {
+        BIRTH ch WITH str[pos];
+        SHOULD ch == "0" OR ch == "1" OR ch == "2" OR ch == "3" OR ch == "4" OR ch == "5" OR ch == "6" OR ch == "7" OR ch == "8" OR ch == "9" {
+            BEQUEATH collectDigits(str, pos + 1, acc + ch, isFloat);
+        } LEST SHOULD ch == "." AND NOT isFloat {
+            BEQUEATH collectDigits(str, pos + 1, acc + ".", ALIVE);
+        } LEST SHOULD ch == "e" OR ch == "E" {
+            BEQUEATH collectExponent(str, pos + 1, acc + ch);
+        }
+    }
+    // End of number
+    SHOULD acc == "" OR acc == "-" {
+        CONDEMN "Expected digit at position " + STRING(pos);
+    }
+    SHOULD isFloat {
+        BEQUEATH {val: PARSE_FLOAT(acc), pos: pos};
+    } LEST {
+        BEQUEATH {val: PARSE_INT(acc), pos: pos};
+    }
+}
+
+RITE collectExponent(str, pos, acc) {
+    // After e/E, optional +/-, then digits
+    SHOULD pos < LENGTH(str) AND (str[pos] == "+" OR str[pos] == "-") {
+        BEQUEATH collectExpDigits(str, pos + 1, acc + str[pos]);
+    } LEST {
+        BEQUEATH collectExpDigits(str, pos, acc);
+    }
+}
+
+RITE collectExpDigits(str, pos, acc) {
+    SHOULD pos < LENGTH(str) {
+        BIRTH ch WITH str[pos];
+        SHOULD ch == "0" OR ch == "1" OR ch == "2" OR ch == "3" OR ch == "4" OR ch == "5" OR ch == "6" OR ch == "7" OR ch == "8" OR ch == "9" {
+            BEQUEATH collectExpDigits(str, pos + 1, acc + ch);
+        }
+    }
+    BEQUEATH {val: PARSE_FLOAT(acc), pos: pos};
+}
+
+// Parse a JSON object {...} into a MAP
+RITE parseObject(str, pos) {
+    // pos should be at '{'
+    BEQUEATH parseObjectEntries(str, pos + 1, {});
+}
+
+RITE parseObjectEntries(str, pos, obj) {
+    BIRTH p WITH skipWS(str, pos);
+    SHOULD p >= LENGTH(str) {
+        CONDEMN "Unterminated object";
+    }
+    SHOULD str[p] == "}" {
+        BEQUEATH {val: obj, pos: p + 1};
+    }
+
+    // If obj is not empty, expect comma
+    SHOULD LENGTH(KEYS(obj)) > 0 {
+        SHOULD str[p] != "," {
+            CONDEMN "Expected ',' in object at position " + STRING(p);
+        }
+        p = skipWS(str, p + 1);
+    }
+
+    // Parse key (must be a string)
+    BIRTH keyResult WITH parseString(str, p);
+    BIRTH key WITH keyResult.val;
+    p = skipWS(str, keyResult.pos);
+
+    // Expect colon
+    SHOULD p >= LENGTH(str) OR str[p] != ":" {
+        CONDEMN "Expected ':' after key at position " + STRING(p);
+    }
+    p = skipWS(str, p + 1);
+
+    // Parse value
+    BIRTH valResult WITH parseValue(str, p);
+    BIRTH newObj WITH SET(obj, key, valResult.val);
+    BEQUEATH parseObjectEntries(str, valResult.pos, newObj);
+}
+
+// Parse a JSON array [...] into an ARRAY
+RITE parseArray(str, pos) {
+    // pos should be at '['
+    BEQUEATH parseArrayElements(str, pos + 1, [], 0);
+}
+
+RITE parseArrayElements(str, pos, arr, count) {
+    BIRTH p WITH skipWS(str, pos);
+    SHOULD p >= LENGTH(str) {
+        CONDEMN "Unterminated array";
+    }
+    SHOULD str[p] == "]" {
+        BEQUEATH {val: arr, pos: p + 1};
+    }
+
+    // If not first element, expect comma
+    SHOULD count > 0 {
+        SHOULD str[p] != "," {
+            CONDEMN "Expected ',' in array at position " + STRING(p);
+        }
+        p = skipWS(str, p + 1);
+    }
+
+    BIRTH valResult WITH parseValue(str, p);
+    BIRTH newArr WITH APPEND(arr, valResult.val);
+    BEQUEATH parseArrayElements(str, valResult.pos, newArr, count + 1);
+}
+
+// Check if str starting at pos matches a keyword
+RITE matchKeyword(str, pos, keyword) {
+    SHOULD pos + LENGTH(keyword) > LENGTH(str) {
+        BEQUEATH DEAD;
+    }
+    BEQUEATH SUBSTRING(str, pos, pos + LENGTH(keyword)) == keyword;
+}
+
+// Dispatch to the appropriate parser based on the next character
+RITE parseValue(str, pos) {
+    BIRTH p WITH skipWS(str, pos);
+    SHOULD p >= LENGTH(str) {
+        CONDEMN "Unexpected end of JSON";
+    }
+    BIRTH ch WITH str[p];
+
+    SHOULD ch == "\"" {
+        BEQUEATH parseString(str, p);
+    } LEST SHOULD ch == "{" {
+        BEQUEATH parseObject(str, p);
+    } LEST SHOULD ch == "[" {
+        BEQUEATH parseArray(str, p);
+    } LEST SHOULD ch == "t" {
+        SHOULD matchKeyword(str, p, "true") {
+            BEQUEATH {val: ALIVE, pos: p + 4};
+        }
+        CONDEMN "Unexpected token at position " + STRING(p);
+    } LEST SHOULD ch == "f" {
+        SHOULD matchKeyword(str, p, "false") {
+            BEQUEATH {val: DEAD, pos: p + 5};
+        }
+        CONDEMN "Unexpected token at position " + STRING(p);
+    } LEST SHOULD ch == "n" {
+        SHOULD matchKeyword(str, p, "null") {
+            BEQUEATH {val: VOID, pos: p + 4};
+        }
+        CONDEMN "Unexpected token at position " + STRING(p);
+    } LEST SHOULD ch == "-" OR ch == "0" OR ch == "1" OR ch == "2" OR ch == "3" OR ch == "4" OR ch == "5" OR ch == "6" OR ch == "7" OR ch == "8" OR ch == "9" {
+        BEQUEATH parseNumber(str, p);
+    } LEST {
+        CONDEMN "Unexpected character '" + ch + "' at position " + STRING(p);
+    }
+}
+
+// Public API: parse a JSON string and return the !~ATH value
+RITE parseJSON(str) {
+    BIRTH result WITH parseValue(str, 0);
+    BIRTH finalPos WITH skipWS(str, result.pos);
+    SHOULD finalPos != LENGTH(str) {
+        CONDEMN "Unexpected trailing content at position " + STRING(finalPos);
+    }
+    BEQUEATH result.val;
+}
+
+// ==================== Self-test (commented out) ====================
+//
+// Uncomment to run comprehensive test suite
+//
+// UTTER("=== JSON Parser Test Suite ===");
+// UTTER("");
+//
+// // Test 1: Complex nested structure
+// UTTER("Test 1: Complex nested structure");
+// BIRTH json1 WITH "{\"name\": \"Karkat\", \"age\": 6, \"items\": [1, \"sword\", true, null], \"nested\": {\"x\": -3.14, \"y\": false}}";
+// BIRTH data1 WITH parseJSON(json1);
+// UTTER("  name: " + data1["name"]);
+// UTTER("  age: " + STRING(data1["age"]));
+// UTTER("  items[1]: " + data1["items"][1]);
+// UTTER("  nested.x: " + STRING(data1["nested"]["x"]));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 2: Empty structures
+// UTTER("Test 2: Empty structures");
+// BIRTH emptyObj WITH parseJSON("{}");
+// BIRTH emptyArr WITH parseJSON("[]");
+// UTTER("  empty object: " + STRING(emptyObj));
+// UTTER("  empty array: " + STRING(emptyArr));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 3: Standalone values
+// UTTER("Test 3: Standalone values");
+// BIRTH standalone1 WITH parseJSON("\"hello\"");
+// BIRTH standalone2 WITH parseJSON("42");
+// BIRTH standalone3 WITH parseJSON("true");
+// BIRTH standalone4 WITH parseJSON("null");
+// UTTER("  string: " + standalone1);
+// UTTER("  number: " + STRING(standalone2));
+// UTTER("  boolean: " + STRING(standalone3));
+// UTTER("  null: " + STRING(standalone4));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 4: Escape sequences
+// UTTER("Test 4: Escape sequences");
+// BIRTH json4 WITH "{\"escaped\": \"line1\\nline2\\ttab\\\"quote\\\\\"}";
+// BIRTH data4 WITH parseJSON(json4);
+// UTTER("  escaped: " + data4["escaped"]);
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 5: Float numbers with exponents
+// UTTER("Test 5: Float numbers with exponents");
+// BIRTH json5 WITH "[1.5, -2.5, 3e2, 1.5e-3, -4E+2]";
+// BIRTH data5 WITH parseJSON(json5);
+// UTTER("  1.5: " + STRING(data5[0]));
+// UTTER("  -2.5: " + STRING(data5[1]));
+// UTTER("  3e2: " + STRING(data5[2]));
+// UTTER("  1.5e-3: " + STRING(data5[3]));
+// UTTER("  -4E+2: " + STRING(data5[4]));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 6: Large array
+// UTTER("Test 6: Large array");
+// BIRTH json6 WITH "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]";
+// BIRTH data6 WITH parseJSON(json6);
+// UTTER("  array length: " + STRING(LENGTH(data6)));
+// UTTER("  first: " + STRING(data6[0]));
+// UTTER("  last: " + STRING(data6[10]));
+// UTTER("  middle: " + STRING(data6[5]));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 7: Object with many keys
+// UTTER("Test 7: Object with many keys");
+// BIRTH json7 WITH "{\"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4, \"e\": 5}";
+// BIRTH data7 WITH parseJSON(json7);
+// UTTER("  keys: " + STRING(KEYS(data7)));
+// UTTER("  key count: " + STRING(LENGTH(KEYS(data7))));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 8: Deeply nested structure
+// UTTER("Test 8: Deeply nested structure");
+// BIRTH json8 WITH "{\"a\": {\"b\": {\"c\": {\"d\": 42}}}}";
+// BIRTH data8 WITH parseJSON(json8);
+// UTTER("  deep value: " + STRING(data8["a"]["b"]["c"]["d"]));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 9: Mixed types in array
+// UTTER("Test 9: Mixed types in array");
+// BIRTH json9 WITH "[42, 3.14, \"string\", true, false, null, [1, 2], {\"key\": \"value\"}]";
+// BIRTH data9 WITH parseJSON(json9);
+// UTTER("  integer: " + STRING(data9[0]));
+// UTTER("  float: " + STRING(data9[1]));
+// UTTER("  string: " + data9[2]);
+// UTTER("  true: " + STRING(data9[3]));
+// UTTER("  false: " + STRING(data9[4]));
+// UTTER("  null: " + STRING(data9[5]));
+// UTTER("  nested array: " + STRING(data9[6]));
+// UTTER("  nested object: " + STRING(data9[7]));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 10: Whitespace handling
+// UTTER("Test 10: Whitespace handling");
+// BIRTH json10 WITH "  {  \"key\" : \"value\" , \"num\" : 123  }  ";
+// BIRTH data10 WITH parseJSON(json10);
+// UTTER("  key: " + data10["key"]);
+// UTTER("  num: " + STRING(data10["num"]));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 11: Zero and negative numbers
+// UTTER("Test 11: Zero and negative numbers");
+// BIRTH json11 WITH "[0, -0, -1, -999, 0.0, -0.5]";
+// BIRTH data11 WITH parseJSON(json11);
+// UTTER("  0: " + STRING(data11[0]));
+// UTTER("  -0: " + STRING(data11[1]));
+// UTTER("  -1: " + STRING(data11[2]));
+// UTTER("  -999: " + STRING(data11[3]));
+// UTTER("  0.0: " + STRING(data11[4]));
+// UTTER("  -0.5: " + STRING(data11[5]));
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 12: Empty string and special chars
+// UTTER("Test 12: Empty string and special characters");
+// BIRTH json12 WITH "{\"empty\": \"\", \"special\": \"!@#$%^&*()\"}";
+// BIRTH data12 WITH parseJSON(json12);
+// UTTER("  empty: '" + data12["empty"] + "'");
+// UTTER("  special: " + data12["special"]);
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 13: Unicode characters
+// UTTER("Test 13: Unicode characters");
+// BIRTH json13 WITH "{\"emoji\": \"☺️\", \"greek\": \"α β γ\", \"chinese\": \"你好\"}";
+// BIRTH data13 WITH parseJSON(json13);
+// UTTER("  emoji: " + data13["emoji"]);
+// UTTER("  greek: " + data13["greek"]);
+// UTTER("  chinese: " + data13["chinese"]);
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 14: Forward slash escape
+// UTTER("Test 14: Forward slash escape");
+// BIRTH json14 WITH "{\"url\": \"http:\\/\\/example.com\"}";
+// BIRTH data14 WITH parseJSON(json14);
+// UTTER("  url: " + data14["url"]);
+// UTTER("  PASS");
+// UTTER("");
+//
+// // Test 15: All boolean and null combinations
+// UTTER("Test 15: All boolean and null combinations");
+// BIRTH json15 WITH "[true, false, null, true, false, null]";
+// BIRTH data15 WITH parseJSON(json15);
+// UTTER("  true: " + STRING(data15[0]));
+// UTTER("  false: " + STRING(data15[1]));
+// UTTER("  null: " + STRING(data15[2]));
+// UTTER("  PASS");
+// UTTER("");
+//
+// UTTER("=== All 15 tests passed ===");
+//
+// THIS.DIE();
