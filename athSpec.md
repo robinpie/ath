@@ -1,6 +1,6 @@
 # !~ATH Language Specification
 
-Version 1.2
+Version 1.3
 
 ## Overview
 
@@ -272,6 +272,43 @@ import watcher W2("/tmp/lockfile");
 The watcher monitors the specified file. When the file is deleted, the entity dies.
 
 **Edge case**: If the file does not exist at import time, the entity's death is scheduled immediately via the event loop (not synchronous with the import). This allows `~ATH(!W)` to still work correctly.
+
+#### Module Imports
+
+When the watcher's filepath ends in `.~ath`, the file is automatically loaded as a **module**. The file is parsed and executed at import time, and its top-level rites and variables become accessible via dot notation on the watcher entity.
+
+```
+// library.~ath
+RITE add(a, b) {
+    BEQUEATH a + b;
+}
+BIRTH version WITH 1;
+THIS.DIE();
+```
+
+```
+// main.~ath
+import watcher Lib("./library.~ath");
+
+BIRTH result WITH Lib.add(3, 4);
+UTTER(result);   // 7
+UTTER(Lib.version);  // 1
+
+THIS.DIE();
+```
+
+**Module semantics**:
+- The module runs in its own scope with its own `THIS` entity. Module execution completes fully before the import statement returns.
+- All top-level `BIRTH` variables, `ENTOMB` constants, and `RITE` definitions become exports accessible via `ModuleName.export`.
+- The watcher entity still functions normally—it dies when the file is deleted.
+- Modules should call `THIS.DIE()` (a warning is emitted if missing, same as regular programs).
+- `TYPEOF(ModuleName)` returns `"MODULE"`.
+
+**Circular import detection**: If module A imports module B which imports module A, a runtime error is raised.
+
+**Re-importing**: Importing the same file again re-executes it and refreshes exports (the old watcher entity is killed and replaced, as with all entity re-imports).
+
+**Non-`.~ath` files**: Watcher entities for non-`.~ath` files behave as before—no module loading, no exports, not accessible as values in expressions.
 
 ### Entity Operations
 
@@ -1099,7 +1136,7 @@ import_stmt     = "import" entity_type IDENTIFIER "(" import_args ")" ";" ;
 //   timer:      single duration literal
 //   process:    one or more string expressions (command + args)
 //   connection: two expressions (host string, port integer)
-//   watcher:    single string expression (file path)
+//   watcher:    single string expression (file path; if .~ath, loaded as module)
 import_args     = duration                              // for timer
                 | expression { "," expression }         // for process, connection, watcher
                 ;
@@ -1202,6 +1239,8 @@ The grammar above is **syntactically permissive**—it accepts programs that are
 3. **EXECUTE cannot be empty**: `EXECUTE()` is a syntax error. Use `EXECUTE(VOID)` for no-op.
 
 4. **Import argument validation**: The `import_args` production accepts either a duration or expressions, but the interpreter must validate that the correct form is used for each entity type (see grammar comments).
+
+5. **Module watcher entities**: When a watcher imports a `.~ath` file, the entity becomes a module. Member access (`W.name`) on module entities resolves to module exports. Non-module entities are not accessible as values in expressions.
 
 ---
 
@@ -1350,6 +1389,37 @@ import timer T2(2s);
 } EXECUTE(
     UTTER("Both timers finished!");
 );
+
+THIS.DIE();
+```
+
+### Module Import
+
+```
+// mathlib.~ath
+RITE factorial(n) {
+    SHOULD n <= 1 {
+        BEQUEATH 1;
+    }
+    BEQUEATH n * factorial(n - 1);
+}
+
+RITE fib(n) {
+    SHOULD n <= 1 {
+        BEQUEATH n;
+    }
+    BEQUEATH fib(n - 1) + fib(n - 2);
+}
+
+THIS.DIE();
+```
+
+```
+// main.~ath
+import watcher Math("./mathlib.~ath");
+
+UTTER(Math.factorial(5));  // 120
+UTTER(Math.fib(10));       // 55
 
 THIS.DIE();
 ```

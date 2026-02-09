@@ -1,0 +1,13 @@
+// Demonstrates module imports.
+// Loads mathlib.~ath as a module and calls its exported rites.
+
+import watcher Math("./mathlib.~ath");
+
+UTTER("factorial(5) =", Math.factorial(5));
+UTTER("factorial(10) =", Math.factorial(10));
+UTTER("fib(10) =", Math.fib(10));
+UTTER("abs(-42) =", Math.abs(-42));
+UTTER("max(3, 7) =", Math.max(3, 7));
+UTTER("min(3, 7) =", Math.min(3, 7));
+
+THIS.DIE();

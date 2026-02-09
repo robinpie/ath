@@ -1,0 +1,40 @@
+// A simple math library module.
+// Import this from another file with:
+//   import watcher Math("./mathlib.~ath");
+
+RITE factorial(n) {
+    SHOULD n <= 1 {
+        BEQUEATH 1;
+    }
+    BEQUEATH n * factorial(n - 1);
+}
+
+RITE fib(n) {
+    SHOULD n <= 1 {
+        BEQUEATH n;
+    }
+    BEQUEATH fib(n - 1) + fib(n - 2);
+}
+
+RITE abs(x) {
+    SHOULD x < 0 {
+        BEQUEATH 0 - x;
+    }
+    BEQUEATH x;
+}
+
+RITE max(a, b) {
+    SHOULD a > b {
+        BEQUEATH a;
+    }
+    BEQUEATH b;
+}
+
+RITE min(a, b) {
+    SHOULD a < b {
+        BEQUEATH a;
+    }
+    BEQUEATH b;
+}
+
+THIS.DIE();
