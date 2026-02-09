@@ -65,7 +65,8 @@ def run_source(source: str, filename: str = "<stdin>", debug: bool = False, trac
             print(f"Debugger enabled for {filename}")
 
         # Interpretation
-        interpreter = Interpreter(debugger)
+        source_file = str(Path(filename).resolve()) if filename != "<stdin>" else None
+        interpreter = Interpreter(debugger, source_file=source_file)
         asyncio.run(interpreter.run(program))
 
         return 0

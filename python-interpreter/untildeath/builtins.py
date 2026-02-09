@@ -10,10 +10,15 @@ from .errors import RuntimeError
 
 def stringify(value: Any) -> str:
     """Convert a value to its string representation."""
+    from .entities import Entity, WatcherEntity
     if value is None:
         return "VOID"
     if isinstance(value, bool):
         return "ALIVE" if value else "DEAD"
+    if isinstance(value, WatcherEntity) and value.is_module:
+        return f"<module {value.name}>"
+    if isinstance(value, Entity):
+        return f"<entity {value.name}>"
     if isinstance(value, list):
         return "[" + ", ".join(stringify(v) for v in value) + "]"
     if isinstance(value, dict):
@@ -24,10 +29,13 @@ def stringify(value: Any) -> str:
 
 def type_name(value: Any) -> str:
     """Get the type name of a value."""
+    from .entities import WatcherEntity
     if value is None:
         return "VOID"
     if isinstance(value, bool):
         return "BOOLEAN"
+    if isinstance(value, WatcherEntity) and value.is_module:
+        return "MODULE"
     if isinstance(value, int):
         return "INTEGER"
     if isinstance(value, float):

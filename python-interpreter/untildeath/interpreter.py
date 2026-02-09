@@ -1,6 +1,7 @@
 """Interpreter for the !~ATH language."""
 
 import asyncio
+import os
 from typing import Any, Dict, List, Optional, Set
 import contextvars
 
@@ -82,7 +83,7 @@ class UserRite:
 class Interpreter:
     """!~ATH interpreter with async execution."""
 
-    def __init__(self, debugger: 'Optional[Debugger]' = None):
+    def __init__(self, debugger: 'Optional[Debugger]' = None, source_file: Optional[str] = None):
         self.global_scope = Scope()
         self.current_scope = self.global_scope
         self.entities: Dict[str, Entity] = {}
@@ -91,6 +92,8 @@ class Interpreter:
         self.this_entity: Optional[ThisEntity] = None
         self._pending_tasks: List[asyncio.Task] = []
         self.debugger = debugger
+        self.source_file = source_file        # absolute path of current file (None for REPL)
+        self._import_stack: list = []         # absolute paths for circular import detection
         # self._current_branch is now managed via contextvars
 
     async def run(self, program: Program):
@@ -104,10 +107,6 @@ class Interpreter:
             for stmt in program.statements:
                 await self.execute(stmt)
 
-            # Wait for all pending async operations
-            if self._pending_tasks:
-                await asyncio.gather(*self._pending_tasks, return_exceptions=True)
-
             # Check if program ended without THIS.DIE()
             if self.this_entity and self.this_entity.is_alive:
                 import sys
@@ -116,6 +115,14 @@ class Interpreter:
         except CondemnError as e:
             print(f"Uncaught error: {e.message}")
             raise
+        finally:
+            # Kill all remaining entities so pending tasks can complete
+            for entity in list(self.entities.values()):
+                if entity.is_alive:
+                    entity.die()
+            # Wait for all pending tasks to finish
+            if self._pending_tasks:
+                await asyncio.gather(*self._pending_tasks, return_exceptions=True)
 
     async def execute(self, node):
         """Execute a statement or expression."""
@@ -210,7 +217,12 @@ class Interpreter:
             if not isinstance(filepath, str):
                 raise RuntimeError("Watcher filepath must be a string", node.line, node.column)
 
-            entity = WatcherEntity(name, filepath)
+            resolved_path = self._resolve_import_path(filepath)
+            entity = WatcherEntity(name, resolved_path)
+
+            # If .~ath file, load as module
+            if resolved_path.endswith('.~ath'):
+                await self._load_module(entity, resolved_path, node)
 
         else:
             raise RuntimeError(f"Unknown entity type: {entity_type}", node.line, node.column)
@@ -219,6 +231,7 @@ class Interpreter:
 
         # Start the entity's lifecycle
         task = asyncio.create_task(entity.start())
+        entity._task = task
         self._pending_tasks.append(task)
 
     def _duration_to_ms(self, duration: Duration) -> int:
@@ -241,6 +254,52 @@ class Interpreter:
             raise RuntimeError(f"Timer duration must be at least 1ms (got {ms}ms)", duration.line, duration.column)
 
         return ms
+
+    def _resolve_import_path(self, filepath: str) -> str:
+        """Resolve a filepath relative to the current source file's directory."""
+        if os.path.isabs(filepath):
+            return os.path.normpath(filepath)
+        base_dir = os.path.dirname(self.source_file) if self.source_file else os.getcwd()
+        return os.path.normpath(os.path.join(base_dir, filepath))
+
+    async def _load_module(self, entity, resolved_path: str, node):
+        """Load a .~ath file as a module, populating entity.exports."""
+        from .lexer import Lexer
+        from .parser import Parser
+
+        # Circular import detection
+        if resolved_path in self._import_stack:
+            chain = " -> ".join(self._import_stack + [resolved_path])
+            raise RuntimeError(f"Circular import detected: {chain}", node.line, node.column)
+
+        # Read the file
+        try:
+            with open(resolved_path, 'r', encoding='utf-8') as f:
+                source = f.read()
+        except FileNotFoundError:
+            raise RuntimeError(f"Module file not found: {resolved_path}", node.line, node.column)
+        except IOError as e:
+            raise RuntimeError(f"Cannot read module file: {e}", node.line, node.column)
+
+        # Lex & parse
+        try:
+            lexer = Lexer(source)
+            tokens = lexer.tokenize()
+            parser = Parser(tokens)
+            program = parser.parse()
+        except Exception as e:
+            raise RuntimeError(f"Error in module '{resolved_path}': {e}", node.line, node.column)
+
+        # Create child interpreter
+        child = Interpreter(source_file=resolved_path)
+        child._import_stack = self._import_stack + [resolved_path]
+
+        # Run module
+        await child.run(program)
+
+        # Copy exports from child's global scope
+        entity.exports = dict(child.global_scope.variables)
+        entity.is_module = True
 
     async def exec_bifurcate(self, node: BifurcateStmt):
         """Execute a bifurcation statement."""
@@ -463,7 +522,14 @@ class Interpreter:
             if builtin:
                 return builtin
             # Check scope
-            return self.current_scope.get(name)
+            if self.current_scope.has(name):
+                return self.current_scope.get(name)
+            # Check for module watcher entities
+            if name in self.entities:
+                entity = self.entities[name]
+                if isinstance(entity, WatcherEntity) and entity.is_module:
+                    return entity
+            raise RuntimeError(f"Undefined variable: {name}")
 
         if isinstance(node, BinaryOp):
             return await self.eval_binary_op(node)
@@ -696,5 +762,10 @@ class Interpreter:
             if node.member not in obj:
                 raise RuntimeError(f"Key not found in map: {node.member}", node.line, node.column)
             return obj[node.member]
+
+        if isinstance(obj, WatcherEntity) and obj.is_module:
+            if node.member not in obj.exports:
+                raise RuntimeError(f"Module '{obj.name}' has no export '{node.member}'", node.line, node.column)
+            return obj.exports[node.member]
 
         raise RuntimeError(f"Cannot access member of {stringify(obj)}", node.line, node.column)

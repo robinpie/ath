@@ -84,6 +84,7 @@ import timer T2(500ms);    // dies after 500 milliseconds
 import process P("cmd");   // dies when process exits
 import connection C("host", 80); // dies when connection closes
 import watcher W("file.txt");    // dies when file is deleted
+import watcher Lib("lib.~ath");  // loads .~ath file as module
 ```
 
 `THIS` is an implicit entity representing the program itself. Kill entities manually with `.DIE()`. The program ends when `THIS.DIE();` is called.
