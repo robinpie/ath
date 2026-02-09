@@ -1,6 +1,6 @@
 // A simple math library module.
 // Import this from another file with:
-//   import watcher Math("./mathlib.~ath");
+//   import watcher Math("./mathlib.~ATH");
 
 RITE factorial(n) {
     SHOULD n <= 1 {

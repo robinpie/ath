@@ -1,7 +1,7 @@
 // Demonstrates module imports.
-// Loads mathlib.~ath as a module and calls its exported rites.
+// Loads mathlib.~ATH as a module and calls its exported rites.
 
-import watcher Math("./mathlib.~ath");
+import watcher Math("./mathlib.~ATH");
 
 UTTER("factorial(5) =", Math.factorial(5));
 UTTER("factorial(10) =", Math.factorial(10));

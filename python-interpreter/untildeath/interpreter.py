@@ -220,8 +220,8 @@ class Interpreter:
             resolved_path = self._resolve_import_path(filepath)
             entity = WatcherEntity(name, resolved_path)
 
-            # If .~ath file, load as module
-            if resolved_path.endswith('.~ath'):
+            # If .~ATH file, load as module
+            if resolved_path.endswith('.~ATH'):
                 await self._load_module(entity, resolved_path, node)
 
         else:
@@ -263,7 +263,7 @@ class Interpreter:
         return os.path.normpath(os.path.join(base_dir, filepath))
 
     async def _load_module(self, entity, resolved_path: str, node):
-        """Load a .~ath file as a module, populating entity.exports."""
+        """Load a .~ATH file as a module, populating entity.exports."""
         from .lexer import Lexer
         from .parser import Parser
 

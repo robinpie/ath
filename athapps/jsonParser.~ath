@@ -1,4 +1,4 @@
-// jsonParser.~ath — JSON parser for !~ATH
+// jsonParser.~ATH — JSON parser for !~ATH
 //
 // Provides parseJSON(str) which converts a JSON string into native
 // !~ATH values (maps, arrays, strings, integers, floats, booleans, VOID).
@@ -244,11 +244,10 @@ RITE parseJSON(str) {
     BEQUEATH result.val;
 }
 
-// ==================== Self-test (commented out) ====================
+// UTTER("================ Self-test ================");
 //
-// Uncomment to run comprehensive test suite
+// Uncomment to run test suite
 //
-// UTTER("=== JSON Parser Test Suite ===");
 // UTTER("");
 //
 // // Test 1: Complex nested structure
@@ -259,7 +258,13 @@ RITE parseJSON(str) {
 // UTTER("  age: " + STRING(data1["age"]));
 // UTTER("  items[1]: " + data1["items"][1]);
 // UTTER("  nested.x: " + STRING(data1["nested"]["x"]));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data1["name"] == "Karkat" AND
+//     data1["age"] == 6 AND
+//     data1["items"][1] == "sickle" AND
+//     data1["nested"]["x"] == -6.12 AND
+//     data1["nested"]["y"] == DEAD
+// ));
 // UTTER("");
 //
 // // Test 2: Empty structures
@@ -268,7 +273,10 @@ RITE parseJSON(str) {
 // BIRTH emptyArr WITH parseJSON("[]");
 // UTTER("  empty object: " + STRING(emptyObj));
 // UTTER("  empty array: " + STRING(emptyArr));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     LENGTH(KEYS(emptyObj)) == 0 AND
+//     LENGTH(emptyArr) == 0
+// ));
 // UTTER("");
 //
 // // Test 3: Standalone values
@@ -281,7 +289,12 @@ RITE parseJSON(str) {
 // UTTER("  number: " + STRING(standalone2));
 // UTTER("  boolean: " + STRING(standalone3));
 // UTTER("  null: " + STRING(standalone4));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     standalone1 == "hello" AND
+//     standalone2 == 42 AND
+//     standalone3 == ALIVE AND
+//     standalone4 == VOID
+// ));
 // UTTER("");
 //
 // // Test 4: Escape sequences
@@ -289,7 +302,9 @@ RITE parseJSON(str) {
 // BIRTH json4 WITH "{\"escaped\": \"line1\\nline2\\ttab\\\"quote\\\\\"}";
 // BIRTH data4 WITH parseJSON(json4);
 // UTTER("  escaped: " + data4["escaped"]);
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data4["escaped"] == "line1" + CHAR(10) + "line2" + CHAR(9) + "tab\"quote" + "\\"
+// ));
 // UTTER("");
 //
 // // Test 5: Float numbers with exponents
@@ -301,7 +316,13 @@ RITE parseJSON(str) {
 // UTTER("  3e2: " + STRING(data5[2]));
 // UTTER("  1.5e-3: " + STRING(data5[3]));
 // UTTER("  -4E+2: " + STRING(data5[4]));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data5[0] == 1.5 AND
+//     data5[1] == -2.5 AND
+//     data5[2] == 300.0 AND
+//     data5[3] == 0.0015 AND
+//     data5[4] == -400.0
+// ));
 // UTTER("");
 //
 // // Test 6: Large array
@@ -312,7 +333,12 @@ RITE parseJSON(str) {
 // UTTER("  first: " + STRING(data6[0]));
 // UTTER("  last: " + STRING(data6[10]));
 // UTTER("  middle: " + STRING(data6[5]));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     LENGTH(data6) == 11 AND
+//     data6[0] == 0 AND
+//     data6[10] == 10 AND
+//     data6[5] == 5
+// ));
 // UTTER("");
 //
 // // Test 7: Object with many keys
@@ -321,7 +347,11 @@ RITE parseJSON(str) {
 // BIRTH data7 WITH parseJSON(json7);
 // UTTER("  keys: " + STRING(KEYS(data7)));
 // UTTER("  key count: " + STRING(LENGTH(KEYS(data7))));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     LENGTH(KEYS(data7)) == 5 AND
+//     data7["a"] == 1 AND
+//     data7["e"] == 5
+// ));
 // UTTER("");
 //
 // // Test 8: Deeply nested structure
@@ -329,7 +359,9 @@ RITE parseJSON(str) {
 // BIRTH json8 WITH "{\"a\": {\"b\": {\"c\": {\"d\": 42}}}}";
 // BIRTH data8 WITH parseJSON(json8);
 // UTTER("  deep value: " + STRING(data8["a"]["b"]["c"]["d"]));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data8["a"]["b"]["c"]["d"] == 42
+// ));
 // UTTER("");
 //
 // // Test 9: Mixed types in array
@@ -344,7 +376,16 @@ RITE parseJSON(str) {
 // UTTER("  null: " + STRING(data9[5]));
 // UTTER("  nested array: " + STRING(data9[6]));
 // UTTER("  nested object: " + STRING(data9[7]));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data9[0] == 42 AND
+//     data9[1] == 3.14 AND
+//     data9[2] == "string" AND
+//     data9[3] == ALIVE AND
+//     data9[4] == DEAD AND
+//     data9[5] == VOID AND
+//     LENGTH(data9[6]) == 2 AND
+//     data9[7]["key"] == "value"
+// ));
 // UTTER("");
 //
 // // Test 10: Whitespace handling
@@ -353,7 +394,10 @@ RITE parseJSON(str) {
 // BIRTH data10 WITH parseJSON(json10);
 // UTTER("  key: " + data10["key"]);
 // UTTER("  num: " + STRING(data10["num"]));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data10["key"] == "value" AND
+//     data10["num"] == 123
+// ));
 // UTTER("");
 //
 // // Test 11: Zero and negative numbers
@@ -366,7 +410,14 @@ RITE parseJSON(str) {
 // UTTER("  -999: " + STRING(data11[3]));
 // UTTER("  0.0: " + STRING(data11[4]));
 // UTTER("  -0.5: " + STRING(data11[5]));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data11[0] == 0 AND
+//     data11[1] == 0 AND
+//     data11[2] == -1 AND
+//     data11[3] == -999 AND
+//     data11[4] == 0.0 AND
+//     data11[5] == -0.5
+// ));
 // UTTER("");
 //
 // // Test 12: Empty string and special chars
@@ -375,7 +426,10 @@ RITE parseJSON(str) {
 // BIRTH data12 WITH parseJSON(json12);
 // UTTER("  empty: '" + data12["empty"] + "'");
 // UTTER("  special: " + data12["special"]);
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data12["empty"] == "" AND
+//     data12["special"] == "!@#$%^&*()"
+// ));
 // UTTER("");
 //
 // // Test 13: Unicode characters
@@ -385,7 +439,11 @@ RITE parseJSON(str) {
 // UTTER("  emoji: " + data13["emoji"]);
 // UTTER("  greek: " + data13["greek"]);
 // UTTER("  chinese: " + data13["chinese"]);
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data13["emoji"] == "☺️" AND
+//     data13["greek"] == "α β γ" AND
+//     data13["chinese"] == "你好"
+// ));
 // UTTER("");
 //
 // // Test 14: Forward slash escape
@@ -393,7 +451,9 @@ RITE parseJSON(str) {
 // BIRTH json14 WITH "{\"url\": \"http:\\/\\/example.com\"}";
 // BIRTH data14 WITH parseJSON(json14);
 // UTTER("  url: " + data14["url"]);
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data14["url"] == "http://example.com"
+// ));
 // UTTER("");
 //
 // // Test 15: All boolean and null combinations
@@ -403,9 +463,16 @@ RITE parseJSON(str) {
 // UTTER("  true: " + STRING(data15[0]));
 // UTTER("  false: " + STRING(data15[1]));
 // UTTER("  null: " + STRING(data15[2]));
-// UTTER("  PASS");
+// UTTER("  PASS: " + STRING(
+//     data15[0] == ALIVE AND
+//     data15[1] == DEAD AND
+//     data15[2] == VOID AND
+//     data15[3] == ALIVE AND
+//     data15[4] == DEAD AND
+//     data15[5] == VOID
+// ));
 // UTTER("");
 //
-// UTTER("=== All 15 tests passed ===");
+// UTTER("=== All 15 tests completed ===");
 
 THIS.DIE();
