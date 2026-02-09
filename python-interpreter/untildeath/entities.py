@@ -132,7 +132,7 @@ class WatcherEntity(Entity):
         self.filepath = filepath
         self._poll_interval = 0.1  # 100ms polling
         self.exports: dict = {}       # populated by interpreter after module execution
-        self.is_module: bool = False  # True if filepath ends with .~ath
+        self.is_module: bool = False  # True if filepath ends with .~ATH
 
     async def start(self):
         """Watch the file and die when it's deleted."""

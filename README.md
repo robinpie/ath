@@ -10,7 +10,7 @@ All commands for the Python interpreter run from the `python-interpreter/` direc
 
 ```
 # Run a !~ATH program
-python3 untildeath.py ./examples/hello.~ath
+python3 untildeath.py ./examples/hello.~ATH
 
 # Start the REPL
 python3 untildeath.py
@@ -31,7 +31,7 @@ Both the Python and JavaScript interpreters include a stepping debugger that pau
 Use the `--step` (or `-d`) flag:
 
 ```
-python3 untildeath.py --step ./examples/hello.~ath
+python3 untildeath.py --step ./examples/hello.~ATH
 ```
 
 In the REPL, type `:step` to toggle debugging for the next execution.
@@ -51,7 +51,7 @@ In the REPL, type `:step` to toggle debugging for the next execution.
 For a richer graphical interface in the terminal, use the `--tui` flag:
 
 ```
-python3 untildeath.py --tui ./examples/hello.~ath
+python3 untildeath.py --tui ./examples/hello.~ATH
 ```
 
 Requires Textual. Just `pip install textual` if not installed.
@@ -63,7 +63,7 @@ For non-interactive JSON logging to stderr, use `--trace`. Useful for machine-re
 Use the `ath.js` CLI script with the `--step` flag:
 
 ```
-node js-interpreter/ath.js --step ./examples/hello.~ath
+node js-interpreter/ath.js --step ./examples/hello.~ATH
 ```
 
 `--trace` is also available for non-interactive JSON logging.
@@ -84,7 +84,7 @@ import timer T2(500ms);    // dies after 500 milliseconds
 import process P("cmd");   // dies when process exits
 import connection C("host", 80); // dies when connection closes
 import watcher W("file.txt");    // dies when file is deleted
-import watcher Lib("lib.~ath");  // loads .~ath file as module
+import watcher Lib("lib.~ATH");  // loads .~ATH file as module
 ```
 
 `THIS` is an implicit entity representing the program itself. Kill entities manually with `.DIE()`. The program ends when `THIS.DIE();` is called.

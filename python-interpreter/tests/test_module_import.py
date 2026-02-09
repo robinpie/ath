@@ -45,16 +45,16 @@ class TestModuleImport(unittest.TestCase):
     def test_basic_rite_import(self):
         """Module defines a rite, caller invokes it via W.rite()."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            write_module(tmpdir, "mathlib.~ath", '''
+            write_module(tmpdir, "mathlib.~ATH", '''
                 RITE add(a, b) {
                     BEQUEATH a + b;
                 }
                 THIS.DIE();
             ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "mathlib.~ath")}");
+                import watcher W("{os.path.join(tmpdir, "mathlib.~ATH")}");
                 BIRTH result WITH W.add(3, 4);
                 UTTER(result);
                 THIS.DIE();
@@ -65,14 +65,14 @@ class TestModuleImport(unittest.TestCase):
     def test_variable_export(self):
         """Access a top-level BIRTH variable from module."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            write_module(tmpdir, "config.~ath", '''
+            write_module(tmpdir, "config.~ATH", '''
                 BIRTH greeting WITH "Hello from module";
                 THIS.DIE();
             ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "config.~ath")}");
+                import watcher W("{os.path.join(tmpdir, "config.~ATH")}");
                 UTTER(W.greeting);
                 THIS.DIE();
             '''
@@ -82,14 +82,14 @@ class TestModuleImport(unittest.TestCase):
     def test_constant_export(self):
         """Access an ENTOMB constant from module."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            write_module(tmpdir, "constants.~ath", '''
+            write_module(tmpdir, "constants.~ATH", '''
                 ENTOMB PI WITH 3;
                 THIS.DIE();
             ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "constants.~ath")}");
+                import watcher W("{os.path.join(tmpdir, "constants.~ATH")}");
                 UTTER(W.PI);
                 THIS.DIE();
             '''
@@ -99,14 +99,14 @@ class TestModuleImport(unittest.TestCase):
     def test_nonexistent_export_error(self):
         """W.nope raises RuntimeError."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            write_module(tmpdir, "lib.~ath", '''
+            write_module(tmpdir, "lib.~ATH", '''
                 BIRTH x WITH 1;
                 THIS.DIE();
             ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "lib.~ath")}");
+                import watcher W("{os.path.join(tmpdir, "lib.~ATH")}");
                 UTTER(W.nope);
                 THIS.DIE();
             '''
@@ -117,7 +117,7 @@ class TestModuleImport(unittest.TestCase):
     def test_rite_with_closure(self):
         """Module rite references a module-local variable."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            write_module(tmpdir, "greeter.~ath", '''
+            write_module(tmpdir, "greeter.~ATH", '''
                 BIRTH prefix WITH "Hello, ";
                 RITE greet(name) {
                     BEQUEATH prefix + name;
@@ -125,9 +125,9 @@ class TestModuleImport(unittest.TestCase):
                 THIS.DIE();
             ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "greeter.~ath")}");
+                import watcher W("{os.path.join(tmpdir, "greeter.~ATH")}");
                 BIRTH msg WITH W.greet("World");
                 UTTER(msg);
                 THIS.DIE();
@@ -139,9 +139,9 @@ class TestModuleImport(unittest.TestCase):
         """A .txt watcher has no module behavior."""
         with tempfile.TemporaryDirectory() as tmpdir:
             txt_path = write_module(tmpdir, "data.txt", "some data")
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
 
-            # Non-.~ath watcher should not be accessible as a value
+            # Non-.~ATH watcher should not be accessible as a value
             source = f'''
                 import watcher W("{txt_path}");
                 UTTER(W);
@@ -153,8 +153,8 @@ class TestModuleImport(unittest.TestCase):
     def test_circular_import_detection(self):
         """A imports B imports A -> RuntimeError."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            a_path = os.path.join(tmpdir, "a.~ath")
-            b_path = os.path.join(tmpdir, "b.~ath")
+            a_path = os.path.join(tmpdir, "a.~ATH")
+            b_path = os.path.join(tmpdir, "b.~ATH")
 
             with open(a_path, 'w') as f:
                 f.write(f'''
@@ -172,7 +172,7 @@ class TestModuleImport(unittest.TestCase):
                 import watcher A("{a_path}");
                 THIS.DIE();
             '''
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             with self.assertRaises(TildeAthError) as ctx:
                 run_program(source, source_file=main_path)
             self.assertIn("Circular import", str(ctx.exception))
@@ -180,13 +180,13 @@ class TestModuleImport(unittest.TestCase):
     def test_module_syntax_error(self):
         """Module with bad syntax raises clear error."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            write_module(tmpdir, "bad.~ath", '''
+            write_module(tmpdir, "bad.~ATH", '''
                 BIRTH x WITH ;
             ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "bad.~ath")}");
+                import watcher W("{os.path.join(tmpdir, "bad.~ATH")}");
                 THIS.DIE();
             '''
             with self.assertRaises(TildeAthError) as ctx:
@@ -196,14 +196,14 @@ class TestModuleImport(unittest.TestCase):
     def test_reimport_module(self):
         """Re-importing reloads exports from disk."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            mod_path = os.path.join(tmpdir, "counter.~ath")
+            mod_path = os.path.join(tmpdir, "counter.~ATH")
             with open(mod_path, 'w') as f:
                 f.write('''
                     BIRTH val WITH 1;
                     THIS.DIE();
                 ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
                 import watcher W("{mod_path}");
                 UTTER(W.val);
@@ -219,16 +219,16 @@ class TestModuleImport(unittest.TestCase):
     def test_module_with_timer(self):
         """Module uses timers internally at load time."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            write_module(tmpdir, "timermod.~ath", '''
+            write_module(tmpdir, "timermod.~ATH", '''
                 BIRTH result WITH 0;
                 import timer T(1ms);
                 ~ATH(T) { } EXECUTE(result = 42;);
                 THIS.DIE();
             ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "timermod.~ath")}");
+                import watcher W("{os.path.join(tmpdir, "timermod.~ATH")}");
                 UTTER(W.result);
                 THIS.DIE();
             '''
@@ -238,16 +238,16 @@ class TestModuleImport(unittest.TestCase):
     def test_multiple_rites(self):
         """Module exports several rites, all callable."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            write_module(tmpdir, "multi.~ath", '''
+            write_module(tmpdir, "multi.~ATH", '''
                 RITE double(x) { BEQUEATH x * 2; }
                 RITE triple(x) { BEQUEATH x * 3; }
                 RITE negate(x) { BEQUEATH 0 - x; }
                 THIS.DIE();
             ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher M("{os.path.join(tmpdir, "multi.~ath")}");
+                import watcher M("{os.path.join(tmpdir, "multi.~ATH")}");
                 UTTER(M.double(5));
                 UTTER(M.triple(5));
                 UTTER(M.negate(5));
@@ -262,13 +262,13 @@ class TestModuleImport(unittest.TestCase):
     def test_module_typeof(self):
         """TYPEOF(W) returns 'MODULE'."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            write_module(tmpdir, "mod.~ath", '''
+            write_module(tmpdir, "mod.~ATH", '''
                 THIS.DIE();
             ''')
 
-            main_path = write_module(tmpdir, "main.~ath", '')
+            main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "mod.~ath")}");
+                import watcher W("{os.path.join(tmpdir, "mod.~ATH")}");
                 UTTER(TYPEOF(W));
                 THIS.DIE();
             '''

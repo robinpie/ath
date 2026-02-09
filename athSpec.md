@@ -14,7 +14,7 @@ Everything is about death. Loops wait for entities to die. Computation happens i
 
 ### File Extension
 
-!~ATH source code files are recommended to use the file extension `.~ath` (e.g., `program.~ath`).
+!~ATH source code files are recommended to use the file extension `.~ATH` (e.g., `program.~ATH`).
 
 ### Character Set
 
@@ -275,10 +275,10 @@ The watcher monitors the specified file. When the file is deleted, the entity di
 
 #### Module Imports
 
-When the watcher's filepath ends in `.~ath`, the file is automatically loaded as a **module**. The file is parsed and executed at import time, and its top-level rites and variables become accessible via dot notation on the watcher entity.
+When the watcher's filepath ends in `.~ATH`, the file is automatically loaded as a **module**. The file is parsed and executed at import time, and its top-level rites and variables become accessible via dot notation on the watcher entity.
 
 ```
-// library.~ath
+// library.~ATH
 RITE add(a, b) {
     BEQUEATH a + b;
 }
@@ -287,8 +287,8 @@ THIS.DIE();
 ```
 
 ```
-// main.~ath
-import watcher Lib("./library.~ath");
+// main.~ATH
+import watcher Lib("./library.~ATH");
 
 BIRTH result WITH Lib.add(3, 4);
 UTTER(result);   // 7
@@ -308,7 +308,7 @@ THIS.DIE();
 
 **Re-importing**: Importing the same file again re-executes it and refreshes exports (the old watcher entity is killed and replaced, as with all entity re-imports).
 
-**Non-`.~ath` files**: Watcher entities for non-`.~ath` files behave as before—no module loading, no exports, not accessible as values in expressions.
+**Non-`.~ATH` files**: Watcher entities for non-`.~ATH` files behave as before—no module loading, no exports, not accessible as values in expressions.
 
 ### Entity Operations
 
@@ -1136,7 +1136,7 @@ import_stmt     = "import" entity_type IDENTIFIER "(" import_args ")" ";" ;
 //   timer:      single duration literal
 //   process:    one or more string expressions (command + args)
 //   connection: two expressions (host string, port integer)
-//   watcher:    single string expression (file path; if .~ath, loaded as module)
+//   watcher:    single string expression (file path; if .~ATH, loaded as module)
 import_args     = duration                              // for timer
                 | expression { "," expression }         // for process, connection, watcher
                 ;
@@ -1240,7 +1240,7 @@ The grammar above is **syntactically permissive**—it accepts programs that are
 
 4. **Import argument validation**: The `import_args` production accepts either a duration or expressions, but the interpreter must validate that the correct form is used for each entity type (see grammar comments).
 
-5. **Module watcher entities**: When a watcher imports a `.~ath` file, the entity becomes a module. Member access (`W.name`) on module entities resolves to module exports. Non-module entities are not accessible as values in expressions.
+5. **Module watcher entities**: When a watcher imports a `.~ATH` file, the entity becomes a module. Member access (`W.name`) on module entities resolves to module exports. Non-module entities are not accessible as values in expressions.
 
 ---
 
@@ -1396,7 +1396,7 @@ THIS.DIE();
 ### Module Import
 
 ```
-// mathlib.~ath
+// mathlib.~ATH
 RITE factorial(n) {
     SHOULD n <= 1 {
         BEQUEATH 1;
@@ -1415,8 +1415,8 @@ THIS.DIE();
 ```
 
 ```
-// main.~ath
-import watcher Math("./mathlib.~ath");
+// main.~ATH
+import watcher Math("./mathlib.~ATH");
 
 UTTER(Math.factorial(5));  // 120
 UTTER(Math.fib(10));       // 55
