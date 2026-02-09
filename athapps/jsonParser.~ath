@@ -253,7 +253,7 @@ RITE parseJSON(str) {
 //
 // // Test 1: Complex nested structure
 // UTTER("Test 1: Complex nested structure");
-// BIRTH json1 WITH "{\"name\": \"Karkat\", \"age\": 6, \"items\": [1, \"sickle\", true, null], \"nested\": {\"x\": -3.14, \"y\": false}}";
+// BIRTH json1 WITH "{\"name\": \"Karkat\", \"age\": 6, \"items\": [1, \"sickle\", true, null], \"nested\": {\"x\": -6.12, \"y\": false}}";
 // BIRTH data1 WITH parseJSON(json1);
 // UTTER("  name: " + data1["name"]);
 // UTTER("  age: " + STRING(data1["age"]));
@@ -407,5 +407,5 @@ RITE parseJSON(str) {
 // UTTER("");
 //
 // UTTER("=== All 15 tests passed ===");
-//
-// THIS.DIE();
+
+THIS.DIE();
