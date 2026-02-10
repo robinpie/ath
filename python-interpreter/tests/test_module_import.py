@@ -31,6 +31,11 @@ def run_program(source: str, source_file: str = None) -> str:
     return output.getvalue()
 
 
+def ath_path(path):
+    """Convert OS path to forward slashes for embedding in !~ATH strings."""
+    return path.replace('\\', '/')
+
+
 def write_module(tmpdir, filename, content):
     """Write a module file and return its path."""
     path = os.path.join(tmpdir, filename)
@@ -54,7 +59,7 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "mathlib.~ATH")}");
+                import watcher W("{ath_path(os.path.join(tmpdir, "mathlib.~ATH"))}");
                 BIRTH result WITH W.add(3, 4);
                 UTTER(result);
                 THIS.DIE();
@@ -72,7 +77,7 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "config.~ATH")}");
+                import watcher W("{ath_path(os.path.join(tmpdir, "config.~ATH"))}");
                 UTTER(W.greeting);
                 THIS.DIE();
             '''
@@ -89,7 +94,7 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "constants.~ATH")}");
+                import watcher W("{ath_path(os.path.join(tmpdir, "constants.~ATH"))}");
                 UTTER(W.PI);
                 THIS.DIE();
             '''
@@ -106,7 +111,7 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "lib.~ATH")}");
+                import watcher W("{ath_path(os.path.join(tmpdir, "lib.~ATH"))}");
                 UTTER(W.nope);
                 THIS.DIE();
             '''
@@ -127,7 +132,7 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "greeter.~ATH")}");
+                import watcher W("{ath_path(os.path.join(tmpdir, "greeter.~ATH"))}");
                 BIRTH msg WITH W.greet("World");
                 UTTER(msg);
                 THIS.DIE();
@@ -143,7 +148,7 @@ class TestModuleImport(unittest.TestCase):
 
             # Non-.~ATH watcher should not be accessible as a value
             source = f'''
-                import watcher W("{txt_path}");
+                import watcher W("{ath_path(txt_path)}");
                 UTTER(W);
                 THIS.DIE();
             '''
@@ -158,18 +163,18 @@ class TestModuleImport(unittest.TestCase):
 
             with open(a_path, 'w') as f:
                 f.write(f'''
-                    import watcher B("{b_path}");
+                    import watcher B("{ath_path(b_path)}");
                     THIS.DIE();
                 ''')
 
             with open(b_path, 'w') as f:
                 f.write(f'''
-                    import watcher A("{a_path}");
+                    import watcher A("{ath_path(a_path)}");
                     THIS.DIE();
                 ''')
 
             source = f'''
-                import watcher A("{a_path}");
+                import watcher A("{ath_path(a_path)}");
                 THIS.DIE();
             '''
             main_path = write_module(tmpdir, "main.~ATH", '')
@@ -186,7 +191,7 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "bad.~ATH")}");
+                import watcher W("{ath_path(os.path.join(tmpdir, "bad.~ATH"))}");
                 THIS.DIE();
             '''
             with self.assertRaises(TildeAthError) as ctx:
@@ -205,9 +210,9 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{mod_path}");
+                import watcher W("{ath_path(mod_path)}");
                 UTTER(W.val);
-                import watcher W("{mod_path}");
+                import watcher W("{ath_path(mod_path)}");
                 UTTER(W.val);
                 THIS.DIE();
             '''
@@ -228,7 +233,7 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "timermod.~ATH")}");
+                import watcher W("{ath_path(os.path.join(tmpdir, "timermod.~ATH"))}");
                 UTTER(W.result);
                 THIS.DIE();
             '''
@@ -247,7 +252,7 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher M("{os.path.join(tmpdir, "multi.~ATH")}");
+                import watcher M("{ath_path(os.path.join(tmpdir, "multi.~ATH"))}");
                 UTTER(M.double(5));
                 UTTER(M.triple(5));
                 UTTER(M.negate(5));
@@ -268,7 +273,7 @@ class TestModuleImport(unittest.TestCase):
 
             main_path = write_module(tmpdir, "main.~ATH", '')
             source = f'''
-                import watcher W("{os.path.join(tmpdir, "mod.~ATH")}");
+                import watcher W("{ath_path(os.path.join(tmpdir, "mod.~ATH"))}");
                 UTTER(TYPEOF(W));
                 THIS.DIE();
             '''
