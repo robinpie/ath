@@ -5,8 +5,9 @@ import sys
 import time
 from typing import Any, Optional
 from textual.app import App, ComposeResult
-from textual.containers import Container
-from textual.widgets import Header, Footer, Static, DataTable, Tree, RichLog, TextArea
+from textual.containers import Container, Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Header, Footer, Static, DataTable, Tree, RichLog, TextArea, Input
 from textual.binding import Binding
 from rich.text import Text
 
@@ -92,6 +93,43 @@ class StaticHeader(Header):
         pass
 
 
+class SaveAsScreen(ModalScreen[str]):
+    """Modal screen that prompts for a file path."""
+
+    CSS = """
+    SaveAsScreen {
+        align: center middle;
+    }
+    #save-as-dialog {
+        width: 60;
+        height: auto;
+        border: solid green;
+        background: $surface;
+        padding: 1 2;
+    }
+    #save-as-dialog Static {
+        margin-bottom: 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", priority=True),
+    ]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="save-as-dialog"):
+            yield Static("Save as:")
+            yield Input(placeholder="path/to/file.~ath", id="save-as-input")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        filepath = event.value.strip()
+        if filepath:
+            self.dismiss(filepath)
+
+    def action_cancel(self) -> None:
+        self.dismiss("")
+
+
 class AthDebuggerApp(App):
     """The Textual TUI Application."""
 
@@ -145,7 +183,7 @@ class AthDebuggerApp(App):
         Binding("r", "reset", "Reset"),
         Binding("e", "toggle_edit", "Edit"),
         Binding("ctrl+s", "save_and_run", "Save & Run", priority=True),
-        Binding("escape", "exit_edit", "Exit Edit", show=False),
+        Binding("escape", "exit_edit", "Exit without saving", priority=True),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -170,7 +208,6 @@ class AthDebuggerApp(App):
                 self.source_code,
                 id="source-editor",
                 language="java",
-                theme="monokai",
                 read_only=True,
                 show_line_numbers=True,
                 tab_behavior="indent",
@@ -195,6 +232,18 @@ class AthDebuggerApp(App):
 
         yield Footer()
 
+    def _is_dark_theme(self) -> bool:
+        """Check if the current app theme is dark."""
+        return self.current_theme.dark
+
+    def watch_theme(self, theme: str) -> None:
+        """Sync TextArea theme when app theme changes."""
+        try:
+            editor = self.query_one("#source-editor", TextArea)
+            editor.theme = "monokai" if self._is_dark_theme() else "github_light"
+        except Exception:
+            pass  # widget not yet mounted
+
     def on_mount(self) -> None:
         """Start the interpreter when the app mounts."""
         # Initialize widgets
@@ -205,13 +254,19 @@ class AthDebuggerApp(App):
         self.entities_table = self.query_one("#entities-table", DataTable)
         self.program_output = self.query_one("#program-output", RichLog)
 
+        self.source_editor.theme = "monokai" if self._is_dark_theme() else "github_light"
         self.entities_table.add_columns("Entity", "State", "Type")
 
-        # Create debugger linked to this app
-        self.debugger = TextualDebugger(self.source_code, self)
-
-        # Start the interpreter in a background task
-        self.interpreter_task = asyncio.create_task(self.run_interpreter())
+        if self.program_ast is not None:
+            # Normal mode: start the interpreter
+            self.debugger = TextualDebugger(self.source_code, self)
+            self.interpreter_task = asyncio.create_task(self.run_interpreter())
+        else:
+            # No file: start in edit mode
+            self.editing = True
+            self.source_editor.read_only = False
+            self._update_mode_indicator()
+            self.source_editor.focus()
 
     async def run_interpreter(self):
         """Run the interpreter with stdout redirection."""
@@ -276,6 +331,16 @@ class AthDebuggerApp(App):
         self.log_step(step_info)
         self.update_panels(step_info, scope, interpreter)
 
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """Control which actions are available based on editing state."""
+        if self.editing:
+            if action in ("step", "continue", "reset"):
+                return False
+        else:
+            if action in ("save_and_run", "exit_edit"):
+                return False
+        return True
+
     def _update_mode_indicator(self):
         """Update visual indicators based on editing state."""
         if self.editing:
@@ -284,6 +349,7 @@ class AthDebuggerApp(App):
         else:
             self.source_title.update("Source Code")
             self.source_container.styles.border = ("solid", "green")
+        self.refresh_bindings()
 
     def action_toggle_edit(self):
         """Toggle between debug mode and edit mode."""
@@ -312,11 +378,32 @@ class AthDebuggerApp(App):
             self._update_mode_indicator()
             self.set_focus(None)
 
+    def _has_filename(self) -> bool:
+        """Check if we have a real file path to save to."""
+        return bool(self.filename) and self.filename not in ("Unknown", "<stdin>")
+
     def action_save_and_run(self):
         """Save edited source and re-run the program."""
         if not self.editing:
             return
 
+        if not self._has_filename():
+            # Prompt for a filepath first
+            self.push_screen(SaveAsScreen(), callback=self._on_save_as)
+            return
+
+        self._do_save_and_run()
+
+    def _on_save_as(self, filepath: str) -> None:
+        """Callback from SaveAsScreen with the chosen filepath."""
+        if not filepath:
+            return  # user cancelled
+        self.filename = filepath
+        self.sub_title = filepath
+        self._do_save_and_run()
+
+    def _do_save_and_run(self):
+        """Parse, save to disk, and re-run."""
         from .lexer import Lexer
         from .parser import Parser
 
@@ -332,8 +419,8 @@ class AthDebuggerApp(App):
             self.program_output.write(f"[bold red]Parse error: {e}[/]")
             return
 
-        # Save to disk if we have a real file path
-        if self.filename and self.filename != "Unknown" and self.filename != "<stdin>":
+        # Save to disk
+        if self._has_filename():
             try:
                 from pathlib import Path
                 Path(self.filename).write_text(new_source, encoding='utf-8')
@@ -378,16 +465,12 @@ class AthDebuggerApp(App):
 
     def action_step(self):
         """Handle Step action."""
-        if self.editing:
-            return
         if self.debugger:
             self.debugger.state = DebuggerState.STEPPING
             self.debugger.resume()
 
     def action_continue(self):
         """Handle Continue action."""
-        if self.editing:
-            return
         if self.debugger:
             self.debugger.state = DebuggerState.RUNNING
             self.debugger.resume()
