@@ -146,37 +146,38 @@ def main():
     
     args = parser.parse_args()
     
-    if args.file:
-        if args.tui:
-            # Run TUI
-            from .tui import AthDebuggerApp
-            from .lexer import Lexer
-            from .parser import Parser
-            from .interpreter import Interpreter
-            
-            try:
+    if args.tui:
+        # Run TUI (with or without a file)
+        from .tui import AthDebuggerApp
+        from .interpreter import Interpreter
+
+        try:
+            if args.file:
+                from .lexer import Lexer
+                from .parser import Parser
+
                 path = Path(args.file)
                 if not path.exists():
                     print(f"Error: File not found: {args.file}", file=sys.stderr)
                     sys.exit(1)
-                
+
                 source = path.read_text(encoding='utf-8')
-                
-                # Parse first
                 lexer = Lexer(source)
                 tokens = lexer.tokenize()
                 parser = Parser(tokens)
                 program = parser.parse()
-                
-                # Run App
+
                 app = AthDebuggerApp(source, program, Interpreter, filename=args.file)
-                app.run()
-                sys.exit(0)
-            except Exception as e:
-                print(f"Error starting TUI: {e}", file=sys.stderr)
-                sys.exit(1)
-        else:
-            sys.exit(run_file(args.file, debug=args.step, trace=args.trace))
+            else:
+                app = AthDebuggerApp("", None, Interpreter)
+
+            app.run()
+            sys.exit(0)
+        except Exception as e:
+            print(f"Error starting TUI: {e}", file=sys.stderr)
+            sys.exit(1)
+    elif args.file:
+        sys.exit(run_file(args.file, debug=args.step, trace=args.trace))
     else:
         run_repl()
 
