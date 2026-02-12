@@ -56,6 +56,20 @@ python3 untildeath.py --tui ./examples/hello.~ATH
 
 Requires Textual. Just `pip install textual` if not installed.
 
+The TUI includes an integrated source code editor for an edit-debug loop:
+
+| Key      | Action                                          |
+|----------|-------------------------------------------------|
+| `s`      | Step to next statement                          |
+| `c`      | Continue execution                              |
+| `r`      | Reset program (discards unsaved edits)          |
+| `e`      | Toggle edit mode (source becomes editable)      |
+| `Ctrl+S` | Save edited source to disk and re-run           |
+| `Escape` | Exit edit mode without saving                   |
+| `q`      | Quit                                            |
+
+In edit mode, the source panel border turns magenta and the title shows `[EDITING]`. Parse errors on save are displayed in the output panel without leaving edit mode.
+
 For non-interactive JSON logging to stderr, use `--trace`. Useful for machine-readability. May produce infinite output when in an infinite loop; always use truncation or timeouts in automated/agentic use.
 
 ### JavaScript interpreter
