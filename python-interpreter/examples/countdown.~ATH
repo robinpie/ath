@@ -1,0 +1,15 @@
+// Countdown from 5 to Liftoff!
+
+RITE countdown(n) {
+    SHOULD n > 0 {
+        UTTER(n);
+        import timer T(1s);
+        ~ATH(T) {
+        } EXECUTE(countdown(n - 1));
+    } LEST {
+        UTTER("Liftoff!");
+    }
+}
+
+countdown(5);
+THIS.DIE();

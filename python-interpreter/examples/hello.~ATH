@@ -1,0 +1,7 @@
+// Hello World in !~ATH
+import timer T(1ms);
+
+~ATH(T) {
+} EXECUTE(UTTER("Hello, world!"));
+
+THIS.DIE();

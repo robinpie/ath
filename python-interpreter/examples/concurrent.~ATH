@@ -1,0 +1,21 @@
+// Concurrent timers using bifurcation
+
+bifurcate THIS[LEFT, RIGHT];
+
+~ATH(LEFT) {
+    import timer T1(1s);
+    ~ATH(T1) {
+    } EXECUTE(UTTER("Left: 1 second"));
+
+    import timer T2(1s);
+    ~ATH(T2) {
+    } EXECUTE(UTTER("Left: 2 seconds"));
+} EXECUTE(UTTER("Left branch complete"));
+
+~ATH(RIGHT) {
+    import timer T3(1500ms);
+    ~ATH(T3) {
+    } EXECUTE(UTTER("Right: 1.5 seconds"));
+} EXECUTE(UTTER("Right branch complete"));
+
+[LEFT, RIGHT].DIE();
