@@ -1,0 +1,28 @@
+// Error handling with ATTEMPT/SALVAGE
+
+import timer T(1ms);
+
+~ATH(T) {
+} EXECUTE(
+    UTTER("Testing error handling...");
+
+    // Test CONDEMN and SALVAGE
+    ATTEMPT {
+        UTTER("About to CONDEMN");
+        CONDEMN "Something went wrong!";
+        UTTER("This should never print");
+    } SALVAGE err {
+        UTTER("Caught error:", err);
+    }
+
+    // Test runtime error handling
+    ATTEMPT {
+        BIRTH x WITH PARSE_INT("not a number");
+    } SALVAGE err {
+        UTTER("Caught parse error:", err);
+    }
+
+    UTTER("Continuing after errors...");
+);
+
+THIS.DIE();

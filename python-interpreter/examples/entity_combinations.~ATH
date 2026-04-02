@@ -1,0 +1,26 @@
+// Entity combinations with && and ||
+
+// Test OR: first one to finish wins
+import timer T1(100ms);
+import timer T2(200ms);
+
+~ATH(T1 || T2) {
+} EXECUTE(
+    UTTER("First timer finished (OR)");
+);
+
+// Wait a bit for cleanup
+import timer wait1(300ms);
+~ATH(wait1) {
+} EXECUTE(VOID);
+
+// Test AND: both must finish
+import timer T3(100ms);
+import timer T4(200ms);
+
+~ATH(T3 && T4) {
+} EXECUTE(
+    UTTER("Both timers finished (AND)");
+);
+
+THIS.DIE();

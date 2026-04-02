@@ -1,0 +1,5 @@
+BIRTH x WITH 0;
+~ATH(THIS) {
+    x = x + 1;  // This never runs because THIS is alive!
+} EXECUTE(VOID);
+THIS.DIE();
