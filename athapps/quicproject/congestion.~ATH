@@ -1,0 +1,106 @@
+// congestion.~ATH — Congestion Control State (Simplified NewReno, RFC 9002)
+
+// Inline constants (can't reference cross-module entities from exported rites)
+ENTOMB INITIAL_RTT WITH 100;
+ENTOMB MAX_DATAGRAM_SIZE WITH 1200;
+ENTOMB MIN_CWND WITH 2400;
+ENTOMB INITIAL_CWND WITH 14720;
+ENTOMB SSTHRESH_INITIAL WITH 999999;
+
+RITE _max(a, b) {
+    SHOULD a > b { BEQUEATH a; }
+    BEQUEATH b;
+}
+
+RITE _abs(x) {
+    SHOULD x < 0 { BEQUEATH 0 - x; }
+    BEQUEATH x;
+}
+
+// Initial congestion state
+RITE init_cc() {
+    BEQUEATH {
+        cwnd: INITIAL_CWND,
+        ssthresh: SSTHRESH_INITIAL,
+        bytes_in_flight: 0,
+        smoothed_rtt: INITIAL_RTT,
+        rttvar: INITIAL_RTT / 2,
+        min_rtt: INITIAL_RTT,
+        recovery_start: 0,
+        in_recovery: DEAD
+    };
+}
+
+// Update RTT estimate (RFC 9002 style)
+RITE update_rtt(cc, latest_rtt, ack_delay) {
+    BIRTH new_min WITH latest_rtt;
+    SHOULD cc.min_rtt < latest_rtt { new_min = cc.min_rtt; }
+    BIRTH adjusted WITH latest_rtt;
+    SHOULD latest_rtt > new_min + ack_delay {
+        adjusted = latest_rtt - ack_delay;
+    }
+    BIRTH new_rttvar WITH cc.rttvar;
+    BIRTH new_srtt WITH cc.smoothed_rtt;
+    SHOULD cc.smoothed_rtt == INITIAL_RTT {
+        new_srtt = latest_rtt;
+        new_rttvar = latest_rtt / 2;
+    } LEST {
+        BIRTH diff WITH _abs(cc.smoothed_rtt - adjusted);
+        new_rttvar = INT(FLOAT(3 * cc.rttvar + diff) / 4.0);
+        new_srtt = INT(FLOAT(7 * cc.smoothed_rtt + adjusted) / 8.0);
+    }
+    BEQUEATH SET(SET(SET(cc,
+        "smoothed_rtt", new_srtt),
+        "rttvar", new_rttvar),
+        "min_rtt", new_min);
+}
+
+// On ACK: increase cwnd
+RITE on_ack(cc, acked_bytes, now) {
+    SHOULD cc.in_recovery AND now < cc.recovery_start + cc.smoothed_rtt {
+        BIRTH new_bif WITH _max(0, cc.bytes_in_flight - acked_bytes);
+        BEQUEATH SET(cc, "bytes_in_flight", new_bif);
+    }
+    BIRTH new_cwnd WITH cc.cwnd;
+    SHOULD cc.cwnd < cc.ssthresh {
+        new_cwnd = cc.cwnd + acked_bytes;
+    } LEST {
+        new_cwnd = cc.cwnd + INT(FLOAT(MAX_DATAGRAM_SIZE * acked_bytes) / FLOAT(cc.cwnd));
+    }
+    BIRTH new_bif WITH _max(0, cc.bytes_in_flight - acked_bytes);
+    BEQUEATH SET(SET(SET(cc,
+        "cwnd", new_cwnd),
+        "bytes_in_flight", new_bif),
+        "in_recovery", DEAD);
+}
+
+// On loss: enter recovery
+RITE on_loss(cc, lost_bytes, now) {
+    SHOULD cc.in_recovery { BEQUEATH cc; }
+    BIRTH new_ssthresh WITH _max(cc.cwnd / 2, MIN_CWND);
+    BEQUEATH SET(SET(SET(SET(SET(cc,
+        "ssthresh", new_ssthresh),
+        "cwnd", new_ssthresh),
+        "in_recovery", ALIVE),
+        "recovery_start", now),
+        "bytes_in_flight", _max(0, cc.bytes_in_flight - lost_bytes));
+}
+
+// Can we send more?
+RITE can_send(cc, packet_size) {
+    BEQUEATH cc.bytes_in_flight + packet_size <= cc.cwnd;
+}
+
+// Probe Timeout (PTO) — RFC 9002 section 6.2
+RITE compute_pto(cc, max_ack_delay) {
+    BIRTH pto_base WITH cc.smoothed_rtt + _max(4 * cc.rttvar, 1);
+    BEQUEATH pto_base + max_ack_delay;
+}
+
+// Time-Threshold Loss Detection — RFC 9002 section 6.1.2
+RITE time_loss_threshold(cc) {
+    BIRTH threshold WITH cc.smoothed_rtt + cc.smoothed_rtt / 8;
+    BEQUEATH _max(threshold, 1);
+}
+
+THIS.DIE();

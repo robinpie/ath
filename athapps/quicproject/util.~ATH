@@ -1,0 +1,35 @@
+// util.~ATH — Constants & Helpers for QUIC simulation
+
+ENTOMB INITIAL_RTT WITH 100;        // ms
+ENTOMB MIN_RTT WITH 1;              // ms
+ENTOMB MAX_DATAGRAM_SIZE WITH 1200; // bytes (QUIC typical)
+ENTOMB LOSS_THRESHOLD WITH 3;       // packet threshold for loss
+ENTOMB INITIAL_CWND WITH 14720;     // 10 * max_datagram_size (approx)
+ENTOMB MIN_CWND WITH 2400;          // 2 * max_datagram_size
+ENTOMB SSTHRESH_INITIAL WITH 999999;
+
+// Clamp helper
+RITE clamp(val, lo, hi) {
+    SHOULD val < lo { BEQUEATH lo; }
+    SHOULD val > hi { BEQUEATH hi; }
+    BEQUEATH val;
+}
+
+// Max/Min (no built-in)
+RITE max(a, b) {
+    SHOULD a > b { BEQUEATH a; }
+    BEQUEATH b;
+}
+
+RITE min(a, b) {
+    SHOULD a < b { BEQUEATH a; }
+    BEQUEATH b;
+}
+
+// Simple abs
+RITE abs(x) {
+    SHOULD x < 0 { BEQUEATH 0 - x; }
+    BEQUEATH x;
+}
+
+THIS.DIE();

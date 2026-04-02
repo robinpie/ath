@@ -1,0 +1,24 @@
+// network.~ATH — Simulated Link
+
+ENTOMB BASE_RTT WITH 50;       // one-way delay in ms
+ENTOMB JITTER WITH 10;         // +/- jitter in ms
+ENTOMB LOSS_RATE WITH 0.02;    // 2% random loss
+
+// Decide if a packet is lost
+RITE is_lost() {
+    BIRTH roll WITH RANDOM();
+    SHOULD roll < LOSS_RATE {
+        BEQUEATH ALIVE;
+    }
+    BEQUEATH DEAD;
+}
+
+// Calculate one-way delay with jitter
+RITE one_way_delay() {
+    BIRTH j WITH RANDOM_INT(0 - JITTER, JITTER);
+    BIRTH result WITH BASE_RTT + j;
+    SHOULD result < 1 { BEQUEATH 1; }
+    BEQUEATH result;
+}
+
+THIS.DIE();

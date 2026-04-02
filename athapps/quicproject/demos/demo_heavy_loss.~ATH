@@ -1,0 +1,271 @@
+// demos/demo_heavy_loss.~ATH — Stress Test
+// Shows system under heavy loss: frequent retransmits, cwnd stays small.
+
+import watcher Pkt("../packets.~ATH");
+import watcher CC("../congestion.~ATH");
+import watcher Streams("../streams.~ATH");
+
+BIRTH cc_state WITH CC.init_cc();
+BIRTH next_pkt_num WITH 0;
+BIRTH sent_packets WITH {};
+BIRTH stream_state WITH Streams.init_streams(4);
+BIRTH last_stream WITH 0;
+BIRTH total_sent WITH 0;
+BIRTH total_acked WITH 0;
+BIRTH total_lost WITH 0;
+BIRTH total_retransmits WITH 0;
+BIRTH simulation_done WITH DEAD;
+BIRTH retransmit_queue WITH [];
+BIRTH pto_count WITH 0;
+BIRTH last_ack_time WITH 0;
+BIRTH recv_largest WITH 0 - 1;
+BIRTH recv_set WITH {};
+BIRTH csv_log WITH "timestamp_ms,cwnd,bytes_in_flight,srtt_ms,total_lost\n";
+BIRTH needs_ack WITH DEAD;
+
+ENTOMB TARGET_BYTES WITH 24000;
+ENTOMB CHUNK_SIZE WITH 1200;
+ENTOMB MAX_ACK_DELAY WITH 25;
+ENTOMB LOSS_THRESHOLD WITH 3;
+ENTOMB LOSS_RATE WITH 0.15;
+
+UTTER("=== DEMO: Heavy Loss (Stress Test) ===");
+UTTER("Expected: frequent losses, busy retransmit queue, possible PTO");
+UTTER("Loss rate: " + STRING(LOSS_RATE * 100.0) + "%");
+UTTER("");
+
+// Helpers
+RITE array_set(arr, idx, val) {
+    BEQUEATH _as(arr, idx, val, 0, []);
+}
+RITE _as(arr, idx, val, i, acc) {
+    SHOULD i >= LENGTH(arr) { BEQUEATH acc; }
+    SHOULD i == idx { BEQUEATH _as(arr, idx, val, i + 1, APPEND(acc, val)); }
+    BEQUEATH _as(arr, idx, val, i + 1, APPEND(acc, arr[i]));
+}
+
+// Receiver-side
+RITE record_received(pkt_num) {
+    recv_set = SET(recv_set, STRING(pkt_num), ALIVE);
+    SHOULD pkt_num > recv_largest { recv_largest = pkt_num; }
+}
+
+RITE build_ack_ranges() {
+    SHOULD recv_largest < 0 { BEQUEATH []; }
+    BEQUEATH _br(0, recv_largest, [], DEAD, 0);
+}
+RITE _br(i, mx, ranges, in_run, rs) {
+    SHOULD i > mx {
+        SHOULD in_run { BEQUEATH APPEND(ranges, [rs, mx]); }
+        BEQUEATH ranges;
+    }
+    BIRTH h WITH HAS(recv_set, STRING(i));
+    SHOULD h AND NOT in_run { BEQUEATH _br(i + 1, mx, ranges, ALIVE, i); }
+    SHOULD h AND in_run { BEQUEATH _br(i + 1, mx, ranges, ALIVE, rs); }
+    SHOULD NOT h AND in_run {
+        BEQUEATH _br(i + 1, mx, APPEND(ranges, [rs, i - 1]), DEAD, 0);
+    }
+    BEQUEATH _br(i + 1, mx, ranges, DEAD, 0);
+}
+
+// ACK processing
+RITE count_newly_acked(ranges) {
+    BIRTH ks WITH KEYS(sent_packets);
+    BEQUEATH _cna(ranges, ks, 0, 0);
+}
+RITE _cna(ranges, keys, i, acc) {
+    SHOULD i >= LENGTH(keys) { BEQUEATH acc; }
+    BIRTH key WITH keys[i];
+    SHOULD HAS(sent_packets, key) {
+        BIRTH pkt WITH sent_packets[key];
+        SHOULD Pkt.is_acked(pkt.pkt_num, ranges) {
+            sent_packets = DELETE(sent_packets, key);
+            BEQUEATH _cna(ranges, keys, i + 1, acc + pkt.size);
+        }
+    }
+    BEQUEATH _cna(ranges, keys, i + 1, acc);
+}
+
+RITE detect_losses(ack, now) {
+    BIRTH ks WITH KEYS(sent_packets);
+    BIRTH tt WITH CC.time_loss_threshold(cc_state);
+    BEQUEATH _dl(ack, now, tt, ks, 0, 0);
+}
+RITE _dl(ack, now, tt, keys, i, la) {
+    SHOULD i >= LENGTH(keys) { BEQUEATH la; }
+    BIRTH key WITH keys[i];
+    SHOULD HAS(sent_packets, key) {
+        BIRTH pkt WITH sent_packets[key];
+        SHOULD pkt.pkt_num < ack.largest_acked {
+            BIRTH gap WITH ack.largest_acked - pkt.pkt_num;
+            SHOULD gap >= LOSS_THRESHOLD OR INT(now - pkt.send_time) > tt {
+                UTTER("[LOST] pkt=" + STRING(pkt.pkt_num)
+                    + " (gap=" + STRING(gap) + ")");
+                SHOULD pkt.size > 0 {
+                    retransmit_queue = APPEND(retransmit_queue, pkt);
+                }
+                sent_packets = DELETE(sent_packets, key);
+                BEQUEATH _dl(ack, now, tt, keys, i + 1, la + pkt.size);
+            }
+        }
+    }
+    BEQUEATH _dl(ack, now, tt, keys, i + 1, la);
+}
+
+RITE process_ack(ack) {
+    BIRTH now WITH TIME();
+    last_ack_time = now;
+    pto_count = 0;
+    UTTER("[ACK] largest=" + STRING(ack.largest_acked)
+        + " ranges=" + STRING(ack.ack_ranges)
+        + " cwnd=" + STRING(cc_state.cwnd)
+        + " inflight=" + STRING(cc_state.bytes_in_flight));
+
+    BIRTH acked_pkt_key WITH STRING(ack.largest_acked);
+    SHOULD HAS(sent_packets, acked_pkt_key) {
+        BIRTH orig WITH sent_packets[acked_pkt_key];
+        BIRTH latest_rtt WITH INT(now - orig.send_time);
+        SHOULD latest_rtt > 0 {
+            cc_state = CC.update_rtt(cc_state, latest_rtt, ack.ack_delay);
+        }
+    }
+
+    BIRTH acked_bytes WITH count_newly_acked(ack.ack_ranges);
+    SHOULD acked_bytes > 0 {
+        cc_state = CC.on_ack(cc_state, acked_bytes, now);
+        total_acked = total_acked + acked_bytes;
+    }
+
+    BIRTH lost_bytes WITH detect_losses(ack, now);
+    SHOULD lost_bytes > 0 {
+        cc_state = CC.on_loss(cc_state, lost_bytes, now);
+        UTTER("[LOSS] lost_bytes=" + STRING(lost_bytes)
+            + " new_cwnd=" + STRING(cc_state.cwnd));
+    }
+
+    csv_log = csv_log + STRING(now) + "," + STRING(cc_state.cwnd) + ","
+        + STRING(cc_state.bytes_in_flight) + ","
+        + STRING(cc_state.smoothed_rtt) + ","
+        + STRING(total_lost) + "\n";
+
+    SHOULD total_acked >= TARGET_BYTES {
+        simulation_done = ALIVE;
+    }
+}
+
+// Transmit with 15% random loss
+RITE transmit_packet(pkt) {
+    SHOULD RANDOM() >= LOSS_RATE {
+        UTTER("[RX] pkt=" + STRING(pkt.pkt_num)
+            + " stream=" + STRING(pkt.stream_id));
+        record_received(pkt.pkt_num);
+        needs_ack = ALIVE;
+    } LEST {
+        total_lost = total_lost + 1;
+        UTTER("[NET] LOST pkt=" + STRING(pkt.pkt_num));
+    }
+}
+
+RITE drain_retransmit_queue() {
+    SHOULD LENGTH(retransmit_queue) == 0 { BEQUEATH VOID; }
+    SHOULD NOT CC.can_send(cc_state, CHUNK_SIZE) { BEQUEATH VOID; }
+    BIRTH old WITH FIRST(retransmit_queue);
+    retransmit_queue = SLICE(retransmit_queue, 1, LENGTH(retransmit_queue));
+    BIRTH now WITH TIME();
+    BIRTH pkt WITH Pkt.make_retransmit(old, next_pkt_num, now);
+    sent_packets = SET(sent_packets, STRING(next_pkt_num), pkt);
+    next_pkt_num = next_pkt_num + 1;
+    total_retransmits = total_retransmits + 1;
+    cc_state = SET(cc_state, "bytes_in_flight",
+        cc_state.bytes_in_flight + pkt.size);
+    UTTER("[RTX] pkt=" + STRING(pkt.pkt_num)
+        + " (was pkt=" + STRING(pkt.original_pkt_num) + ")");
+    transmit_packet(pkt);
+    drain_retransmit_queue();
+}
+
+RITE send_burst() {
+    SHOULD total_sent >= TARGET_BYTES { BEQUEATH VOID; }
+    SHOULD NOT CC.can_send(cc_state, CHUNK_SIZE) { BEQUEATH VOID; }
+
+    last_stream = Streams.pick_stream(stream_state, last_stream);
+    BIRTH stream WITH stream_state[last_stream];
+    BIRTH chunk WITH Streams.next_chunk(stream, CHUNK_SIZE);
+    BIRTH updated WITH SET(stream, "send_offset", chunk.new_offset);
+    stream_state = array_set(stream_state, last_stream, updated);
+
+    BIRTH now WITH TIME();
+    BIRTH pkt WITH Pkt.make_packet(
+        next_pkt_num, chunk.stream_id, chunk.offset, chunk.size, now
+    );
+    sent_packets = SET(sent_packets, STRING(next_pkt_num), pkt);
+    next_pkt_num = next_pkt_num + 1;
+    total_sent = total_sent + CHUNK_SIZE;
+    cc_state = SET(cc_state, "bytes_in_flight",
+        cc_state.bytes_in_flight + CHUNK_SIZE);
+
+    UTTER("[TX] pkt=" + STRING(pkt.pkt_num)
+        + " stream=" + STRING(pkt.stream_id)
+        + " cwnd=" + STRING(cc_state.cwnd)
+        + " inflight=" + STRING(cc_state.bytes_in_flight));
+
+    transmit_packet(pkt);
+    send_burst();
+}
+
+// Main loop
+RITE sim_cycle() {
+    SHOULD simulation_done {
+        UTTER("");
+        UTTER("=== Simulation Complete ===");
+        UTTER("Total sent:         " + STRING(total_sent));
+        UTTER("Total acked:        " + STRING(total_acked));
+        UTTER("Total lost:         " + STRING(total_lost));
+        UTTER("Total retransmits:  " + STRING(total_retransmits));
+        UTTER("Final cwnd:         " + STRING(cc_state.cwnd));
+        UTTER("Final SRTT:         " + STRING(cc_state.smoothed_rtt) + "ms");
+        INSCRIBE("./cwnd_log.csv", csv_log);
+        UTTER("Wrote cwnd_log.csv");
+        BEQUEATH VOID;
+    }
+
+    drain_retransmit_queue();
+    send_burst();
+
+    import timer rtt_wait(100ms);
+    ~ATH(rtt_wait) {
+    } EXECUTE(
+        SHOULD needs_ack {
+            needs_ack = DEAD;
+            BIRTH ranges WITH build_ack_ranges();
+            BIRTH ack_delay WITH RANDOM_INT(1, MAX_ACK_DELAY);
+            BIRTH ack WITH Pkt.make_ack(recv_largest, ranges, ack_delay);
+            process_ack(ack);
+        } LEST {
+            SHOULD LENGTH(KEYS(sent_packets)) > 0 {
+                BIRTH now WITH TIME();
+                SHOULD now - last_ack_time > 250 {
+                    UTTER("[PTO] Fired (backoff=" + STRING(pto_count) + ")");
+                    pto_count = pto_count + 1;
+                    SHOULD total_sent < TARGET_BYTES {
+                        send_burst();
+                    } LEST {
+                        BIRTH probe WITH {
+                            type: "probe", pkt_num: next_pkt_num,
+                            stream_id: 0, offset: 0, size: 0,
+                            send_time: now, ack_eliciting: ALIVE
+                        };
+                        sent_packets = SET(sent_packets, STRING(next_pkt_num), probe);
+                        next_pkt_num = next_pkt_num + 1;
+                        UTTER("[PTO] Sent probe pkt=" + STRING(probe.pkt_num));
+                        transmit_packet(probe);
+                    }
+                }
+            }
+        }
+        sim_cycle()
+    );
+}
+
+sim_cycle();
+THIS.DIE();

@@ -1,0 +1,26 @@
+BIRTH counter WITH 0;
+
+bifurcate THIS[A, B];
+
+~ATH(A) {
+    RITE tick_a() {
+        SHOULD counter >= 5 { BEQUEATH VOID; }
+        counter = counter + 1;
+        UTTER("A tick " + STRING(counter));
+        import timer t(100ms);
+        ~ATH(t) {} EXECUTE(tick_a());
+    }
+    tick_a();
+} EXECUTE(UTTER("A done"));
+
+~ATH(B) {
+    RITE tick_b() {
+        SHOULD counter >= 5 { BEQUEATH VOID; }
+        UTTER("B check: counter=" + STRING(counter));
+        import timer t(100ms);
+        ~ATH(t) {} EXECUTE(tick_b());
+    }
+    tick_b();
+} EXECUTE(UTTER("B done"));
+
+[A, B].DIE();
