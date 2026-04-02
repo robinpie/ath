@@ -1,0 +1,55 @@
+// packets.~ATH — Packet Representation
+
+// Create a data packet
+RITE make_packet(pkt_num, stream_id, offset, payload_size, send_time) {
+    BEQUEATH {
+        type: "data",
+        pkt_num: pkt_num,
+        stream_id: stream_id,
+        offset: offset,
+        size: payload_size,
+        send_time: send_time,
+        ack_eliciting: ALIVE
+    };
+}
+
+// Create an ACK frame
+RITE make_ack(largest_acked, ack_ranges, ack_delay) {
+    BEQUEATH {
+        type: "ack",
+        largest_acked: largest_acked,
+        ack_ranges: ack_ranges,
+        ack_delay: ack_delay
+    };
+}
+
+// Check if packet number is in ACK ranges
+RITE is_acked(pkt_num, ack_ranges) {
+    BEQUEATH _is_acked_loop(pkt_num, ack_ranges, 0);
+}
+
+RITE _is_acked_loop(pkt_num, ranges, i) {
+    SHOULD i >= LENGTH(ranges) { BEQUEATH DEAD; }
+    BIRTH range WITH ranges[i];
+    SHOULD pkt_num >= range[0] AND pkt_num <= range[1] {
+        BEQUEATH ALIVE;
+    }
+    BEQUEATH _is_acked_loop(pkt_num, ranges, i + 1);
+}
+
+// Create a retransmission entry — same stream data, NEW packet number
+RITE make_retransmit(old_pkt, new_pkt_num, send_time) {
+    BEQUEATH {
+        type: "data",
+        pkt_num: new_pkt_num,
+        stream_id: old_pkt.stream_id,
+        offset: old_pkt.offset,
+        size: old_pkt.size,
+        send_time: send_time,
+        ack_eliciting: ALIVE,
+        is_retransmit: ALIVE,
+        original_pkt_num: old_pkt.pkt_num
+    };
+}
+
+THIS.DIE();

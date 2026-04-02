@@ -1,0 +1,36 @@
+// streams.~ATH — Stream Multiplexing
+
+RITE init_streams(num_streams) {
+    BEQUEATH _build_streams(num_streams, 0, []);
+}
+
+RITE _build_streams(n, i, acc) {
+    SHOULD i >= n { BEQUEATH acc; }
+    BIRTH stream WITH {
+        id: i,
+        send_offset: 0,
+        recv_offset: 0,
+        recv_buffer: {},
+        total_bytes: 0,
+        finished: DEAD
+    };
+    BEQUEATH _build_streams(n, i + 1, APPEND(acc, stream));
+}
+
+// Get next chunk to send from a stream
+RITE next_chunk(stream, chunk_size) {
+    BEQUEATH {
+        stream_id: stream.id,
+        offset: stream.send_offset,
+        size: chunk_size,
+        new_offset: stream.send_offset + chunk_size
+    };
+}
+
+// Round-robin stream selection
+RITE pick_stream(streams, last_stream_idx) {
+    BIRTH next WITH (last_stream_idx + 1) % LENGTH(streams);
+    BEQUEATH next;
+}
+
+THIS.DIE();
