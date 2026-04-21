@@ -70,7 +70,7 @@ The TUI includes an integrated source code editor for an edit-debug loop:
 
 In edit mode, the source panel border turns magenta and the title shows `[EDITING]`. Parse errors on save are displayed in the output panel without leaving edit mode.
 
-For non-interactive JSON logging to stderr, use `--trace`. Useful for machine-readability. May produce infinite output when in an infinite loop; always use truncation or timeouts in automated/agentic use.
+For non-interactive JSON logging to stderr, use `--trace`. Useful for machine-readability. May produce infinite output when in an infinite loop; always use timeouts and truncation in automated/agentic use.
 
 ### JavaScript interpreter
 
