@@ -1,0 +1,194 @@
+// lexer.~ATH — tokenizer for !~ATH source
+// tokenize(src) -> array of token maps {t,v,l,c}
+
+RITE isDigit(ch) {
+    BIRTH c WITH CODE(ch);
+    BEQUEATH c >= 48 AND c <= 57;
+}
+
+RITE isAlpha(ch) {
+    BIRTH c WITH CODE(ch);
+    BEQUEATH (c >= 65 AND c <= 90) OR (c >= 97 AND c <= 122) OR ch == "_";
+}
+
+RITE isAlNum(ch) { BEQUEATH isAlpha(ch) OR isDigit(ch); }
+
+RITE isExprEnd(toks) {
+    SHOULD LENGTH(toks) == 0 { BEQUEATH DEAD; }
+    BIRTH lt WITH LAST(toks).t;
+    BEQUEATH lt == "ID" OR lt == "INT" OR lt == "FLT" OR lt == "STR" OR lt == "DUR"
+             OR lt == "BOOL" OR lt == "VOID" OR lt == "THIS" OR lt == ")" OR lt == "]";
+}
+
+RITE skipComment(src, pos, line, col, toks) {
+    SHOULD pos >= LENGTH(src) OR src[pos] == "\n" {
+        BEQUEATH tokenizeAt(src, pos, line, col, toks);
+    }
+    BEQUEATH skipComment(src, pos + 1, line, col + 1, toks);
+}
+
+RITE scanStringChars(src, pos, line, col, acc) {
+    SHOULD pos >= LENGTH(src) { CONDEMN "Unterminated string at line " + STRING(line); }
+    BIRTH ch WITH src[pos];
+    SHOULD ch == "\"" { BEQUEATH {v: acc, pos: pos+1, line: line, col: col+1}; }
+    SHOULD ch == "\\" {
+        SHOULD pos+1 >= LENGTH(src) { CONDEMN "Truncated escape at line " + STRING(line); }
+        BIRTH esc WITH src[pos+1];
+        SHOULD esc == "n"  { BEQUEATH scanStringChars(src, pos+2, line, col+2, acc + "\n"); }
+        SHOULD esc == "t"  { BEQUEATH scanStringChars(src, pos+2, line, col+2, acc + "\t"); }
+        SHOULD esc == "\\" { BEQUEATH scanStringChars(src, pos+2, line, col+2, acc + "\\"); }
+        SHOULD esc == "\"" { BEQUEATH scanStringChars(src, pos+2, line, col+2, acc + "\""); }
+        CONDEMN "Unknown escape \\" + esc + " at line " + STRING(line);
+    }
+    SHOULD ch == "\n" { BEQUEATH scanStringChars(src, pos+1, line+1, 1, acc+ch); }
+    BEQUEATH scanStringChars(src, pos+1, line, col+1, acc+ch);
+}
+
+RITE scanDigits(src, pos, col, acc) {
+    SHOULD pos < LENGTH(src) AND isDigit(src[pos]) {
+        BEQUEATH scanDigits(src, pos+1, col+1, acc + src[pos]);
+    }
+    BEQUEATH {pos: pos, col: col, acc: acc};
+}
+
+RITE scanNumber(src, pos, line, col) {
+    BIRTH acc WITH "";
+    BIRTH p WITH pos;
+    BIRTH c WITH col;
+    SHOULD src[p] == "-" { acc = "-"; p = p+1; c = c+1; }
+    BIRTH dr WITH scanDigits(src, p, c, "");
+    p = dr.pos; c = dr.col; acc = acc + dr.acc;
+    SHOULD p < LENGTH(src) AND src[p] == "." AND p+1 < LENGTH(src) AND isDigit(src[p+1]) {
+        BIRTH dr2 WITH scanDigits(src, p+1, c+1, "");
+        BEQUEATH {tok: {t: "FLT", v: PARSE_FLOAT(acc + "." + dr2.acc), l: line, c: col},
+                  pos: dr2.pos, col: dr2.col};
+    }
+    SHOULD p < LENGTH(src) AND src[p] == "m" AND p+1 < LENGTH(src) AND src[p+1] == "s" {
+        BEQUEATH {tok: {t: "DUR", v: PARSE_INT(acc), l: line, c: col}, pos: p+2, col: c+2};
+    }
+    SHOULD p < LENGTH(src) AND src[p] == "s" {
+        BEQUEATH {tok: {t: "DUR", v: PARSE_INT(acc)*1000, l: line, c: col}, pos: p+1, col: c+1};
+    }
+    SHOULD p < LENGTH(src) AND src[p] == "m" {
+        BEQUEATH {tok: {t: "DUR", v: PARSE_INT(acc)*60000, l: line, c: col}, pos: p+1, col: c+1};
+    }
+    SHOULD p < LENGTH(src) AND src[p] == "h" {
+        BEQUEATH {tok: {t: "DUR", v: PARSE_INT(acc)*3600000, l: line, c: col}, pos: p+1, col: c+1};
+    }
+    BEQUEATH {tok: {t: "INT", v: PARSE_INT(acc), l: line, c: col}, pos: p, col: c};
+}
+
+ENTOMB KW WITH {
+    "import": "import", "bifurcate": "bifurcate", "EXECUTE": "EXECUTE",
+    "DIE": "DIE", "THIS": "THIS",
+    "timer": "timer", "process": "process", "connection": "connection", "watcher": "watcher",
+    "BIRTH": "BIRTH", "ENTOMB": "ENTOMB", "WITH": "WITH",
+    "ALIVE": "ALIVE", "DEAD": "DEAD", "VOID": "VOID",
+    "SHOULD": "SHOULD", "LEST": "LEST", "RITE": "RITE",
+    "BEQUEATH": "BEQUEATH", "ATTEMPT": "ATTEMPT", "SALVAGE": "SALVAGE", "CONDEMN": "CONDEMN",
+    "AND": "AND", "OR": "OR", "NOT": "NOT"
+};
+
+RITE scanIdent(src, pos, line, col, acc) {
+    SHOULD pos < LENGTH(src) AND isAlNum(src[pos]) {
+        BEQUEATH scanIdent(src, pos+1, line, col+1, acc + src[pos]);
+    }
+    BIRTH sc WITH col - LENGTH(acc);
+    SHOULD acc == "ALIVE" { BEQUEATH {tok:{t:"BOOL",v:ALIVE,l:line,c:sc},pos:pos,col:col}; }
+    SHOULD acc == "DEAD"  { BEQUEATH {tok:{t:"BOOL",v:DEAD, l:line,c:sc},pos:pos,col:col}; }
+    SHOULD acc == "VOID"  { BEQUEATH {tok:{t:"VOID",v:VOID, l:line,c:sc},pos:pos,col:col}; }
+    SHOULD HAS(KW, acc)   { BEQUEATH {tok:{t:acc,  v:acc,  l:line,c:sc},pos:pos,col:col}; }
+    BEQUEATH {tok:{t:"ID",v:acc,l:line,c:sc},pos:pos,col:col};
+}
+
+RITE addTok(toks, ty, v, l, c) {
+    BEQUEATH APPEND(toks, {t:ty,v:v,l:l,c:c});
+}
+
+RITE tokenizeAt(src, pos, line, col, toks) {
+    SHOULD pos >= LENGTH(src) {
+        BEQUEATH APPEND(toks, {t:"EOF",v:VOID,l:line,c:col});
+    }
+    BIRTH ch WITH src[pos];
+    SHOULD ch == " " OR ch == "\t" OR CODE(ch) == 13 {
+        BEQUEATH tokenizeAt(src, pos+1, line, col+1, toks);
+    }
+    SHOULD ch == "\n" { BEQUEATH tokenizeAt(src, pos+1, line+1, 1, toks); }
+    SHOULD ch == "/" AND pos+1 < LENGTH(src) AND src[pos+1] == "/" {
+        BEQUEATH skipComment(src, pos+2, line, col+2, toks);
+    }
+    SHOULD ch == "~" AND pos+3 < LENGTH(src) AND src[pos+1] == "A" AND src[pos+2] == "T" AND src[pos+3] == "H" {
+        BEQUEATH tokenizeAt(src, pos+4, line, col+4, addTok(toks,"~ATH","~ATH",line,col));
+    }
+    SHOULD ch == "\"" {
+        BIRTH r WITH scanStringChars(src, pos+1, line, col+1, "");
+        BEQUEATH tokenizeAt(src, r.pos, r.line, r.col,
+                    APPEND(toks, {t:"STR",v:r.v,l:line,c:col}));
+    }
+    SHOULD isDigit(ch) {
+        BIRTH r WITH scanNumber(src, pos, line, col);
+        BEQUEATH tokenizeAt(src, r.pos, line, r.col, APPEND(toks, r.tok));
+    }
+    SHOULD ch == "-" AND pos+1 < LENGTH(src) AND isDigit(src[pos+1]) AND NOT isExprEnd(toks) {
+        BIRTH r WITH scanNumber(src, pos, line, col);
+        BEQUEATH tokenizeAt(src, r.pos, line, r.col, APPEND(toks, r.tok));
+    }
+    SHOULD isAlpha(ch) {
+        BIRTH r WITH scanIdent(src, pos+1, line, col+1, ch);
+        BEQUEATH tokenizeAt(src, r.pos, line, r.col, APPEND(toks, r.tok));
+    }
+    SHOULD ch == "&" AND pos+1 < LENGTH(src) AND src[pos+1] == "&" {
+        BEQUEATH tokenizeAt(src, pos+2, line, col+2, addTok(toks,"&&","&&",line,col));
+    }
+    SHOULD ch == "|" AND pos+1 < LENGTH(src) AND src[pos+1] == "|" {
+        BEQUEATH tokenizeAt(src, pos+2, line, col+2, addTok(toks,"||","||",line,col));
+    }
+    SHOULD ch == "<" AND pos+1 < LENGTH(src) AND src[pos+1] == "<" {
+        BEQUEATH tokenizeAt(src, pos+2, line, col+2, addTok(toks,"<<","<<",line,col));
+    }
+    SHOULD ch == ">" AND pos+1 < LENGTH(src) AND src[pos+1] == ">" {
+        BEQUEATH tokenizeAt(src, pos+2, line, col+2, addTok(toks,">>",">>",line,col));
+    }
+    SHOULD ch == "=" AND pos+1 < LENGTH(src) AND src[pos+1] == "=" {
+        BEQUEATH tokenizeAt(src, pos+2, line, col+2, addTok(toks,"==","==",line,col));
+    }
+    SHOULD ch == "!" AND pos+1 < LENGTH(src) AND src[pos+1] == "=" {
+        BEQUEATH tokenizeAt(src, pos+2, line, col+2, addTok(toks,"!=","!=",line,col));
+    }
+    SHOULD ch == "<" AND pos+1 < LENGTH(src) AND src[pos+1] == "=" {
+        BEQUEATH tokenizeAt(src, pos+2, line, col+2, addTok(toks,"<=","<=",line,col));
+    }
+    SHOULD ch == ">" AND pos+1 < LENGTH(src) AND src[pos+1] == "=" {
+        BEQUEATH tokenizeAt(src, pos+2, line, col+2, addTok(toks,">=",">=",line,col));
+    }
+    SHOULD ch == "+" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"+","+",line,col)); }
+    SHOULD ch == "-" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"-","-",line,col)); }
+    SHOULD ch == "*" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"*","*",line,col)); }
+    SHOULD ch == "/" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"/","/",line,col)); }
+    SHOULD ch == "%" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"%","%",line,col)); }
+    SHOULD ch == "<" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"<","<",line,col)); }
+    SHOULD ch == ">" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,">",">",line,col)); }
+    SHOULD ch == "=" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"=","=",line,col)); }
+    SHOULD ch == "!" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"!","!",line,col)); }
+    SHOULD ch == "&" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"&","&",line,col)); }
+    SHOULD ch == "|" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"|","|",line,col)); }
+    SHOULD ch == "^" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"^","^",line,col)); }
+    SHOULD ch == "~" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"~","~",line,col)); }
+    SHOULD ch == "(" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"(","(",line,col)); }
+    SHOULD ch == ")" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,")",  ")",  line,col)); }
+    SHOULD ch == "{" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"{","{",line,col)); }
+    SHOULD ch == "}" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"}","}",line,col)); }
+    SHOULD ch == "[" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"[","[",line,col)); }
+    SHOULD ch == "]" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,"]","]",line,col)); }
+    SHOULD ch == ";" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,";",";",line,col)); }
+    SHOULD ch == "," { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,",",",",line,col)); }
+    SHOULD ch == "." { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,".",  ".",  line,col)); }
+    SHOULD ch == ":" { BEQUEATH tokenizeAt(src,pos+1,line,col+1,addTok(toks,":",  ":",  line,col)); }
+    CONDEMN "Unexpected char at line " + STRING(line) + ": " + ch;
+}
+
+RITE tokenize(src) {
+    BEQUEATH tokenizeAt(src, 0, 1, 1, []);
+}
+
+THIS.DIE();

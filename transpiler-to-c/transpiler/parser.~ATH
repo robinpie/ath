@@ -1,0 +1,722 @@
+// parser.~ATH — recursive descent parser for !~ATH
+// parse(toks) -> AST root {t:"Program",stmts:[...]}
+// AST nodes: {t:TYPE, ...fields...}
+// Statement types: Import Bifurcate AthLoop Die VarDecl ConstDecl Assign
+//   RiteDef Cond AttemptSalvage Condemn Bequeath ExprStmt
+// Expression types: Lit Ident BinOp UnaryOp Call Index Member Array Map
+
+// --- Helpers ---
+
+RITE cur(toks, pos) { BEQUEATH toks[pos]; }
+RITE curT(toks, pos) { BEQUEATH toks[pos].t; }
+
+RITE expect(toks, pos, ty) {
+    SHOULD toks[pos].t != ty {
+        CONDEMN "Parse error at line " + STRING(toks[pos].l) + ": expected " + ty + " got " + toks[pos].t;
+    }
+    BEQUEATH pos + 1;
+}
+
+RITE matchTok(toks, pos, ty) {
+    SHOULD toks[pos].t == ty { BEQUEATH {matched: ALIVE, pos: pos+1}; }
+    BEQUEATH {matched: DEAD, pos: pos};
+}
+
+// --- Top level ---
+
+RITE parse(toks) {
+    BEQUEATH parseStmts(toks, 0, []);
+}
+
+RITE parseStmts(toks, pos, stmts) {
+    SHOULD toks[pos].t == "EOF" {
+        BEQUEATH {t: "Program", stmts: stmts};
+    }
+    BIRTH r WITH parseStmt(toks, pos);
+    BEQUEATH parseStmts(toks, r.pos, APPEND(stmts, r.node));
+}
+
+RITE parseStmt(toks, pos) {
+    BIRTH ty WITH toks[pos].t;
+    SHOULD ty == "import" { BEQUEATH parseImport(toks, pos); }
+    SHOULD ty == "bifurcate" { BEQUEATH parseBifurcate(toks, pos); }
+    SHOULD ty == "~ATH" { BEQUEATH parseAthLoop(toks, pos); }
+    SHOULD ty == "BIRTH" { BEQUEATH parseVarDecl(toks, pos); }
+    SHOULD ty == "ENTOMB" { BEQUEATH parseConstDecl(toks, pos); }
+    SHOULD ty == "RITE" { BEQUEATH parseRiteDef(toks, pos); }
+    SHOULD ty == "SHOULD" { BEQUEATH parseCond(toks, pos); }
+    SHOULD ty == "ATTEMPT" { BEQUEATH parseAttemptSalvage(toks, pos); }
+    SHOULD ty == "CONDEMN" { BEQUEATH parseCondemnStmt(toks, pos); }
+    SHOULD ty == "BEQUEATH" { BEQUEATH parseBequeathStmt(toks, pos); }
+    SHOULD ty == "ID" OR ty == "THIS" OR ty == "[" { BEQUEATH parseDieOrAssignOrExpr(toks, pos); }
+    CONDEMN "Unexpected token: " + ty + " at line " + STRING(toks[pos].l);
+}
+
+// Same as parseStmt but for inside EXECUTE/RITE bodies
+RITE parseExprStmt(toks, pos) {
+    BIRTH ty WITH toks[pos].t;
+    SHOULD ty == "import" { BEQUEATH parseImport(toks, pos); }
+    SHOULD ty == "~ATH" { BEQUEATH parseAthLoop(toks, pos); }
+    SHOULD ty == "BIRTH" { BEQUEATH parseVarDecl(toks, pos); }
+    SHOULD ty == "ENTOMB" { BEQUEATH parseConstDecl(toks, pos); }
+    SHOULD ty == "RITE" { BEQUEATH parseRiteDef(toks, pos); }
+    SHOULD ty == "SHOULD" { BEQUEATH parseCond(toks, pos); }
+    SHOULD ty == "ATTEMPT" { BEQUEATH parseAttemptSalvage(toks, pos); }
+    SHOULD ty == "CONDEMN" { BEQUEATH parseCondemnStmt(toks, pos); }
+    SHOULD ty == "BEQUEATH" { BEQUEATH parseBequeathStmt(toks, pos); }
+    SHOULD ty == "VOID" {
+        BIRTH p WITH pos + 1;
+        BIRTH mr WITH matchTok(toks, p, ";");
+        SHOULD mr.matched { p = mr.pos; }
+        BEQUEATH {node: {t:"ExprStmt",expr:{t:"Lit",vt:"VOID",v:VOID},l:toks[pos].l}, pos: p};
+    }
+    // Expression (may be assignment)
+    BIRTH re WITH parseExpr(toks, pos);
+    BIRTH expr WITH re.node;
+    BIRTH p WITH re.pos;
+    // Check for assignment
+    SHOULD toks[p].t == "=" {
+        p = p + 1;
+        BIRTH rv WITH parseExpr(toks, p);
+        p = expect(rv.pos, p, ";");
+        SHOULD toks[rv.pos].t == ";" { p = rv.pos + 1; } LEST { p = rv.pos; }
+        BEQUEATH {node:{t:"Assign",target:expr,val:rv.node,l:expr.l}, pos: rv.pos + 1};
+    }
+    // Optional semicolon
+    BIRTH mr WITH matchTok(toks, p, ";");
+    BEQUEATH {node: {t:"ExprStmt",expr:expr,l:expr.l}, pos: mr.pos};
+}
+
+// --- Import ---
+RITE parseImport(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1; // consume 'import'
+    BIRTH ety WITH toks[pos].t;
+    SHOULD ety != "timer" AND ety != "process" AND ety != "connection" AND ety != "watcher" {
+        CONDEMN "Expected entity type at line " + STRING(toks[pos].l);
+    }
+    pos = pos + 1;
+    SHOULD toks[pos].t != "ID" { CONDEMN "Expected entity name at line " + STRING(toks[pos].l); }
+    BIRTH nm WITH toks[pos].v;
+    pos = pos + 1;
+    pos = expect(toks, pos, "(");
+    BIRTH args WITH [];
+    SHOULD ety == "timer" {
+        SHOULD toks[pos].t == "DUR" {
+            args = APPEND(args, {t:"Duration",ms:toks[pos].v,l:toks[pos].l});
+            pos = pos + 1;
+        } LEST SHOULD toks[pos].t == "INT" {
+            args = APPEND(args, {t:"Duration",ms:toks[pos].v,l:toks[pos].l});
+            pos = pos + 1;
+        } LEST {
+            CONDEMN "Expected duration for timer at line " + STRING(toks[pos].l);
+        }
+    } LEST {
+        SHOULD toks[pos].t != ")" {
+            BIRTH ra WITH parseExpr(toks, pos);
+            args = APPEND(args, ra.node);
+            pos = ra.pos;
+            BIRTH parsing WITH ALIVE;
+            SHOULD toks[pos].t == "," {
+                pos = pos + 1;
+                BIRTH ra2 WITH parseExpr(toks, pos);
+                args = APPEND(args, ra2.node);
+                pos = ra2.pos;
+            }
+            SHOULD toks[pos].t == "," {
+                pos = pos + 1;
+                BIRTH ra3 WITH parseExpr(toks, pos);
+                args = APPEND(args, ra3.node);
+                pos = ra3.pos;
+            }
+        }
+    }
+    pos = expect(toks, pos, ")");
+    pos = expect(toks, pos, ";");
+    BEQUEATH {node: {t:"Import",etype:ety,name:nm,args:args,l:l}, pos: pos};
+}
+
+// --- Bifurcate ---
+RITE parseBifurcate(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1;
+    BIRTH ent WITH toks[pos].v;
+    pos = pos + 1; // entity name (ID or THIS)
+    pos = expect(toks, pos, "[");
+    SHOULD toks[pos].t != "ID" { CONDEMN "Expected branch name at line " + STRING(toks[pos].l); }
+    BIRTH br1 WITH toks[pos].v; pos = pos + 1;
+    pos = expect(toks, pos, ",");
+    SHOULD toks[pos].t != "ID" { CONDEMN "Expected branch name at line " + STRING(toks[pos].l); }
+    BIRTH br2 WITH toks[pos].v; pos = pos + 1;
+    pos = expect(toks, pos, "]");
+    pos = expect(toks, pos, ";");
+    BEQUEATH {node: {t:"Bifurcate",entity:ent,br1:br1,br2:br2,l:l}, pos: pos};
+}
+
+// --- ~ATH loop ---
+RITE parseAthLoop(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1; // consume ~ATH
+    pos = expect(toks, pos, "(");
+    BIRTH re WITH parseEntityExpr(toks, pos);
+    BIRTH entity WITH re.node;
+    pos = expect(toks, re.pos, ")");
+    pos = expect(toks, pos, "{");
+    BIRTH rb WITH parseStmtList(toks, pos, []);
+    pos = expect(toks, rb.pos, "}");
+    pos = expect(toks, pos, "EXECUTE");
+    pos = expect(toks, pos, "(");
+    BIRTH exec WITH parseExecuteBody(toks, pos, []);
+    pos = expect(toks, exec.pos, ")");
+    pos = expect(toks, pos, ";");
+    BEQUEATH {node: {t:"AthLoop",entity:entity,body:rb.stmts,exec:exec.stmts,l:l}, pos: pos};
+}
+
+RITE parseStmtList(toks, pos, acc) {
+    SHOULD toks[pos].t == "}" OR toks[pos].t == "EOF" {
+        BEQUEATH {stmts: acc, pos: pos};
+    }
+    BIRTH r WITH parseStmt(toks, pos);
+    BEQUEATH parseStmtList(toks, r.pos, APPEND(acc, r.node));
+}
+
+RITE parseExecuteBody(toks, pos, acc) {
+    SHOULD toks[pos].t == ")" OR toks[pos].t == "EOF" {
+        BEQUEATH {stmts: acc, pos: pos};
+    }
+    BIRTH r WITH parseExprStmt(toks, pos);
+    BEQUEATH parseExecuteBody(toks, r.pos, APPEND(acc, r.node));
+}
+
+RITE parseExprStmtList(toks, pos, acc) {
+    SHOULD toks[pos].t == "}" OR toks[pos].t == "EOF" {
+        BEQUEATH {stmts: acc, pos: pos};
+    }
+    BIRTH r WITH parseExprStmt(toks, pos);
+    BEQUEATH parseExprStmtList(toks, r.pos, APPEND(acc, r.node));
+}
+
+// --- DIE or assignment or expression ---
+RITE parseDieOrAssignOrExpr(toks, pos) {
+    SHOULD toks[pos].t == "[" {
+        BIRTH rd WITH parseDieTarget(toks, pos);
+        pos = expect(toks, rd.pos, ".");
+        pos = expect(toks, pos, "DIE");
+        pos = expect(toks, pos, "(");
+        pos = expect(toks, pos, ")");
+        pos = expect(toks, pos, ";");
+        BEQUEATH {node: {t:"Die",target:rd.node,l:rd.node.l}, pos: pos};
+    }
+    BIRTH re WITH parseExpr(toks, pos);
+    BIRTH expr WITH re.node;
+    BIRTH p WITH re.pos;
+    // Check for assignment
+    SHOULD toks[p].t == "=" {
+        p = p + 1;
+        BIRTH rv WITH parseExpr(toks, p);
+        p = expect(toks, rv.pos, ";");
+        BEQUEATH {node:{t:"Assign",target:expr,val:rv.node,l:expr.l}, pos: p};
+    }
+    // Check for DIE call
+    SHOULD expr.t == "Call" AND HAS(expr, "callee") AND expr.callee.t == "Member" AND expr.callee.mem == "DIE" {
+        BIRTH obj WITH expr.callee.obj;
+        BIRTH nm WITH obj.name;
+        p = expect(toks, p, ";");
+        BEQUEATH {node:{t:"Die",target:{t:"DieIdent",name:nm,l:obj.l},l:expr.l}, pos: p};
+    }
+    p = expect(toks, p, ";");
+    BEQUEATH {node:{t:"ExprStmt",expr:expr,l:expr.l}, pos: p};
+}
+
+RITE parseDieTarget(toks, pos) {
+    SHOULD toks[pos].t == "[" {
+        BIRTH l WITH toks[pos].l;
+        pos = pos + 1;
+        BIRTH rl WITH parseDieTarget(toks, pos);
+        pos = expect(toks, rl.pos, ",");
+        BIRTH rr WITH parseDieTarget(toks, pos);
+        pos = expect(toks, rr.pos, "]");
+        BEQUEATH {node:{t:"DiePair",left:rl.node,right:rr.node,l:l}, pos: pos};
+    }
+    SHOULD toks[pos].t == "THIS" OR toks[pos].t == "ID" {
+        BIRTH nm WITH toks[pos].v;
+        BIRTH l WITH toks[pos].l;
+        BEQUEATH {node:{t:"DieIdent",name:nm,l:l}, pos: pos+1};
+    }
+    CONDEMN "Expected die target at line " + STRING(toks[pos].l);
+}
+
+// --- VarDecl / ConstDecl ---
+RITE parseVarDecl(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1;
+    SHOULD toks[pos].t != "ID" { CONDEMN "Expected name at line " + STRING(toks[pos].l); }
+    BIRTH nm WITH toks[pos].v; pos = pos + 1;
+    pos = expect(toks, pos, "WITH");
+    BIRTH re WITH parseExpr(toks, pos);
+    pos = expect(toks, re.pos, ";");
+    BEQUEATH {node:{t:"VarDecl",name:nm,val:re.node,l:l}, pos: pos};
+}
+
+RITE parseConstDecl(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1;
+    SHOULD toks[pos].t != "ID" { CONDEMN "Expected name at line " + STRING(toks[pos].l); }
+    BIRTH nm WITH toks[pos].v; pos = pos + 1;
+    pos = expect(toks, pos, "WITH");
+    BIRTH re WITH parseExpr(toks, pos);
+    pos = expect(toks, re.pos, ";");
+    BEQUEATH {node:{t:"ConstDecl",name:nm,val:re.node,l:l}, pos: pos};
+}
+
+// --- RiteDef ---
+RITE parseRiteDef(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1;
+    SHOULD toks[pos].t != "ID" { CONDEMN "Expected rite name at line " + STRING(toks[pos].l); }
+    BIRTH nm WITH toks[pos].v; pos = pos + 1;
+    pos = expect(toks, pos, "(");
+    BIRTH params WITH [];
+    SHOULD toks[pos].t != ")" {
+        SHOULD toks[pos].t != "ID" { CONDEMN "Expected param at line " + STRING(toks[pos].l); }
+        params = APPEND(params, toks[pos].v);
+        pos = pos + 1;
+        BIRTH moreparams WITH ALIVE;
+        SHOULD toks[pos].t == "," { pos = pos + 1;
+            SHOULD toks[pos].t != "ID" { CONDEMN "Expected param at line " + STRING(toks[pos].l); }
+            params = APPEND(params, toks[pos].v); pos = pos + 1; }
+        SHOULD toks[pos].t == "," { pos = pos + 1;
+            SHOULD toks[pos].t != "ID" { CONDEMN "Expected param at line " + STRING(toks[pos].l); }
+            params = APPEND(params, toks[pos].v); pos = pos + 1; }
+        SHOULD toks[pos].t == "," { pos = pos + 1;
+            SHOULD toks[pos].t != "ID" { CONDEMN "Expected param at line " + STRING(toks[pos].l); }
+            params = APPEND(params, toks[pos].v); pos = pos + 1; }
+        SHOULD toks[pos].t == "," { pos = pos + 1;
+            SHOULD toks[pos].t != "ID" { CONDEMN "Expected param at line " + STRING(toks[pos].l); }
+            params = APPEND(params, toks[pos].v); pos = pos + 1; }
+        SHOULD toks[pos].t == "," { pos = pos + 1;
+            SHOULD toks[pos].t != "ID" { CONDEMN "Expected param at line " + STRING(toks[pos].l); }
+            params = APPEND(params, toks[pos].v); pos = pos + 1; }
+        SHOULD toks[pos].t == "," { pos = pos + 1;
+            SHOULD toks[pos].t != "ID" { CONDEMN "Expected param at line " + STRING(toks[pos].l); }
+            params = APPEND(params, toks[pos].v); pos = pos + 1; }
+        SHOULD toks[pos].t == "," { pos = pos + 1;
+            SHOULD toks[pos].t != "ID" { CONDEMN "Expected param at line " + STRING(toks[pos].l); }
+            params = APPEND(params, toks[pos].v); pos = pos + 1; }
+        SHOULD toks[pos].t == "," { pos = pos + 1;
+            SHOULD toks[pos].t != "ID" { CONDEMN "Expected param at line " + STRING(toks[pos].l); }
+            params = APPEND(params, toks[pos].v); pos = pos + 1; }
+    }
+    pos = expect(toks, pos, ")");
+    pos = expect(toks, pos, "{");
+    BIRTH rb WITH parseExprStmtList(toks, pos, []);
+    pos = expect(toks, rb.pos, "}");
+    BEQUEATH {node:{t:"RiteDef",name:nm,params:params,body:rb.stmts,l:l}, pos: pos};
+}
+
+// --- Conditional ---
+RITE parseCond(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1;
+    BIRTH rc WITH parseExpr(toks, pos);
+    pos = expect(toks, rc.pos, "{");
+    BIRTH rt WITH parseExprStmtList(toks, pos, []);
+    pos = expect(toks, rt.pos, "}");
+    BIRTH els WITH VOID;
+    SHOULD toks[pos].t == "LEST" {
+        pos = pos + 1;
+        SHOULD toks[pos].t == "SHOULD" {
+            BIRTH ri WITH parseCond(toks, pos);
+            els = [ri.node];
+            pos = ri.pos;
+        } LEST {
+            pos = expect(toks, pos, "{");
+            BIRTH re WITH parseExprStmtList(toks, pos, []);
+            els = re.stmts;
+            pos = expect(toks, re.pos, "}");
+        }
+    }
+    BEQUEATH {node:{t:"Cond",cond:rc.node,then:rt.stmts,els:els,l:l}, pos: pos};
+}
+
+// --- AttemptSalvage ---
+RITE parseAttemptSalvage(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1;
+    pos = expect(toks, pos, "{");
+    BIRTH ra WITH parseExprStmtList(toks, pos, []);
+    pos = expect(toks, ra.pos, "}");
+    pos = expect(toks, pos, "SALVAGE");
+    SHOULD toks[pos].t != "ID" { CONDEMN "Expected error var at line " + STRING(toks[pos].l); }
+    BIRTH en WITH toks[pos].v; pos = pos + 1;
+    pos = expect(toks, pos, "{");
+    BIRTH rs WITH parseExprStmtList(toks, pos, []);
+    pos = expect(toks, rs.pos, "}");
+    BEQUEATH {node:{t:"AttemptSalvage",attempt:ra.stmts,errname:en,salvage:rs.stmts,l:l}, pos: pos};
+}
+
+// --- Condemn ---
+RITE parseCondemnStmt(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1;
+    BIRTH re WITH parseExpr(toks, pos);
+    pos = expect(toks, re.pos, ";");
+    BEQUEATH {node:{t:"Condemn",msg:re.node,l:l}, pos: pos};
+}
+
+// --- Bequeath ---
+RITE parseBequeathStmt(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1;
+    SHOULD toks[pos].t == ";" {
+        BEQUEATH {node:{t:"Bequeath",val:{t:"Lit",vt:"VOID",v:VOID},l:l}, pos: pos+1};
+    }
+    BIRTH re WITH parseExpr(toks, pos);
+    pos = expect(toks, re.pos, ";");
+    BEQUEATH {node:{t:"Bequeath",val:re.node,l:l}, pos: pos};
+}
+
+// --- Entity expressions ---
+RITE parseEntityExpr(toks, pos) { BEQUEATH parseEntityOr(toks, pos); }
+
+RITE parseEntityOr(toks, pos) {
+    BIRTH rl WITH parseEntityAnd(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "||" {
+        pos = pos + 1;
+        BIRTH rr WITH parseEntityAnd(toks, pos);
+        BEQUEATH {node:{t:"EntityOr",left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseEntityAnd(toks, pos) {
+    BIRTH rl WITH parseEntityUnary(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "&&" {
+        pos = pos + 1;
+        BIRTH rr WITH parseEntityUnary(toks, pos);
+        BEQUEATH {node:{t:"EntityAnd",left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseEntityUnary(toks, pos) {
+    SHOULD toks[pos].t == "!" {
+        BIRTH l WITH toks[pos].l;
+        pos = pos + 1;
+        BIRTH ro WITH parseEntityUnary(toks, pos);
+        BEQUEATH {node:{t:"EntityNot",operand:ro.node,l:l}, pos: ro.pos};
+    }
+    BEQUEATH parseEntityPrimary(toks, pos);
+}
+
+RITE parseEntityPrimary(toks, pos) {
+    SHOULD toks[pos].t == "(" {
+        pos = pos + 1;
+        BIRTH re WITH parseEntityExpr(toks, pos);
+        pos = expect(toks, re.pos, ")");
+        BEQUEATH {node: re.node, pos: pos};
+    }
+    SHOULD toks[pos].t == "THIS" OR toks[pos].t == "ID" {
+        BIRTH nm WITH toks[pos].v;
+        BIRTH l WITH toks[pos].l;
+        BEQUEATH {node:{t:"EntityIdent",name:nm,l:l}, pos: pos+1};
+    }
+    CONDEMN "Expected entity at line " + STRING(toks[pos].l);
+}
+
+// --- Expressions ---
+RITE parseExpr(toks, pos) { BEQUEATH parseOr(toks, pos); }
+
+RITE parseOr(toks, pos) {
+    BIRTH rl WITH parseAnd(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "OR" {
+        pos = pos + 1;
+        BIRTH rr WITH parseAnd(toks, pos);
+        BEQUEATH {node:{t:"BinOp",op:"OR",left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseAnd(toks, pos) {
+    BIRTH rl WITH parseEq(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "AND" {
+        pos = pos + 1;
+        BIRTH rr WITH parseEq(toks, pos);
+        BEQUEATH {node:{t:"BinOp",op:"AND",left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseEq(toks, pos) {
+    BIRTH rl WITH parseCmp(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "==" OR toks[pos].t == "!=" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseCmp(toks, pos);
+        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseCmp(toks, pos) {
+    BIRTH rl WITH parseBitOr(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "<" OR toks[pos].t == ">" OR toks[pos].t == "<=" OR toks[pos].t == ">=" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseBitOr(toks, pos);
+        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseBitOr(toks, pos) {
+    BIRTH rl WITH parseBitXor(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "|" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseBitXor(toks, pos);
+        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseBitXor(toks, pos) {
+    BIRTH rl WITH parseBitAnd(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "^" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseBitAnd(toks, pos);
+        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseBitAnd(toks, pos) {
+    BIRTH rl WITH parseShift(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "&" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseShift(toks, pos);
+        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseShift(toks, pos) {
+    BIRTH rl WITH parseTerm(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "<<" OR toks[pos].t == ">>" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseTerm(toks, pos);
+        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseTerm(toks, pos) {
+    BIRTH rl WITH parseFactor(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "+" OR toks[pos].t == "-" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseFactor(toks, pos);
+        BIRTH r WITH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueTerms(toks, r.pos, r.node);
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE continueTerms(toks, pos, left) {
+    SHOULD toks[pos].t == "+" OR toks[pos].t == "-" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseFactor(toks, pos);
+        BEQUEATH continueTerms(toks, rr.pos, {t:"BinOp",op:op,left:left,right:rr.node,l:left.l});
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseFactor(toks, pos) {
+    BIRTH rl WITH parseUnary(toks, pos);
+    BIRTH left WITH rl.node;
+    pos = rl.pos;
+    SHOULD toks[pos].t == "*" OR toks[pos].t == "/" OR toks[pos].t == "%" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseUnary(toks, pos);
+        BIRTH r WITH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueFactors(toks, r.pos, r.node);
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE continueFactors(toks, pos, left) {
+    SHOULD toks[pos].t == "*" OR toks[pos].t == "/" OR toks[pos].t == "%" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseUnary(toks, pos);
+        BEQUEATH continueFactors(toks, rr.pos, {t:"BinOp",op:op,left:left,right:rr.node,l:left.l});
+    }
+    BEQUEATH {node: left, pos: pos};
+}
+
+RITE parseUnary(toks, pos) {
+    SHOULD toks[pos].t == "NOT" {
+        BIRTH l WITH toks[pos].l; pos = pos + 1;
+        BIRTH ro WITH parseUnary(toks, pos);
+        BEQUEATH {node:{t:"UnaryOp",op:"NOT",operand:ro.node,l:l}, pos: ro.pos};
+    }
+    SHOULD toks[pos].t == "-" {
+        BIRTH l WITH toks[pos].l; pos = pos + 1;
+        BIRTH ro WITH parseUnary(toks, pos);
+        BEQUEATH {node:{t:"UnaryOp",op:"-",operand:ro.node,l:l}, pos: ro.pos};
+    }
+    SHOULD toks[pos].t == "~" {
+        BIRTH l WITH toks[pos].l; pos = pos + 1;
+        BIRTH ro WITH parseUnary(toks, pos);
+        BEQUEATH {node:{t:"UnaryOp",op:"~",operand:ro.node,l:l}, pos: ro.pos};
+    }
+    BEQUEATH parsePostfix(toks, pos);
+}
+
+RITE parsePostfix(toks, pos) {
+    BIRTH rp WITH parsePrimary(toks, pos);
+    BEQUEATH continuePostfix(toks, rp.pos, rp.node);
+}
+
+RITE continuePostfix(toks, pos, expr) {
+    SHOULD toks[pos].t == "[" {
+        pos = pos + 1;
+        BIRTH ri WITH parseExpr(toks, pos);
+        pos = expect(toks, ri.pos, "]");
+        BEQUEATH continuePostfix(toks, pos, {t:"Index",obj:expr,idx:ri.node,l:expr.l});
+    }
+    SHOULD toks[pos].t == "." {
+        pos = pos + 1;
+        // Special: .DIE is a keyword not identifier
+        SHOULD toks[pos].t == "DIE" {
+            BIRTH l WITH toks[pos].l; pos = pos + 1;
+            pos = expect(toks, pos, "(");
+            pos = expect(toks, pos, ")");
+            BIRTH mem WITH {t:"Member",obj:expr,mem:"DIE",l:l};
+            BEQUEATH continuePostfix(toks, pos, {t:"Call",callee:mem,args:[],l:l});
+        }
+        SHOULD toks[pos].t != "ID" { CONDEMN "Expected member name at line " + STRING(toks[pos].l); }
+        BIRTH nm WITH toks[pos].v; BIRTH l WITH toks[pos].l; pos = pos + 1;
+        BEQUEATH continuePostfix(toks, pos, {t:"Member",obj:expr,mem:nm,l:l});
+    }
+    SHOULD toks[pos].t == "(" {
+        pos = pos + 1;
+        BIRTH ra WITH parseArgList(toks, pos, []);
+        pos = expect(toks, ra.pos, ")");
+        BEQUEATH continuePostfix(toks, pos, {t:"Call",callee:expr,args:ra.args,l:expr.l});
+    }
+    BEQUEATH {node: expr, pos: pos};
+}
+
+RITE parseArgList(toks, pos, args) {
+    SHOULD toks[pos].t == ")" { BEQUEATH {args: args, pos: pos}; }
+    BIRTH re WITH parseExpr(toks, pos);
+    BIRTH newArgs WITH APPEND(args, re.node);
+    pos = re.pos;
+    SHOULD toks[pos].t == "," {
+        BEQUEATH parseArgList(toks, pos+1, newArgs);
+    }
+    BEQUEATH {args: newArgs, pos: pos};
+}
+
+RITE parsePrimary(toks, pos) {
+    BIRTH ty WITH toks[pos].t;
+    BIRTH l WITH toks[pos].l;
+    BIRTH v WITH toks[pos].v;
+    SHOULD ty == "INT"  { BEQUEATH {node:{t:"Lit",vt:"INT", v:v,l:l}, pos:pos+1}; }
+    SHOULD ty == "FLT"  { BEQUEATH {node:{t:"Lit",vt:"FLT", v:v,l:l}, pos:pos+1}; }
+    SHOULD ty == "STR"  { BEQUEATH {node:{t:"Lit",vt:"STR", v:v,l:l}, pos:pos+1}; }
+    SHOULD ty == "BOOL" { BEQUEATH {node:{t:"Lit",vt:"BOOL",v:v,l:l}, pos:pos+1}; }
+    SHOULD ty == "VOID" { BEQUEATH {node:{t:"Lit",vt:"VOID",v:VOID,l:l}, pos:pos+1}; }
+    SHOULD ty == "THIS" { BEQUEATH {node:{t:"Ident",name:"THIS",l:l}, pos:pos+1}; }
+    SHOULD ty == "ID"   { BEQUEATH {node:{t:"Ident",name:v,l:l}, pos:pos+1}; }
+    SHOULD ty == "(" {
+        pos = pos + 1;
+        BIRTH re WITH parseExpr(toks, pos);
+        pos = expect(toks, re.pos, ")");
+        BEQUEATH {node: re.node, pos: pos};
+    }
+    SHOULD ty == "[" {
+        pos = pos + 1;
+        BIRTH ra WITH parseArrayElements(toks, pos, []);
+        pos = expect(toks, ra.pos, "]");
+        BEQUEATH {node:{t:"Array",elems:ra.elems,l:l}, pos:pos};
+    }
+    SHOULD ty == "{" {
+        pos = pos + 1;
+        BIRTH rm WITH parseMapEntries(toks, pos, []);
+        pos = expect(toks, rm.pos, "}");
+        BEQUEATH {node:{t:"Map",entries:rm.entries,l:l}, pos:pos};
+    }
+    CONDEMN "Unexpected token in expression: " + ty + " at line " + STRING(l);
+}
+
+RITE parseArrayElements(toks, pos, elems) {
+    SHOULD toks[pos].t == "]" { BEQUEATH {elems: elems, pos: pos}; }
+    BIRTH re WITH parseExpr(toks, pos);
+    BIRTH newElems WITH APPEND(elems, re.node);
+    pos = re.pos;
+    SHOULD toks[pos].t == "," {
+        BIRTH mr WITH matchTok(toks, pos+1, "]");
+        SHOULD mr.matched { BEQUEATH {elems: newElems, pos: pos+1}; }
+        BEQUEATH parseArrayElements(toks, pos+1, newElems);
+    }
+    BEQUEATH {elems: newElems, pos: pos};
+}
+
+RITE parseMapEntries(toks, pos, entries) {
+    SHOULD toks[pos].t == "}" { BEQUEATH {entries: entries, pos: pos}; }
+    SHOULD toks[pos].t != "ID" AND toks[pos].t != "STR" {
+        CONDEMN "Expected map key at line " + STRING(toks[pos].l);
+    }
+    BIRTH key WITH toks[pos].v; pos = pos + 1;
+    pos = expect(toks, pos, ":");
+    BIRTH rv WITH parseExpr(toks, pos);
+    BIRTH newEntries WITH APPEND(entries, {key: key, val: rv.node});
+    pos = rv.pos;
+    SHOULD toks[pos].t == "," {
+        BIRTH mr WITH matchTok(toks, pos+1, "}");
+        SHOULD mr.matched { BEQUEATH {entries: newEntries, pos: pos+1}; }
+        BEQUEATH parseMapEntries(toks, pos+1, newEntries);
+    }
+    BEQUEATH {entries: newEntries, pos: pos};
+}
+
+// Fix: parseExprStmt assignment - correct expect call
+RITE parseAssignExprStmt(toks, pos) {
+    BIRTH re WITH parseExpr(toks, pos);
+    BIRTH expr WITH re.node;
+    BIRTH p WITH re.pos;
+    SHOULD toks[p].t == "=" {
+        p = p + 1;
+        BIRTH rv WITH parseExpr(toks, p);
+        SHOULD toks[rv.pos].t != ";" { CONDEMN "Expected ; after assignment at line " + STRING(toks[rv.pos].l); }
+        BEQUEATH {node:{t:"Assign",target:expr,val:rv.node,l:expr.l}, pos: rv.pos+1};
+    }
+    SHOULD expr.t == "Call" AND HAS(expr, "callee") AND expr.callee.t == "Member" AND expr.callee.mem == "DIE" {
+        SHOULD toks[p].t != ";" { CONDEMN "Expected ; after DIE at line " + STRING(toks[p].l); }
+        BIRTH obj WITH expr.callee.obj;
+        BEQUEATH {node:{t:"Die",target:{t:"DieIdent",name:obj.name,l:obj.l},l:expr.l}, pos: p+1};
+    }
+    SHOULD toks[p].t != ";" { CONDEMN "Expected ; after expression at line " + STRING(toks[p].l); }
+    BEQUEATH {node:{t:"ExprStmt",expr:expr,l:expr.l}, pos: p+1};
+}
+
+THIS.DIE();
