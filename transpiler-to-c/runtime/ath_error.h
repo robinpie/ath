@@ -28,10 +28,11 @@ extern AthErrorFrame *_ath_error_top;
     _ath_error_top = (frame).prev
 
 #define ATH_SALVAGE_BEGIN(frame) \
-    else
+    else { \
+        _ath_error_top = (frame).prev;
 
 #define ATH_SALVAGE_END(frame) \
-    _ath_error_top = (frame).prev
+    }
 
 /* Throw an error to the nearest SALVAGE */
 void ath_condemn(const char *msg, int line, int col);

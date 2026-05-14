@@ -78,9 +78,8 @@ RITE parseExprStmt(toks, pos) {
     SHOULD toks[p].t == "=" {
         p = p + 1;
         BIRTH rv WITH parseExpr(toks, p);
-        p = expect(rv.pos, p, ";");
         SHOULD toks[rv.pos].t == ";" { p = rv.pos + 1; } LEST { p = rv.pos; }
-        BEQUEATH {node:{t:"Assign",target:expr,val:rv.node,l:expr.l}, pos: rv.pos + 1};
+        BEQUEATH {node:{t:"Assign",target:expr,val:rv.node,l:expr.l}, pos: p};
     }
     // Optional semicolon
     BIRTH mr WITH matchTok(toks, p, ";");

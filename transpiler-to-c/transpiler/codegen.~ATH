@@ -1,0 +1,1134 @@
+// codegen.~ATH — AST -> C89 source string
+// generate(ast, asyncRites) -> string
+
+ENTOMB BUILTINS WITH {
+    "UTTER":ALIVE,"HEED":ALIVE,"SCRY":ALIVE,"INSCRIBE":ALIVE,
+    "TYPEOF":ALIVE,"LENGTH":ALIVE,"PARSE_INT":ALIVE,"PARSE_FLOAT":ALIVE,
+    "STRING":ALIVE,"INT":ALIVE,"FLOAT":ALIVE,"CHAR":ALIVE,"CODE":ALIVE,
+    "BIN":ALIVE,"HEX":ALIVE,"APPEND":ALIVE,"PREPEND":ALIVE,
+    "SLICE":ALIVE,"FIRST":ALIVE,"LAST":ALIVE,"CONCAT":ALIVE,
+    "KEYS":ALIVE,"VALUES":ALIVE,"HAS":ALIVE,"SET":ALIVE,"DELETE":ALIVE,
+    "SPLIT":ALIVE,"JOIN":ALIVE,"SUBSTRING":ALIVE,"UPPERCASE":ALIVE,
+    "LOWERCASE":ALIVE,"TRIM":ALIVE,"REPLACE":ALIVE,
+    "RANDOM":ALIVE,"RANDOM_INT":ALIVE,"TIME":ALIVE
+};
+
+ENTOMB BINOPS WITH {
+    "+":"ath_add","-":"ath_sub","*":"ath_mul","/":"ath_div","%":"ath_mod",
+    "==":"ath_eq","!=":"ath_ne","<":"ath_lt",">":"ath_gt","<=":"ath_le",">=":"ath_ge",
+    "&":"ath_band","|":"ath_bor","^":"ath_bxor","<<":"ath_lshift",">>":"ath_rshift"
+};
+
+// ===== Context =====
+// cl: cleanup code for early exits (false-path in async cond)
+// fn: current frame name
+
+RITE mkCtx(asyncRites, syncRites, branchNames, pipeline) {
+    BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],pre:[],defs:[],pm:DEAD,ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline};
+}
+
+RITE freshN(ctx) {
+    BIRTH v WITH ctx.n;
+    BEQUEATH {ctx:SET(ctx,"n",ctx.n+1), v:v};
+}
+
+RITE freshT(ctx) {
+    BIRTH v WITH ctx.tc;
+    BEQUEATH {ctx:SET(ctx,"tc",ctx.tc+1), t:"_t["+STRING(v)+"]"};
+}
+
+RITE resetTc(ctx) { BEQUEATH SET(ctx,"tc",0); }
+RITE emitFwd(ctx, line) { BEQUEATH SET(ctx,"fwds",APPEND(ctx.fwds,line)); }
+RITE emitDef(ctx, s) {
+    SHOULD ctx.pm { BEQUEATH SET(ctx,"pre",APPEND(ctx.pre,s)); }
+    BEQUEATH SET(ctx,"defs",APPEND(ctx.defs,s));
+}
+
+RITE ind(n) {
+    SHOULD n <= 0 { BEQUEATH ""; }
+    BEQUEATH "    " + ind(n-1);
+}
+
+RITE escChar(c) {
+    SHOULD c == "\\" { BEQUEATH "\\\\"; }
+    SHOULD c == "\"" { BEQUEATH "\\\""; }
+    SHOULD c == "\n" { BEQUEATH "\\n"; }
+    SHOULD c == "\t" { BEQUEATH "\\t"; }
+    BIRTH code WITH CODE(c);
+    SHOULD code == 13 { BEQUEATH "\\r"; }
+    SHOULD code < 32 OR code > 126 {
+        BIRTH h WITH HEX(code);
+        SHOULD LENGTH(h) < 2 { h = "0" + h; }
+        BEQUEATH "\\x" + LOWERCASE(h);
+    }
+    BEQUEATH c;
+}
+
+RITE escStr(s) { BEQUEATH escStrR(SPLIT(s,""),0,""); }
+RITE escStrR(chars, i, acc) {
+    SHOULD i >= LENGTH(chars) { BEQUEATH acc; }
+    BEQUEATH escStrR(chars, i+1, acc + escChar(chars[i]));
+}
+
+// ===== Module import helpers =====
+
+RITE isModuleImport(s) {
+    SHOULD s.t == "Import" AND s.etype == "watcher" {
+        SHOULD s.args[0].t == "Lit" AND s.args[0].vt == "STR" {
+            BIRTH path WITH s.args[0].v;
+            BIRTH len WITH LENGTH(path);
+            SHOULD len >= 5 AND SUBSTRING(path, len-5, len) == ".~ATH" { BEQUEATH ALIVE; }
+        }
+    }
+    BEQUEATH DEAD;
+}
+
+RITE collectModuleExports(stmts, i) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH []; }
+    BIRTH rest WITH collectModuleExports(stmts, i+1);
+    BIRTH s WITH stmts[i];
+    SHOULD s.t == "VarDecl" OR s.t == "ConstDecl" OR s.t == "RiteDef" {
+        BEQUEATH PREPEND(rest, s.name);
+    }
+    BEQUEATH rest;
+}
+
+RITE genExportCollects(exports, i) {
+    SHOULD i >= LENGTH(exports) { BEQUEATH ""; }
+    BIRTH name WITH exports[i];
+    BEQUEATH "    ath_map_set(_exp,\""+name+"\",ath_scope_get(f->scope,\""+name+"\"));\n" +
+             genExportCollects(exports, i+1);
+}
+
+// ===== Async detection helpers =====
+
+RITE isAsyncCall(expr, ar) {
+    SHOULD expr.t == "Call" AND expr.callee.t == "Ident" {
+        BEQUEATH HAS(ar, expr.callee.name);
+    }
+    BEQUEATH DEAD;
+}
+
+RITE deepContainsAsyncAthStmts(stmts, i, bn, ar) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH DEAD; }
+    BIRTH s WITH stmts[i];
+    SHOULD s.t == "AthLoop" AND entityIsAsyncCG(s.entity, bn) { BEQUEATH ALIVE; }
+    SHOULD s.t == "ExprStmt" AND isAsyncCall(s.expr, ar) { BEQUEATH ALIVE; }
+    SHOULD isModuleImport(s) { BEQUEATH ALIVE; }
+    SHOULD s.t == "Cond" {
+        SHOULD deepContainsAsyncAthStmts(s.then, 0, bn, ar) { BEQUEATH ALIVE; }
+        SHOULD TYPEOF(s.els) == "ARRAY" {
+            SHOULD deepContainsAsyncAthStmts(s.els, 0, bn, ar) { BEQUEATH ALIVE; }
+        }
+    }
+    BEQUEATH deepContainsAsyncAthStmts(stmts, i+1, bn, ar);
+}
+
+RITE findFirstAsyncDeep(stmts, i, ctx) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH -1; }
+    BIRTH s WITH stmts[i];
+    SHOULD s.t == "AthLoop" AND entityIsAsyncCG(s.entity, ctx.bn) { BEQUEATH i; }
+    SHOULD s.t == "ExprStmt" AND isAsyncCall(s.expr, ctx.ar) { BEQUEATH i; }
+    SHOULD isModuleImport(s) { BEQUEATH i; }
+    SHOULD s.t == "Cond" {
+        SHOULD deepContainsAsyncAthStmts(s.then, 0, ctx.bn, ctx.ar) { BEQUEATH i; }
+        SHOULD TYPEOF(s.els) == "ARRAY" {
+            SHOULD deepContainsAsyncAthStmts(s.els, 0, ctx.bn, ctx.ar) { BEQUEATH i; }
+        }
+    }
+    SHOULD s.t == "AttemptSalvage" {
+        SHOULD deepContainsAsyncAthStmts(s.attempt, 0, ctx.bn, ctx.ar) { BEQUEATH i; }
+    }
+    BEQUEATH findFirstAsyncDeep(stmts, i+1, ctx);
+}
+
+// ===== Entity expression -> C entity pointer =====
+
+RITE genEntityC(ent, sv) {
+    SHOULD ent.t == "EntityIdent" {
+        BEQUEATH "ath_scope_get("+sv+",\""+ent.name+"\").as.entity";
+    }
+    SHOULD ent.t == "EntityNot" {
+        BEQUEATH "ath_entity_not_new("+genEntityC(ent.operand,sv)+")";
+    }
+    SHOULD ent.t == "EntityAnd" {
+        BEQUEATH "ath_entity_and_new("+genEntityC(ent.left,sv)+","+genEntityC(ent.right,sv)+")";
+    }
+    SHOULD ent.t == "EntityOr" {
+        BEQUEATH "ath_entity_or_new("+genEntityC(ent.left,sv)+","+genEntityC(ent.right,sv)+")";
+    }
+    BEQUEATH "NULL";
+}
+
+// ===== Expression Generation =====
+// Returns {ctx, stmts, t} where stmts is C code, t is the temp var name
+
+RITE genExpr(expr, ctx) {
+    BIRTH et WITH expr.t;
+
+    SHOULD et == "Lit" {
+        BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+        BIRTH vt WITH expr.vt;
+        SHOULD vt == "INT" { BEQUEATH {ctx:ctx, stmts:t+"=ath_int("+STRING(expr.v)+"L);\n", t:t}; }
+        SHOULD vt == "FLT" { BEQUEATH {ctx:ctx, stmts:t+"=ath_float("+STRING(expr.v)+");\n", t:t}; }
+        SHOULD vt == "STR" { BEQUEATH {ctx:ctx, stmts:t+"=ath_str_cstr(\""+escStr(expr.v)+"\");\n", t:t}; }
+        SHOULD vt == "BOOL" {
+            SHOULD expr.v { BEQUEATH {ctx:ctx, stmts:t+"=ath_bool(1);\n", t:t}; }
+            LEST           { BEQUEATH {ctx:ctx, stmts:t+"=ath_bool(0);\n", t:t}; }
+        }
+        BEQUEATH {ctx:ctx, stmts:t+"=ath_void();\n", t:t};
+    }
+
+    SHOULD et == "Ident" {
+        BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+        BEQUEATH {ctx:ctx, stmts:t+"=ath_scope_get("+ctx.sv+",\""+expr.name+"\");\n", t:t};
+    }
+
+    SHOULD et == "BinOp" {
+        BIRTH op WITH expr.op;
+        BIRTH rl WITH genExpr(expr.left, ctx); ctx = rl.ctx;
+        SHOULD op == "AND" {
+            BIRTH rr WITH genExpr(expr.right, ctx); ctx = rr.ctx;
+            BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+            BEQUEATH {ctx:ctx, stmts:rl.stmts+
+                "if(ath_is_truthy("+rl.t+")){"+rr.stmts+t+"=ath_bool(ath_is_truthy("+rr.t+"));}else{"+t+"=ath_bool(0);}\n",
+                t:t};
+        }
+        SHOULD op == "OR" {
+            BIRTH rr WITH genExpr(expr.right, ctx); ctx = rr.ctx;
+            BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+            BEQUEATH {ctx:ctx, stmts:rl.stmts+
+                "if(ath_is_truthy("+rl.t+")){"+t+"=ath_bool(1);}else{"+rr.stmts+t+"=ath_bool(ath_is_truthy("+rr.t+"));}\n",
+                t:t};
+        }
+        BIRTH rr WITH genExpr(expr.right, ctx); ctx = rr.ctx;
+        BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+        SHOULD HAS(BINOPS, op) {
+            BEQUEATH {ctx:ctx, stmts:rl.stmts+rr.stmts+
+                t+"="+BINOPS[op]+"("+rl.t+","+rr.t+");\n", t:t};
+        }
+        BEQUEATH {ctx:ctx, stmts:rl.stmts+rr.stmts+t+"=ath_void();\n", t:t};
+    }
+
+    SHOULD et == "UnaryOp" {
+        BIRTH ro WITH genExpr(expr.operand, ctx); ctx = ro.ctx;
+        BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+        SHOULD expr.op == "NOT" { BEQUEATH {ctx:ctx, stmts:ro.stmts+t+"=ath_bool(!ath_is_truthy("+ro.t+"));\n", t:t}; }
+        SHOULD expr.op == "-"   { BEQUEATH {ctx:ctx, stmts:ro.stmts+t+"=ath_neg("+ro.t+");\n", t:t}; }
+        SHOULD expr.op == "~"   { BEQUEATH {ctx:ctx, stmts:ro.stmts+t+"=ath_bnot("+ro.t+");\n", t:t}; }
+        BEQUEATH {ctx:ctx, stmts:ro.stmts+t+"=ath_void();\n", t:t};
+    }
+
+    SHOULD et == "Call" { BEQUEATH genCallExpr(expr, ctx); }
+
+    SHOULD et == "Member" {
+        BIRTH ro WITH genExpr(expr.obj, ctx); ctx = ro.ctx;
+        BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+        BEQUEATH {ctx:ctx, stmts:ro.stmts+t+"=ath_member("+ro.t+",\""+expr.mem+"\");\n", t:t};
+    }
+
+    SHOULD et == "Index" {
+        BIRTH ro WITH genExpr(expr.obj, ctx); ctx = ro.ctx;
+        BIRTH ri WITH genExpr(expr.idx, ctx); ctx = ri.ctx;
+        BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+        BEQUEATH {ctx:ctx, stmts:ro.stmts+ri.stmts+t+"=ath_index("+ro.t+","+ri.t+");\n", t:t};
+    }
+
+    SHOULD et == "Array" { BEQUEATH genArrayExpr(expr, ctx); }
+    SHOULD et == "Map"   { BEQUEATH genMapExpr(expr, ctx); }
+
+    BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+    BEQUEATH {ctx:ctx, stmts:t+"=ath_void();\n", t:t};
+}
+
+RITE genCallExpr(expr, ctx) {
+    BIRTH callee WITH expr.callee;
+    BIRTH args WITH expr.args;
+    BIRTH argc WITH LENGTH(args);
+    BIRTH ra WITH genArgsList(args, 0, ctx); ctx = ra.ctx;
+    BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+
+    BIRTH raa WITH ra.stmts+ra.assigns;
+    SHOULD callee.t == "Ident" AND HAS(BUILTINS, callee.name) {
+        BEQUEATH {ctx:ctx, stmts:raa+t+"=ath_builtin_"+callee.name+"("+ctx.sv+","+STRING(argc)+",_args);\n", t:t};
+    }
+    SHOULD callee.t == "Ident" AND HAS(ctx.ar, callee.name) {
+        // Async rite called from sync context: fire-and-forget with NULL continuation
+        BEQUEATH {ctx:ctx, stmts:raa+"_rite_async_"+callee.name+"("+ctx.sv+",NULL,"+STRING(argc)+",_args);\n"+t+"=ath_void();\n", t:t};
+    }
+    SHOULD callee.t == "Ident" AND HAS(ctx.sr, callee.name) {
+        BEQUEATH {ctx:ctx, stmts:raa+t+"=_rite_"+callee.name+"("+ctx.sv+","+STRING(argc)+",_args);\n", t:t};
+    }
+    BIRTH rc WITH genExpr(callee, ctx); ctx = rc.ctx;
+    BEQUEATH {ctx:ctx, stmts:raa+rc.stmts+t+"=ath_call_sync("+ctx.sv+","+rc.t+","+STRING(argc)+",_args);\n", t:t};
+}
+
+// Evaluate all args first (stmts), then assign _args[i] (assigns) separately.
+// This prevents later arg evaluations from clobbering _args[0..(i-1)].
+RITE genArgsList(args, i, ctx) {
+    SHOULD i >= LENGTH(args) { BEQUEATH {ctx:ctx, stmts:"", assigns:""}; }
+    BIRTH ra WITH genExpr(args[i], ctx); ctx = ra.ctx;
+    BIRTH rest WITH genArgsList(args, i+1, ctx); ctx = rest.ctx;
+    BEQUEATH {ctx:ctx, stmts:ra.stmts+rest.stmts,
+              assigns:"_args["+STRING(i)+"]="+ra.t+";\n"+rest.assigns};
+}
+
+// Array literal: use APPEND builtin
+RITE genArrayExpr(expr, ctx) {
+    BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+    BIRTH s WITH t+"=ath_array_val(ath_array_new(0));\n";
+    BIRTH ra WITH genArrayAppends(expr.elems, 0, t, ctx); ctx = ra.ctx;
+    BEQUEATH {ctx:ctx, stmts:s+ra.stmts, t:t};
+}
+
+RITE genArrayAppends(elems, i, t, ctx) {
+    SHOULD i >= LENGTH(elems) { BEQUEATH {ctx:ctx, stmts:""}; }
+    BIRTH re WITH genExpr(elems[i], ctx); ctx = re.ctx;
+    BIRTH rest WITH genArrayAppends(elems, i+1, t, ctx); ctx = rest.ctx;
+    BIRTH s WITH re.stmts+"_args[0]="+t+";_args[1]="+re.t+";\n"+
+        t+"=ath_builtin_APPEND("+ctx.sv+",2,_args);\n"+rest.stmts;
+    BEQUEATH {ctx:ctx, stmts:s};
+}
+
+// Map literal: use SET builtin
+RITE genMapExpr(expr, ctx) {
+    BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+    BIRTH s WITH t+"=ath_map_val(ath_map_new(0));\n";
+    BIRTH rm WITH genMapSets(expr.entries, 0, t, ctx); ctx = rm.ctx;
+    BEQUEATH {ctx:ctx, stmts:s+rm.stmts, t:t};
+}
+
+RITE genMapSets(entries, i, t, ctx) {
+    SHOULD i >= LENGTH(entries) { BEQUEATH {ctx:ctx, stmts:""}; }
+    BIRTH entry WITH entries[i];
+    BIRTH rv WITH genExpr(entry.val, ctx); ctx = rv.ctx;
+    BIRTH rk WITH freshT(ctx); ctx = rk.ctx; BIRTH kt WITH rk.t;
+    BIRTH rest WITH genMapSets(entries, i+1, t, ctx); ctx = rest.ctx;
+    BIRTH s WITH rv.stmts+kt+"=ath_str_cstr(\""+escStr(entry.key)+"\");\n"+
+        "_args[0]="+t+";_args[1]="+kt+";_args[2]="+rv.t+";\n"+
+        t+"=ath_builtin_SET("+ctx.sv+",3,_args);\n"+rest.stmts;
+    BEQUEATH {ctx:ctx, stmts:s};
+}
+
+// ===== Sync Statement Generation =====
+
+RITE genSyncStmt(stmt, depth, ctx) {
+    BIRTH nt WITH stmt.t;
+    BIRTH p WITH ind(depth);
+
+    SHOULD nt == "VarDecl" OR nt == "ConstDecl" {
+        BIRTH ic WITH 0; SHOULD nt == "ConstDecl" { ic = 1; }
+        BIRTH re WITH genExpr(stmt.val, ctx); ctx = re.ctx;
+        BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+
+            p+"ath_scope_define("+ctx.sv+",\""+stmt.name+"\","+re.t+","+STRING(ic)+");\n"+p+"}\n"};
+    }
+
+    SHOULD nt == "Assign" {
+        BIRTH target WITH stmt.target;
+        BIRTH re WITH genExpr(stmt.val, ctx); ctx = re.ctx;
+        SHOULD target.t == "Ident" {
+            BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+
+                p+"ath_scope_set("+ctx.sv+",\""+target.name+"\","+re.t+");\n"+p+"}\n"};
+        }
+        SHOULD target.t == "Member" {
+            BIRTH ro WITH genExpr(target.obj, ctx); ctx = ro.ctx;
+            BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+ro.stmts+
+                p+"ath_member_set("+ro.t+",\""+target.mem+"\","+re.t+");\n"+p+"}\n"};
+        }
+        SHOULD target.t == "Index" {
+            BIRTH ro WITH genExpr(target.obj, ctx); ctx = ro.ctx;
+            BIRTH ri WITH genExpr(target.idx, ctx); ctx = ri.ctx;
+            BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+ro.stmts+p+ri.stmts+
+                p+"ath_index_set("+ro.t+","+ri.t+","+re.t+");\n"+p+"}\n"};
+        }
+        BEQUEATH {ctx:ctx, s:p+"/* unknown assign */\n"};
+    }
+
+    SHOULD nt == "ExprStmt" {
+        BIRTH re WITH genExpr(stmt.expr, ctx); ctx = re.ctx;
+        BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+"(void)"+re.t+";\n"+p+"}\n"};
+    }
+
+    SHOULD nt == "Bequeath" {
+        SHOULD TYPEOF(stmt.val) == "VOID" {
+            BEQUEATH {ctx:ctx, s:p+"{ _ret=ath_void(); goto _done; }\n"};
+        }
+        BIRTH re WITH genExpr(stmt.val, ctx); ctx = re.ctx;
+        BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+"_ret="+re.t+"; goto _done;\n"+p+"}\n"};
+    }
+
+    SHOULD nt == "Condemn" {
+        BIRTH re WITH genExpr(stmt.msg, ctx); ctx = re.ctx;
+        BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+
+            p+"{ char *_m=ath_stringify("+re.t+"); ath_condemn(_m,0,0); free(_m); }\n"+p+"}\n"};
+    }
+
+    SHOULD nt == "Cond" {
+        BIRTH rc WITH genExpr(stmt.cond, ctx); ctx = rc.ctx;
+        BIRTH rt WITH genSyncStmtList(stmt.then, 0, depth+1, ctx); ctx = rt.ctx;
+        BIRTH elsIsVoid WITH TYPEOF(stmt.els) == "VOID";
+        SHOULD elsIsVoid {
+            BEQUEATH {ctx:ctx, s:p+"{\n"+p+rc.stmts+
+                p+"if (ath_is_truthy("+rc.t+")) {\n"+rt.s+p+"}\n"+p+"}\n"};
+        }
+        SHOULD TYPEOF(stmt.els) == "ARRAY" {
+            BIRTH re2 WITH genSyncStmtList(stmt.els, 0, depth+1, ctx); ctx = re2.ctx;
+            BEQUEATH {ctx:ctx, s:p+"{\n"+p+rc.stmts+
+                p+"if (ath_is_truthy("+rc.t+")) {\n"+rt.s+p+"} else {\n"+re2.s+p+"}\n"+p+"}\n"};
+        }
+        // LEST SHOULD (else-if): els is a Cond node
+        BIRTH re2 WITH genSyncStmt(stmt.els, depth+1, ctx); ctx = re2.ctx;
+        BEQUEATH {ctx:ctx, s:p+"{\n"+p+rc.stmts+
+            p+"if (ath_is_truthy("+rc.t+")) {\n"+rt.s+p+"} else {\n"+re2.s+p+"}\n"+p+"}\n"};
+    }
+
+    SHOULD nt == "AttemptSalvage" {
+        BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+        BIRTH ef WITH "_ef"+STRING(rn.v);
+        BIRTH rt WITH genSyncStmtList(stmt.attempt, 0, depth+2, ctx); ctx = rt.ctx;
+        BIRTH rs WITH genSyncStmtList(stmt.salvage, 0, depth+2, ctx); ctx = rs.ctx;
+        BIRTH s WITH p+"{\n"+
+            p+"    AthErrorFrame "+ef+";\n"+
+            p+"    ATH_ATTEMPT_BEGIN("+ef+") {\n"+rt.s+
+            p+"        ATH_ATTEMPT_END("+ef+");\n"+
+            p+"    } ATH_SALVAGE_BEGIN("+ef+") {\n"+
+            p+"        AthValue _err_v = ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\");\n"+
+            p+"        ath_scope_define("+ctx.sv+",\""+stmt.errname+"\",_err_v,0);\n"+
+            rs.s+
+            p+"        ATH_SALVAGE_END("+ef+");\n"+
+            p+"    }\n"+p+"}\n";
+        BEQUEATH {ctx:ctx, s:s};
+    }
+
+    SHOULD nt == "Import" { BEQUEATH genSyncImport(stmt, depth, ctx); }
+
+    SHOULD nt == "Die" {
+        BEQUEATH {ctx:ctx, s:genDieStmt(stmt.target, p, ctx.sv)};
+    }
+
+    SHOULD nt == "RiteDef" {
+        BIRTH np WITH LENGTH(stmt.params);
+        SHOULD HAS(ctx.ar, stmt.name) {
+            // If not already generated at top level, generate now (use pre-mode to avoid nesting)
+            SHOULD NOT HAS(ctx.sr, stmt.name) {
+                BIRTH pmCtx WITH SET(ctx,"pm",ALIVE);
+                pmCtx = genAsyncRite(stmt, pmCtx);
+                ctx = SET(SET(pmCtx,"pm",ctx.pm),"sr",SET(pmCtx.sr,stmt.name,ALIVE));
+            }
+            BIRTH s WITH p+"ath_scope_define("+ctx.sv+",\""+stmt.name+"\","+
+                "ath_rite_val(ath_rite_new_async("+ctx.sv+",_rite_async_"+stmt.name+","+STRING(np)+")),0);\n";
+            BEQUEATH {ctx:ctx, s:s};
+        }
+        // If not already generated at top level, generate now (use pre-mode to avoid nesting)
+        SHOULD NOT HAS(ctx.sr, stmt.name) {
+            BIRTH pmCtx WITH SET(ctx,"pm",ALIVE);
+            pmCtx = genSyncRite(stmt, pmCtx);
+            ctx = SET(SET(pmCtx,"pm",ctx.pm),"sr",SET(pmCtx.sr,stmt.name,ALIVE));
+        }
+        BIRTH s WITH p+"ath_scope_define("+ctx.sv+",\""+stmt.name+"\","+
+            "ath_rite_val(ath_rite_new_sync("+ctx.sv+",_rite_"+stmt.name+","+STRING(np)+")),0);\n";
+        BEQUEATH {ctx:ctx, s:s};
+    }
+
+    SHOULD nt == "AthLoop" {
+        BEQUEATH {ctx:ctx, s:p+"/* ~ATH in sync ctx - unsupported */\n"};
+    }
+
+    BEQUEATH {ctx:ctx, s:p+"/* unhandled: "+nt+" */\n"};
+}
+
+RITE genDieStmt(target, p, sv) {
+    SHOULD target.t == "DieIdent" {
+        BEQUEATH p+"ath_entity_die(ath_scope_get("+sv+",\""+target.name+"\").as.entity);\n";
+    }
+    SHOULD target.t == "DiePair" {
+        BEQUEATH genDieStmt(target.left, p, sv) + genDieStmt(target.right, p, sv);
+    }
+    BEQUEATH p+"/* unknown die target */\n";
+}
+
+RITE genSyncImport(stmt, depth, ctx) {
+    BIRTH p WITH ind(depth);
+    BIRTH et WITH stmt.etype;
+    BIRTH name WITH stmt.name;
+    BIRTH sv WITH ctx.sv;
+
+    SHOULD et == "timer" {
+        BIRTH ms WITH stmt.args[0].ms;
+        BEQUEATH {ctx:ctx, s:p+"{ AthEntity *_e=ath_entity_timer_new(\""+name+"\","+STRING(ms)+"UL);\n"+
+            p+"  ath_scope_define("+sv+",\""+name+"\",ath_entity_val(_e),0); }\n"};
+    }
+
+    SHOULD et == "connection" {
+        BIRTH rh WITH genExpr(stmt.args[0], ctx); ctx = rh.ctx;
+        BIRTH rp WITH genExpr(stmt.args[1], ctx); ctx = rp.ctx;
+        BIRTH s WITH p+"{ "+rh.stmts+rp.stmts+
+            "{ char *_h=ath_stringify("+rh.t+"); int _port=(int)"+rp.t+".as.integer;\n"+
+            p+"  AthEntity *_e=ath_entity_connection_new(\""+name+"\",_h,_port); free(_h);\n"+
+            p+"  ath_scope_define("+sv+",\""+name+"\",ath_entity_val(_e),0); } }\n";
+        BEQUEATH {ctx:ctx, s:s};
+    }
+
+    SHOULD et == "watcher" {
+        BIRTH rp WITH genExpr(stmt.args[0], ctx); ctx = rp.ctx;
+        BIRTH s WITH p+"{ "+rp.stmts+
+            "{ char *_fp=ath_stringify("+rp.t+");\n"+
+            p+"  AthEntity *_e=ath_entity_watcher_new(\""+name+"\",_fp); free(_fp);\n"+
+            p+"  ath_scope_define("+sv+",\""+name+"\",ath_entity_val(_e),0); } }\n";
+        BEQUEATH {ctx:ctx, s:s};
+    }
+
+    SHOULD et == "process" {
+        BIRTH argc WITH LENGTH(stmt.args);
+        BIRTH ra WITH genArgsList(stmt.args, 0, ctx); ctx = ra.ctx;
+        BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+        BIRTH pav WITH "_pav"+STRING(rn.v);
+        BIRTH s WITH p+"{ "+ra.stmts+ra.assigns+
+            "char *"+pav+"["+STRING(argc+1)+"];\n";
+        BIRTH i WITH 0;
+        BIRTH frees WITH "";
+        SHOULD i < argc {
+            s = s + p+"  "+pav+"["+STRING(i)+"]=ath_stringify(_args["+STRING(i)+"]);\n";
+            frees = frees + "free("+pav+"["+STRING(i)+"]); ";
+            i = i + 1;
+        }
+        SHOULD i < argc {
+            s = s + p+"  "+pav+"["+STRING(i)+"]=ath_stringify(_args["+STRING(i)+"]);\n";
+            frees = frees + "free("+pav+"["+STRING(i)+"]); ";
+            i = i + 1;
+        }
+        SHOULD i < argc {
+            s = s + p+"  "+pav+"["+STRING(i)+"]=ath_stringify(_args["+STRING(i)+"]);\n";
+            frees = frees + "free("+pav+"["+STRING(i)+"]); ";
+            i = i + 1;
+        }
+        SHOULD i < argc {
+            s = s + p+"  "+pav+"["+STRING(i)+"]=ath_stringify(_args["+STRING(i)+"]);\n";
+            frees = frees + "free("+pav+"["+STRING(i)+"]); ";
+            i = i + 1;
+        }
+        s = s + p+"  "+pav+"["+STRING(argc)+"]=NULL;\n"+
+            p+"  { AthEntity *_e=ath_entity_process_new(\""+name+"\","+pav+"[0],"+pav+"+1);\n"+
+            p+"    ath_scope_define("+sv+",\""+name+"\",ath_entity_val(_e),0); }\n"+
+            p+"  "+frees+"\n"+p+"}\n";
+        BEQUEATH {ctx:ctx, s:s};
+    }
+
+    BEQUEATH {ctx:ctx, s:p+"/* unknown entity: "+et+" */\n"};
+}
+
+RITE genSyncStmtList(stmts, i, depth, ctx) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH {ctx:ctx, s:""}; }
+    BIRTH r WITH genSyncStmt(stmts[i], depth, ctx); ctx = r.ctx;
+    BIRTH rest WITH genSyncStmtList(stmts, i+1, depth, ctx); ctx = rest.ctx;
+    BEQUEATH {ctx:ctx, s:r.s+rest.s};
+}
+
+// ===== Sync Rite Generation =====
+
+RITE genSyncRite(stmt, ctx) {
+    BIRTH name WITH stmt.name;
+    BIRTH params WITH stmt.params;
+    BIRTH np WITH LENGTH(params);
+
+    ctx = emitFwd(ctx, "static AthValue _rite_"+name+"(AthScope*,int,AthValue*);");
+
+    BIRTH rctx WITH SET(resetTc(ctx),"sv","_sc");
+    BIRTH rb WITH genSyncStmtList(stmt.body, 0, 2, rctx); rctx = rb.ctx;
+
+    BIRTH fn WITH "static AthValue _rite_"+name+"(AthScope *_closure,int _argc,AthValue *_argv) {\n"+
+        "    AthScope *_sc;\n"+
+        "    AthValue _t[128]; AthValue _args[16]; AthValue _ret;\n"+
+        "    (void)_argc;\n"+
+        "    _sc = ath_scope_new(_closure);\n"+
+        "    memset(_t,0,sizeof(_t));\n"+
+        genParamBinds(params, 0, "_sc") +
+        "    _ret = ath_void();\n"+
+        rb.s +
+        "    _done:\n"+
+        "    ath_scope_decref(_sc);\n"+
+        "    return _ret;\n"+
+        "}\n";
+
+    BEQUEATH emitDef(ctx, fn);
+}
+
+RITE genParamBinds(params, i, sc) {
+    SHOULD i >= LENGTH(params) { BEQUEATH ""; }
+    BIRTH s WITH "    ath_scope_define("+sc+",\""+params[i]+"\",_argc>"+STRING(i)+"?_argv["+STRING(i)+"]:ath_void(),0);\n";
+    BEQUEATH s + genParamBinds(params, i+1, sc);
+}
+
+// ===== Async CPS =====
+
+RITE entityIsAsyncCG(ent, bn) {
+    SHOULD ent.t == "EntityIdent" {
+        SHOULD HAS(bn, ent.name) { BEQUEATH DEAD; }
+        BEQUEATH ALIVE;
+    }
+    SHOULD ent.t == "EntityNot" { BEQUEATH ALIVE; }
+    SHOULD ent.t == "EntityAnd" OR ent.t == "EntityOr" {
+        BEQUEATH entityIsAsyncCG(ent.left,bn) OR entityIsAsyncCG(ent.right,bn);
+    }
+    BEQUEATH DEAD;
+}
+
+RITE isBranchEntity(ent, bn) {
+    SHOULD ent.t == "EntityIdent" AND HAS(bn, ent.name) { BEQUEATH ALIVE; }
+    BEQUEATH DEAD;
+}
+
+RITE findFirstAsync(stmts, i, bn) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH -1; }
+    BIRTH stmt WITH stmts[i];
+    SHOULD stmt.t == "AthLoop" AND entityIsAsyncCG(stmt.entity, bn) { BEQUEATH i; }
+    SHOULD isModuleImport(stmt) { BEQUEATH i; }
+    BEQUEATH findFirstAsync(stmts, i+1, bn);
+}
+
+// genAsyncBodyStmts: emit sync statements directly into defs (async segment context)
+// sv = "f->scope"
+RITE genAsyncBodyStmts(stmts, i, fname, ctx) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH ctx; }
+    BIRTH stmt WITH stmts[i];
+    BIRTH rctx WITH SET(ctx,"sv","f->scope");
+
+    SHOULD stmt.t == "Bifurcate" {
+        BIRTH r WITH genBifurcate(stmt, rctx); ctx = r.ctx;
+        BEQUEATH genAsyncBodyStmts(stmts, i+1, fname, ctx);
+    }
+    SHOULD stmt.t == "AthLoop" AND isBranchEntity(stmt.entity, ctx.bn) {
+        BIRTH r WITH genBranchAthLoop(stmt, fname, rctx); ctx = r.ctx;
+        BEQUEATH genAsyncBodyStmts(stmts, i+1, fname, ctx);
+    }
+
+    BIRTH rs WITH genSyncStmt(stmt, 1, rctx);
+    ctx = emitDef(rs.ctx, rs.s);
+    BEQUEATH genAsyncBodyStmts(stmts, i+1, fname, ctx);
+}
+
+// genAsyncAttempt: handle AttemptSalvage with async content in async context.
+// Emits sync pre-stmts, sets up the wait, then the NEXT segment wraps everything
+// in ATH_ATTEMPT_BEGIN/SALVAGE so setjmp is valid on that segment's C stack.
+RITE genAsyncAttempt(node, post, fname, ctx) {
+    BIRTH sv WITH "f->scope";
+    BIRTH j WITH findFirstAsyncDeep(node.attempt, 0, ctx);
+    SHOULD j < 0 {
+        BIRTH rs WITH genSyncStmt(node, 1, SET(ctx,"sv",sv));
+        ctx = emitDef(rs.ctx, rs.s);
+        BEQUEATH genAsyncSegments(post, fname, ctx);
+    }
+    BIRTH preAttempt WITH SLICE(node.attempt, 0, j);
+    BIRTH ctx2 WITH genAsyncBodyStmts(preAttempt, 0, fname, ctx);
+    BIRTH asyncLoop WITH node.attempt[j];
+    SHOULD asyncLoop.t == "AthLoop" {
+        BIRTH ep WITH genEntityC(asyncLoop.entity, sv);
+        BIRTH rn WITH freshN(ctx2); ctx2 = rn.ctx;
+        BIRTH nextName WITH "_s"+STRING(rn.v)+"_"+fname;
+        ctx2 = emitDef(ctx2, "    f->base.resume = "+nextName+"; ath_entity_on_death("+ep+",(AthCont*)f);");
+        ctx2 = emitDef(ctx2, "    return;");
+        ctx2 = emitDef(ctx2, "}");
+        ctx2 = emitFwd(ctx2, "static void "+nextName+"(AthCont*,AthValue);");
+        ctx2 = emitDef(ctx2, "static void "+nextName+"(AthCont *_self, AthValue _result) {");
+        ctx2 = emitDef(ctx2, "    "+fname+" *f = ("+fname+"*)_self;");
+        ctx2 = emitDef(ctx2, "    AthValue _t[128]; AthValue _args[16];");
+        ctx2 = emitDef(ctx2, "    (void)_result; memset(_t,0,sizeof(_t));");
+        ctx2 = resetTc(ctx2);
+        BIRTH efn WITH freshN(ctx2); ctx2 = efn.ctx;
+        BIRTH ef WITH "_ef"+STRING(efn.v);
+        ctx2 = emitDef(ctx2, "    {");
+        ctx2 = emitDef(ctx2, "        AthErrorFrame "+ef+";");
+        ctx2 = emitDef(ctx2, "        ATH_ATTEMPT_BEGIN("+ef+") {");
+        BIRTH postAttempt WITH SLICE(node.attempt, j+1, LENGTH(node.attempt));
+        BIRTH execAndRest WITH CONCAT(asyncLoop.exec, postAttempt);
+        BIRTH ictx WITH SET(resetTc(ctx2),"sv",sv);
+        BIRTH ri WITH genSyncStmtList(execAndRest, 0, 3, ictx);
+        ctx2 = SET(ctx2,"n",ri.ctx.n); ctx2 = SET(ctx2,"tc",ri.ctx.tc);
+        ctx2 = emitDef(ctx2, ri.s);
+        ctx2 = emitDef(ctx2, "            ATH_ATTEMPT_END("+ef+");");
+        ctx2 = emitDef(ctx2, "        } ATH_SALVAGE_BEGIN("+ef+") {");
+        ctx2 = emitDef(ctx2, "            AthValue _err_v = ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\");");
+        ctx2 = emitDef(ctx2, "            ath_scope_define("+sv+",\""+node.errname+"\",_err_v,0);");
+        BIRTH sctx WITH SET(resetTc(ctx2),"sv",sv);
+        BIRTH rs WITH genSyncStmtList(node.salvage, 0, 3, sctx);
+        ctx2 = SET(ctx2,"n",rs.ctx.n); ctx2 = SET(ctx2,"tc",rs.ctx.tc);
+        ctx2 = emitDef(ctx2, rs.s);
+        ctx2 = emitDef(ctx2, "            ATH_SALVAGE_END("+ef+");");
+        ctx2 = emitDef(ctx2, "        }");
+        ctx2 = emitDef(ctx2, "    }");
+        BEQUEATH genAsyncSegments(post, fname, resetTc(ctx2));
+    }
+    BEQUEATH ctx2;
+}
+
+// genModuleFrame: generates the complete module init frame in pre-mode.
+// Returns updated ctx (with mc cache updated, pm restored).
+RITE genModuleFrame(frameName, modName, exports, stmts, modAsyncRites, outerCtx) {
+    BIRTH rn WITH freshN(outerCtx); outerCtx = rn.ctx;
+    BIRTH seg0 WITH "_s"+STRING(rn.v)+"_"+frameName;
+
+    outerCtx = emitFwd(outerCtx, "typedef struct "+frameName+" "+frameName+";");
+    outerCtx = emitFwd(outerCtx, "static void "+seg0+"(AthCont*,AthValue);");
+    outerCtx = emitFwd(outerCtx, "static void "+frameName+"_done(AthCont*,AthValue);");
+
+    outerCtx = emitDef(outerCtx, "struct "+frameName+" { AthCont base; AthScope *scope; AthScope *parent_scope; };");
+
+    outerCtx = emitDef(outerCtx, "static "+frameName+"* "+frameName+"_new(AthCont *next,AthScope *par) {");
+    outerCtx = emitDef(outerCtx, "    "+frameName+" *f=("+frameName+"*)malloc(sizeof("+frameName+"));");
+    outerCtx = emitDef(outerCtx, "    f->base.resume="+seg0+"; f->base.next=next; f->base.refcount=1;");
+    outerCtx = emitDef(outerCtx, "    f->scope=ath_scope_new(NULL); f->parent_scope=par;");
+    outerCtx = emitDef(outerCtx, "    ath_scope_define_builtins(f->scope);");
+    outerCtx = emitDef(outerCtx, "    { AthEntity *_mt=ath_entity_this_new();");
+    outerCtx = emitDef(outerCtx, "      ath_scope_define(f->scope,\"THIS\",ath_entity_val(_mt),0); }");
+    outerCtx = emitDef(outerCtx, "    return f; }");
+
+    outerCtx = emitDef(outerCtx, "static void "+frameName+"_free("+frameName+" *f){ath_scope_decref(f->scope);free(f);}");
+
+    BIRTH doneBody WITH "static void "+frameName+"_done(AthCont *_self, AthValue _unused) {\n"+
+        "    "+frameName+" *f=("+frameName+"*)_self;\n"+
+        "    AthMap *_exp=ath_map_new(8);\n"+
+        genExportCollects(exports, 0)+
+        "    ath_scope_define(f->parent_scope,\""+modName+"\",ath_module_val(_exp),0);\n"+
+        "    if(f->base.next)ath_eventloop_schedule(f->base.next,ath_void());\n"+
+        "    "+frameName+"_free(f);\n"+
+        "}\n";
+    outerCtx = emitDef(outerCtx, doneBody);
+
+    outerCtx = emitDef(outerCtx, "static void "+seg0+"(AthCont *_self, AthValue _result) {");
+    outerCtx = emitDef(outerCtx, "    "+frameName+" *f=("+frameName+"*)_self;");
+    outerCtx = emitDef(outerCtx, "    AthValue _t[128]; AthValue _args[16];");
+    outerCtx = emitDef(outerCtx, "    (void)_result; memset(_t,0,sizeof(_t));");
+
+    // Build module-specific context (ar/sr/bn from the module, not outer program)
+    BIRTH modSyncRites WITH collectSyncRites(stmts, 0, modAsyncRites);
+    BIRTH modAsyncNames WITH collectAsyncRiteNames(stmts, 0, modAsyncRites);
+    BIRTH modAllRites WITH mergeIntoSr(modSyncRites, KEYS(modAsyncNames), 0);
+    BIRTH cl WITH "    "+frameName+"_done((AthCont*)f,ath_void());\n";
+    BIRTH rctx WITH SET(SET(SET(SET(SET(SET(SET(outerCtx,
+        "ar",modAsyncRites),"sr",modAllRites),"bn",{}),"sv","f->scope"),"cl",cl),"fn",frameName),"pm",ALIVE);
+    BIRTH ctx2 WITH genAsyncSegments(stmts, frameName, resetTc(rctx));
+    ctx2 = emitDef(ctx2, "    "+frameName+"_done((AthCont*)f,ath_void());");
+    ctx2 = emitDef(ctx2, "}");
+
+    // Restore outer context state (ar, sr, bn, cl, fn, pm) but keep n, fwds, pre, defs
+    BEQUEATH SET(SET(SET(SET(SET(SET(ctx2,"ar",outerCtx.ar),"sr",outerCtx.sr),"bn",outerCtx.bn),"cl",outerCtx.cl),"fn",outerCtx.fn),"pm",outerCtx.pm);
+}
+
+// genModuleImport: handle async module import split in CPS context.
+RITE genModuleImport(stmt, post, fname, ctx) {
+    BIRTH path WITH stmt.args[0].v;
+    BIRTH modName WITH stmt.name;
+
+    // Check cache: if same module was already generated, skip C code generation
+    SHOULD HAS(ctx.mc, path) {
+        BIRTH cached WITH ctx.mc[path];
+        BIRTH frameName WITH cached.fn;
+        // Emit the CPS split
+        BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+        BIRTH nextName WITH "_s"+STRING(rn.v)+"_"+fname;
+        ctx = emitDef(ctx, "    f->base.resume="+nextName+";");
+        ctx = emitDef(ctx, "    { "+frameName+" *_mf="+frameName+"_new((AthCont*)f,f->scope);");
+        ctx = emitDef(ctx, "      ath_eventloop_schedule((AthCont*)_mf,ath_void()); }");
+        ctx = emitDef(ctx, "    return;");
+        ctx = emitDef(ctx, "}");
+        ctx = emitFwd(ctx, "static void "+nextName+"(AthCont*,AthValue);");
+        ctx = emitDef(ctx, "static void "+nextName+"(AthCont *_self, AthValue _result) {");
+        ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
+        ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+        ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+        BEQUEATH genAsyncSegments(post, fname, resetTc(ctx));
+    }
+
+    // Read and compile module at transpile time
+    BIRTH src WITH SCRY(path);
+    BIRTH tokens WITH ctx.pl.tokenize(src);
+    BIRTH modAst WITH ctx.pl.parse(tokens);
+    BIRTH modAnn WITH ctx.pl.analyze(modAst, {});
+    BIRTH exports WITH collectModuleExports(modAnn.ast.stmts, 0);
+
+    BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+    BIRTH frameName WITH "_FMod"+STRING(rn.v);
+
+    // Generate module rites and frame in pre-mode
+    BIRTH pmCtx WITH SET(ctx,"pm",ALIVE);
+    pmCtx = genAllRites(modAnn.ast.stmts, 0, modAnn.asyncRites, pmCtx);
+    pmCtx = genModuleFrame(frameName, modName, exports, modAnn.ast.stmts, modAnn.asyncRites, pmCtx);
+    ctx = SET(pmCtx,"pm",ctx.pm);
+
+    // Cache the module
+    ctx = SET(ctx,"mc",SET(ctx.mc, path, {fn:frameName}));
+
+    // Emit the CPS split in the parent frame
+    BIRTH rn2 WITH freshN(ctx); ctx = rn2.ctx;
+    BIRTH nextName WITH "_s"+STRING(rn2.v)+"_"+fname;
+    ctx = emitDef(ctx, "    f->base.resume="+nextName+";");
+    ctx = emitDef(ctx, "    { "+frameName+" *_mf="+frameName+"_new((AthCont*)f,f->scope);");
+    ctx = emitDef(ctx, "      ath_eventloop_schedule((AthCont*)_mf,ath_void()); }");
+    ctx = emitDef(ctx, "    return;");
+    ctx = emitDef(ctx, "}");
+    ctx = emitFwd(ctx, "static void "+nextName+"(AthCont*,AthValue);");
+    ctx = emitDef(ctx, "static void "+nextName+"(AthCont *_self, AthValue _result) {");
+    ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
+    ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+    BEQUEATH genAsyncSegments(post, fname, resetTc(ctx));
+}
+
+// genAsyncSegments: generate CPS segments from a stmt list.
+// Called when inside an open segment function body.
+// Caller emits cleanup + "}" after this returns.
+RITE genAsyncSegments(stmts, fname, ctx) {
+    BIRTH k WITH findFirstAsyncDeep(stmts, 0, ctx);
+    SHOULD k < 0 {
+        BEQUEATH genAsyncBodyStmts(stmts, 0, fname, ctx);
+    }
+
+    BIRTH node WITH stmts[k];
+    BIRTH pre WITH SLICE(stmts, 0, k);
+    BIRTH ctx2 WITH genAsyncBodyStmts(pre, 0, fname, ctx);
+
+    // Re-check: pre may have contained a Bifurcate that added this entity to bn
+    SHOULD node.t == "AthLoop" AND isBranchEntity(node.entity, ctx2.bn) {
+        BIRTH r WITH genBranchAthLoop(node, fname, ctx2); ctx2 = r.ctx;
+        BIRTH post WITH SLICE(stmts, k+1, LENGTH(stmts));
+        BEQUEATH genAsyncSegments(post, fname, ctx2);
+    }
+
+    // AthLoop: entity death wait (original behavior)
+    SHOULD node.t == "AthLoop" {
+        BIRTH ep WITH genEntityC(node.entity, "f->scope");
+        BIRTH rn WITH freshN(ctx2); ctx2 = rn.ctx;
+        BIRTH nextName WITH "_s"+STRING(rn.v)+"_"+fname;
+        ctx2 = emitDef(ctx2, "    f->base.resume = "+nextName+"; ath_entity_on_death("+ep+",(AthCont*)f);");
+        ctx2 = emitDef(ctx2, "    return;");
+        ctx2 = emitDef(ctx2, "}");
+        ctx2 = emitFwd(ctx2, "static void "+nextName+"(AthCont*,AthValue);");
+        ctx2 = emitDef(ctx2, "static void "+nextName+"(AthCont *_self, AthValue _result) {");
+        ctx2 = emitDef(ctx2, "    "+fname+" *f = ("+fname+"*)_self;");
+        ctx2 = emitDef(ctx2, "    AthValue _t[128]; AthValue _args[16];");
+        ctx2 = emitDef(ctx2, "    (void)_result; memset(_t,0,sizeof(_t));");
+        BIRTH post WITH SLICE(stmts, k+1, LENGTH(stmts));
+        BIRTH execAndPost WITH CONCAT(node.exec, post);
+        BEQUEATH genAsyncSegments(execAndPost, fname, resetTc(ctx2));
+    }
+
+    // Module import: always async
+    SHOULD isModuleImport(node) {
+        BIRTH post WITH SLICE(stmts, k+1, LENGTH(stmts));
+        BEQUEATH genModuleImport(node, post, fname, ctx2);
+    }
+
+    // AttemptSalvage with async content: move setjmp into next segment
+    SHOULD node.t == "AttemptSalvage" {
+        BIRTH post WITH SLICE(stmts, k+1, LENGTH(stmts));
+        BEQUEATH genAsyncAttempt(node, post, fname, ctx2);
+    }
+
+    // Cond with async content in then-branch
+    SHOULD node.t == "Cond" {
+        BIRTH post WITH SLICE(stmts, k+1, LENGTH(stmts));
+        BEQUEATH genAsyncCond(node, post, fname, ctx2);
+    }
+
+    // ExprStmt with direct async rite call
+    SHOULD node.t == "ExprStmt" AND isAsyncCall(node.expr, ctx2.ar) {
+        BIRTH post WITH SLICE(stmts, k+1, LENGTH(stmts));
+        BEQUEATH genAsyncCallSplit(node.expr, post, fname, ctx2);
+    }
+
+    BEQUEATH ctx2;
+}
+
+// genAsyncCond: handle SHOULD cond { async_then } [LEST { sync_else }] in async context
+RITE genAsyncCond(condNode, post, fname, ctx) {
+    BIRTH sv WITH "f->scope";
+    BIRTH rctx WITH SET(ctx,"sv",sv);
+
+    // Evaluate condition
+    BIRTH rc WITH genExpr(condNode.cond, rctx); rctx = rc.ctx;
+    ctx = SET(ctx,"n",rctx.n); ctx = SET(ctx,"tc",rctx.tc);
+
+    // Build false-path code: else stmts + sync post stmts + cleanup + return
+    BIRTH fpCode WITH "";
+    SHOULD TYPEOF(condNode.els) == "ARRAY" {
+        BIRTH ectx WITH SET(resetTc(ctx),"sv",sv);
+        BIRTH re WITH genSyncStmtList(condNode.els, 0, 2, ectx);
+        fpCode = fpCode + re.s;
+        ctx = SET(ctx,"n",re.ctx.n);
+    }
+    BIRTH pctx WITH SET(resetTc(ctx),"sv",sv);
+    BIRTH rp WITH genSyncStmtList(post, 0, 2, pctx);
+    ctx = SET(ctx,"n",rp.ctx.n);
+
+    BIRTH falseBlock WITH "    if (!ath_is_truthy("+rc.t+")) {\n"+
+        fpCode + rp.s + ctx.cl + "        return;\n    }\n";
+    ctx = emitDef(ctx, rc.stmts + falseBlock);
+
+    // True path: then_stmts + post via genAsyncSegments
+    BIRTH thenAndPost WITH CONCAT(condNode.then, post);
+    BEQUEATH genAsyncSegments(thenAndPost, fname, resetTc(ctx));
+}
+
+// genAsyncCallSplit: async rite call in async context
+// If post is empty: tail-call optimization (pass f->base.next directly)
+// Otherwise: split to new segment
+RITE genAsyncCallSplit(callExpr, post, fname, ctx) {
+    BIRTH callee WITH callExpr.callee;
+    BIRTH args WITH callExpr.args;
+    BIRTH argc WITH LENGTH(args);
+    BIRTH sv WITH "f->scope";
+    BIRTH rctx WITH SET(ctx,"sv",sv);
+    BIRTH ra WITH genArgsList(args, 0, rctx); rctx = ra.ctx;
+    ctx = SET(ctx,"n",rctx.n); ctx = SET(ctx,"tc",rctx.tc);
+
+    SHOULD callee.t == "Ident" AND HAS(ctx.ar, callee.name) {
+        SHOULD LENGTH(post) == 0 {
+            // Tail-call: steal continuation, free current frame afterward (via standard cleanup)
+            ctx = emitDef(ctx, ra.stmts+ra.assigns);
+            ctx = emitDef(ctx, "    { AthCont *_k=f->base.next; f->base.next=NULL;");
+            ctx = emitDef(ctx, "      _rite_async_"+callee.name+"("+sv+",_k,"+STRING(argc)+",_args); }");
+            BEQUEATH ctx;
+        }
+        // Non-tail: split to new segment
+        BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+        BIRTH nextName WITH "_s"+STRING(rn.v)+"_"+fname;
+        ctx = emitDef(ctx, ra.stmts+ra.assigns);
+        ctx = emitDef(ctx, "    f->base.resume="+nextName+"; _rite_async_"+callee.name+"("+sv+",(AthCont*)f,"+STRING(argc)+",_args);");
+        ctx = emitDef(ctx, "    return;");
+        ctx = emitDef(ctx, "}");
+        ctx = emitFwd(ctx, "static void "+nextName+"(AthCont*,AthValue);");
+        ctx = emitDef(ctx, "static void "+nextName+"(AthCont *_self,AthValue _result) {");
+        ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
+        ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+        ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+        BEQUEATH genAsyncSegments(post, fname, resetTc(ctx));
+    }
+    BEQUEATH ctx;
+}
+
+// ===== Branch/Bifurcation =====
+
+RITE genBifurcate(stmt, ctx) {
+    BIRTH sv WITH "f->scope";
+    BIRTH br1 WITH stmt.br1; BIRTH br2 WITH stmt.br2;
+    BIRTH s WITH "    { AthEntity *_br1=ath_entity_branch_new(\""+br1+"\");\n"+
+        "      AthEntity *_br2=ath_entity_branch_new(\""+br2+"\");\n"+
+        "      ath_scope_define("+sv+",\""+br1+"\",ath_entity_val(_br1),0);\n"+
+        "      ath_scope_define("+sv+",\""+br2+"\",ath_entity_val(_br2),0); }\n";
+    BIRTH ctx2 WITH emitDef(ctx, s);
+    ctx2 = SET(ctx2,"bn",SET(SET(ctx2.bn,br1,ALIVE),br2,ALIVE));
+    BEQUEATH {ctx:ctx2};
+}
+
+RITE genBranchAthLoop(stmt, encFname, ctx) {
+    BIRTH brName WITH stmt.entity.name;
+    BIRTH sv WITH "f->scope";
+    BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+    BIRTH bfname WITH "_FB"+STRING(rn.v);
+
+    ctx = genBranchFrame(bfname, brName, stmt.body, stmt.exec, ctx);
+
+    BIRTH s WITH "    { "+bfname+" *_bf="+bfname+"_new((AthCont*)f,"+sv+");\n"+
+        "      ath_eventloop_schedule((AthCont*)_bf,ath_void()); }\n";
+    ctx = emitDef(ctx, s);
+    BEQUEATH {ctx:ctx};
+}
+
+RITE genBranchFrame(fname, brName, bodyStmts, execStmts, ctx) {
+    BIRTH saved_pm WITH ctx.pm;
+    ctx = SET(ctx,"pm",ALIVE);
+    BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+    BIRTH seg0 WITH "_s"+STRING(rn.v)+"_"+fname;
+    ctx = emitFwd(ctx, "typedef struct "+fname+" "+fname+";");
+    ctx = emitFwd(ctx, "static void "+seg0+"(AthCont*,AthValue);");
+    ctx = emitDef(ctx, "struct "+fname+" { AthCont base; AthScope *scope; };");
+    ctx = emitDef(ctx, "static "+fname+"* "+fname+"_new(AthCont *next,AthScope *par) {");
+    ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)malloc(sizeof("+fname+"));");
+    ctx = emitDef(ctx, "    f->base.resume="+seg0+"; f->base.next=next; f->base.refcount=1;");
+    ctx = emitDef(ctx, "    f->scope=ath_scope_new(par); return f; }");
+    ctx = emitDef(ctx, "static void "+fname+"_free("+fname+" *f){ath_scope_decref(f->scope);free(f);}");
+    ctx = emitDef(ctx, "static void "+seg0+"(AthCont *_self,AthValue _result) {");
+    ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
+    ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+    BIRTH cl WITH "    ath_entity_die(ath_scope_get(f->scope,\""+brName+"\").as.entity);\n    "+fname+"_free(f);\n";
+    BIRTH rctx WITH SET(SET(ctx,"cl",cl),"fn",fname);
+    BIRTH allStmts WITH CONCAT(bodyStmts, execStmts);
+    BIRTH ctx2 WITH genAsyncSegments(allStmts, fname, resetTc(rctx));
+    ctx2 = emitDef(ctx2, "    ath_entity_die(ath_scope_get(f->scope,\""+brName+"\").as.entity);");
+    ctx2 = emitDef(ctx2, "    "+fname+"_free(f);");
+    ctx2 = emitDef(ctx2, "}");
+    BEQUEATH SET(SET(SET(ctx2,"cl",""),"fn",""),"pm",saved_pm);
+}
+
+// ===== Async Rite =====
+
+RITE genAsyncRite(stmt, ctx) {
+    BIRTH name WITH stmt.name;
+    BIRTH params WITH stmt.params;
+    BIRTH np WITH LENGTH(params);
+    BIRTH fname WITH "_FRite_"+name;
+
+    BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+    BIRTH seg0 WITH "_s"+STRING(rn.v)+"_"+fname;
+
+    ctx = emitFwd(ctx, "typedef struct "+fname+" "+fname+";");
+    ctx = emitFwd(ctx, "static void "+seg0+"(AthCont*,AthValue);");
+    ctx = emitFwd(ctx, "static void _rite_async_"+name+"(AthScope*,AthCont*,int,AthValue*);");
+
+    ctx = emitDef(ctx, "struct "+fname+" { AthCont base; AthScope *scope; };");
+    ctx = emitDef(ctx, "static void "+fname+"_free("+fname+" *f){ath_scope_decref(f->scope);free(f);}");
+
+    BIRTH entryFn WITH "static void _rite_async_"+name+
+        "(AthScope *_closure,AthCont *_k,int _argc,AthValue *_argv) {\n"+
+        "    "+fname+" *f=("+fname+"*)malloc(sizeof("+fname+"));\n"+
+        "    f->base.resume="+seg0+"; f->base.next=_k; f->base.refcount=1;\n"+
+        "    f->scope=ath_scope_new(_closure);\n"+
+        genParamBinds(params, 0, "f->scope")+
+        "    ath_eventloop_schedule((AthCont*)f,ath_void());\n"+
+        "}\n";
+    ctx = emitDef(ctx, entryFn);
+
+    ctx = emitDef(ctx, "static void "+seg0+"(AthCont *_self,AthValue _result) {");
+    ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
+    ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+
+    BIRTH cl WITH "    if(f->base.next)ath_cont_resume(f->base.next,ath_void());\n    "+fname+"_free(f);\n";
+    BIRTH rctx WITH SET(SET(ctx,"cl",cl),"fn",fname);
+    BIRTH ctx2 WITH genAsyncSegments(stmt.body, fname, resetTc(rctx));
+    ctx2 = emitDef(ctx2, cl+"    return;");
+    ctx2 = emitDef(ctx2, "}");
+    BEQUEATH SET(SET(ctx2,"cl",""),"fn","");
+}
+
+// ===== Main Frame =====
+
+RITE genMainFrame(stmts, syncRiteNames, asyncRiteNames, ctx) {
+    // Consume n=0 for the initial segment so genAsyncSegments starts from n=1
+    BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+    BIRTH seg0 WITH "_s"+STRING(rn.v)+"__FMain";
+    ctx = emitFwd(ctx, "typedef struct _FMain _FMain;");
+    ctx = emitFwd(ctx, "static void "+seg0+"(AthCont*,AthValue);");
+    ctx = emitDef(ctx, "struct _FMain { AthCont base; AthScope *scope; };");
+    ctx = emitDef(ctx, "static _FMain* _FMain_new(AthCont *next,AthScope *par) {");
+    ctx = emitDef(ctx, "    _FMain *f=(_FMain*)malloc(sizeof(_FMain));");
+    ctx = emitDef(ctx, "    f->base.resume="+seg0+"; f->base.next=next; f->base.refcount=1;");
+    ctx = emitDef(ctx, "    f->scope=ath_scope_new(par); return f; }");
+    ctx = emitDef(ctx, "static void _FMain_free(_FMain *f){ath_scope_decref(f->scope);free(f);}");
+    ctx = emitDef(ctx, "static void "+seg0+"(AthCont *_self,AthValue _result) {");
+    ctx = emitDef(ctx, "    _FMain *f=(_FMain*)_self;");
+    ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+
+    BIRTH cl WITH "    _FMain_free(f);\n";
+    BIRTH rctx WITH SET(SET(ctx,"cl",cl),"fn","_FMain");
+    BIRTH ctx2 WITH genAsyncSegments(stmts, "_FMain", resetTc(rctx));
+    ctx2 = emitDef(ctx2, "    _FMain_free(f);");
+    ctx2 = emitDef(ctx2, "}");
+    BEQUEATH genMainFn(syncRiteNames, asyncRiteNames, SET(SET(ctx2,"cl",""),"fn",""));
+}
+
+RITE genMainFn(syncRiteNames, asyncRiteNames, ctx) {
+    BIRTH snames WITH KEYS(syncRiteNames);
+    BIRTH anames WITH KEYS(asyncRiteNames);
+    BIRTH fn WITH "int main(void) {\n"+
+        "    AthScope  *global;\n"+
+        "    AthEntity *_this;\n"+
+        "    _FMain    *_frame;\n"+
+        "    ath_eventloop_init();\n"+
+        "    global = ath_scope_new(NULL);\n"+
+        "    ath_scope_define_builtins(global);\n"+
+        "    _this = ath_entity_this_new();\n"+
+        "    ath_scope_define(global,\"THIS\",ath_entity_val(_this),0);\n"+
+        genRiteRegs(snames, 0)+
+        genAsyncRiteRegs(anames, 0)+
+        "    _frame = _FMain_new(NULL,global);\n"+
+        "    ath_eventloop_schedule((AthCont*)_frame,ath_void());\n"+
+        "    ath_eventloop_run();\n"+
+        "    ath_scope_decref(global);\n"+
+        "    return 0;\n"+
+        "}\n";
+    BEQUEATH emitDef(ctx, fn);
+}
+
+RITE genRiteRegs(names, i) {
+    SHOULD i >= LENGTH(names) { BEQUEATH ""; }
+    BIRTH n WITH names[i];
+    BEQUEATH "    ath_scope_define(global,\""+n+"\",ath_rite_val(ath_rite_new_sync(global,_rite_"+n+",-1)),0);\n"+
+        genRiteRegs(names, i+1);
+}
+
+RITE genAsyncRiteRegs(names, i) {
+    SHOULD i >= LENGTH(names) { BEQUEATH ""; }
+    BIRTH n WITH names[i];
+    BEQUEATH "    ath_scope_define(global,\""+n+"\",ath_rite_val(ath_rite_new_async(global,_rite_async_"+n+",-1)),0);\n"+
+        genAsyncRiteRegs(names, i+1);
+}
+
+// ===== Top-Level =====
+
+RITE collectSyncRites(stmts, i, asyncRites) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH {}; }
+    BIRTH stmt WITH stmts[i];
+    BIRTH rest WITH collectSyncRites(stmts, i+1, asyncRites);
+    SHOULD stmt.t == "RiteDef" AND NOT HAS(asyncRites, stmt.name) {
+        BEQUEATH SET(rest, stmt.name, ALIVE);
+    }
+    BEQUEATH rest;
+}
+
+RITE collectAsyncRiteNames(stmts, i, asyncRites) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH {}; }
+    BIRTH stmt WITH stmts[i];
+    BIRTH rest WITH collectAsyncRiteNames(stmts, i+1, asyncRites);
+    SHOULD stmt.t == "RiteDef" AND HAS(asyncRites, stmt.name) {
+        BEQUEATH SET(rest, stmt.name, ALIVE);
+    }
+    BEQUEATH rest;
+}
+
+RITE genAllRites(stmts, i, asyncRites, ctx) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH ctx; }
+    BIRTH stmt WITH stmts[i];
+    SHOULD stmt.t == "RiteDef" {
+        SHOULD HAS(asyncRites, stmt.name) {
+            BIRTH ctx2 WITH genAsyncRite(stmt, ctx);
+            BEQUEATH genAllRites(stmts, i+1, asyncRites, ctx2);
+        }
+        BIRTH ctx2 WITH genSyncRite(stmt, ctx);
+        BEQUEATH genAllRites(stmts, i+1, asyncRites, ctx2);
+    }
+    BEQUEATH genAllRites(stmts, i+1, asyncRites, ctx);
+}
+
+RITE mergeIntoSr(sr, keys, i) {
+    SHOULD i >= LENGTH(keys) { BEQUEATH sr; }
+    BEQUEATH mergeIntoSr(SET(sr, keys[i], ALIVE), keys, i+1);
+}
+
+RITE generate(ast, asyncRites, pipeline) {
+    BIRTH stmts WITH ast.stmts;
+    BIRTH syncRites WITH collectSyncRites(stmts, 0, asyncRites);
+    BIRTH asyncRiteNames WITH collectAsyncRiteNames(stmts, 0, asyncRites);
+    // Pre-populate sr with all top-level rite names (sync + async) so genSyncStmt
+    // doesn't re-generate rites that genAllRites already emitted.
+    BIRTH allTopRites WITH mergeIntoSr(syncRites, KEYS(asyncRiteNames), 0);
+    BIRTH ctx WITH mkCtx(asyncRites, allTopRites, {}, pipeline);
+
+    BIRTH hdr WITH "/* Generated by !~ATH to C89 transpiler */\n"+
+        "#include \"ath_runtime.h\"\n"+
+        "#include <stdlib.h>\n"+
+        "#include <string.h>\n"+
+        "#include <stdio.h>\n\n";
+
+    BIRTH ctx2 WITH genAllRites(stmts, 0, asyncRites, ctx);
+    BIRTH ctx3 WITH genMainFrame(stmts, syncRites, asyncRiteNames, ctx2);
+
+    BEQUEATH hdr +
+        JOIN(ctx3.fwds, "\n") + "\n\n" +
+        JOIN(ctx3.pre, "\n") + "\n\n" +
+        JOIN(ctx3.defs, "\n");
+}
+
+THIS.DIE();

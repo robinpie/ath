@@ -22,7 +22,8 @@ typedef enum {
     ATH_ARRAY   = 5,
     ATH_MAP     = 6,
     ATH_ENTITY  = 7,
-    ATH_RITE    = 8
+    ATH_RITE    = 8,
+    ATH_MODULE  = 9  /* like MAP but TYPEOF returns "MODULE" */
 } AthType;
 
 typedef struct AthValue {
@@ -131,6 +132,7 @@ AthValue ath_str_val(AthString *s);
 AthValue ath_str_cstr(const char *s);
 AthValue ath_array_val(AthArray *a);
 AthValue ath_map_val(AthMap *m);
+AthValue ath_module_val(AthMap *m);
 AthValue ath_entity_val(struct AthEntity *e);
 AthValue ath_rite_val(AthRite *r);
 

@@ -1,0 +1,16 @@
+// main.~ATH — transpiler entry point
+// Reads !~ATH source from stdin, outputs C89 to stdout.
+
+import watcher Lex("./lexer.~ATH");
+import watcher Par("./parser.~ATH");
+import watcher CPS("./cps.~ATH");
+import watcher Gen("./codegen.~ATH");
+
+BIRTH source WITH SCRY(VOID);
+BIRTH tokens WITH Lex.tokenize(source);
+BIRTH ast    WITH Par.parse(tokens);
+BIRTH ann    WITH CPS.analyze(ast, {});
+BIRTH pipeline WITH {tokenize: Lex.tokenize, parse: Par.parse, analyze: CPS.analyze};
+BIRTH code   WITH Gen.generate(ann.ast, ann.asyncRites, pipeline);
+UTTER(code);
+THIS.DIE();

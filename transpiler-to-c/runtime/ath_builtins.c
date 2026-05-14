@@ -88,12 +88,22 @@ AthBuiltinFn ath_builtin_lookup(const char *name) {
     return NULL;
 }
 
+void ath_scope_define_builtins(AthScope *s) {
+    int i;
+    for (i = 0; _builtins[i].name; i++) {
+        AthRite  *r = ath_rite_new_sync(s, _builtins[i].fn, -1);
+        AthValue  v = ath_rite_val(r);
+        ath_scope_define(s, _builtins[i].name, v, 1);
+        ath_rite_decref(r);
+    }
+}
+
 AthValue ath_call_sync(AthScope *scope, AthValue callee, int argc, AthValue *argv) {
     if (callee.type == ATH_RITE) {
         AthRite *r = callee.as.rite;
         if (r->is_async)
             ath_runtime_error("cannot call async rite synchronously", 0, 0);
-        return r->fn.sync(scope, argc, argv);
+        return r->fn.sync(r->closure ? r->closure : scope, argc, argv);
     }
     ath_runtime_error("value is not callable", 0, 0);
     return ath_void();

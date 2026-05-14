@@ -390,6 +390,13 @@ AthValue ath_map_val(AthMap *m) {
     return v;
 }
 
+AthValue ath_module_val(AthMap *m) {
+    AthValue v;
+    v.type = ATH_MODULE;
+    v.as.map = m;
+    return v;
+}
+
 AthValue ath_entity_val(struct AthEntity *e) {
     AthValue v;
     v.type = ATH_ENTITY;
@@ -411,6 +418,7 @@ void ath_value_incref(AthValue v) {
     case ATH_STRING: ath_string_incref(v.as.string); break;
     case ATH_ARRAY:  ath_array_incref(v.as.array);   break;
     case ATH_MAP:    ath_map_incref(v.as.map);        break;
+    case ATH_MODULE: ath_map_incref(v.as.map);        break;
     case ATH_RITE:   ath_rite_incref(v.as.rite);      break;
     default: break;
     }
@@ -421,6 +429,7 @@ void ath_value_decref(AthValue v) {
     case ATH_STRING: ath_string_decref(v.as.string); break;
     case ATH_ARRAY:  ath_array_decref(v.as.array);   break;
     case ATH_MAP:    ath_map_decref(v.as.map);        break;
+    case ATH_MODULE: ath_map_decref(v.as.map);        break;
     case ATH_RITE:   ath_rite_decref(v.as.rite);      break;
     default: break;
     }
@@ -438,6 +447,10 @@ AthValue ath_value_copy(AthValue v) {
         AthMap *m = ath_map_copy(v.as.map);
         return ath_map_val(m);
     }
+    case ATH_MODULE: {
+        AthMap *m = ath_map_copy(v.as.map);
+        return ath_module_val(m);
+    }
     case ATH_RITE: ath_rite_incref(v.as.rite); return v;
     default: return v;
     }
@@ -454,6 +467,7 @@ int ath_is_truthy(AthValue v) {
     case ATH_STRING:  return v.as.string && v.as.string->length > 0;
     case ATH_ARRAY:   return v.as.array  && v.as.array->length > 0;
     case ATH_MAP:     return v.as.map    && v.as.map->count > 0;
+    case ATH_MODULE:  return 1;
     default:          return 1;
     }
 }
@@ -469,6 +483,7 @@ const char *ath_typeof_str(AthValue v) {
     case ATH_MAP:     return "MAP";
     case ATH_ENTITY:  return "ENTITY";
     case ATH_RITE:    return "RITE";
+    case ATH_MODULE:  return "MODULE";
     default:          return "UNKNOWN";
     }
 }
@@ -503,6 +518,7 @@ char *ath_stringify(AthValue v) {
         return buf;
     case ATH_ARRAY:  return stringify_array(v.as.array);
     case ATH_MAP:    return stringify_map(v.as.map);
+    case ATH_MODULE: return stringify_map(v.as.map);
     case ATH_ENTITY: {
         const char *name = v.as.entity ? v.as.entity->name : "?";
         buf = (char*)malloc(strlen(name)+1); strcpy(buf,name); return buf;
@@ -750,7 +766,8 @@ AthValue ath_index(AthValue obj, AthValue idx) {
         s = ath_string_new(&obj.as.string->data[i], 1);
         return ath_str_val(s);
     }
-    case ATH_MAP: {
+    case ATH_MAP:
+    case ATH_MODULE: {
         char *key = ath_stringify(idx);
         AthValue v = ath_map_get(obj.as.map, key);
         free(key);
@@ -765,6 +782,7 @@ AthValue ath_index(AthValue obj, AthValue idx) {
 AthValue ath_member(AthValue obj, const char *member) {
     switch (obj.type) {
     case ATH_MAP:
+    case ATH_MODULE:
         return ath_map_get(obj.as.map, member);
     default:
         ath_runtime_error_fmt("cannot access member '%s' on non-map value", member);
@@ -783,7 +801,7 @@ void ath_index_set(AthValue obj, AthValue idx, AthValue val) {
         ath_value_decref(obj.as.array->data[i]);
         obj.as.array->data[i] = val;
         ath_value_incref(val);
-    } else if (obj.type == ATH_MAP) {
+    } else if (obj.type == ATH_MAP || obj.type == ATH_MODULE) {
         char *key = ath_stringify(idx);
         ath_map_set(obj.as.map, key, val);
         free(key);
@@ -793,7 +811,7 @@ void ath_index_set(AthValue obj, AthValue idx, AthValue val) {
 }
 
 void ath_member_set(AthValue obj, const char *member, AthValue val) {
-    if (obj.type != ATH_MAP)
+    if (obj.type != ATH_MAP && obj.type != ATH_MODULE)
         ath_runtime_error("cannot set member on non-map value", 0, 0);
     ath_map_set(obj.as.map, member, val);
 }

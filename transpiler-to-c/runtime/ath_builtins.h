@@ -11,6 +11,9 @@ typedef AthValue (*AthBuiltinFn)(AthScope *scope, int argc, AthValue *argv);
 /* Lookup a builtin by name; returns NULL if not found */
 AthBuiltinFn ath_builtin_lookup(const char *name);
 
+/* Register all builtins as const AthRite values in scope s */
+void ath_scope_define_builtins(AthScope *s);
+
 /* Call a value (rite or builtin) synchronously */
 AthValue ath_call_sync(AthScope *scope, AthValue callee, int argc, AthValue *argv);
 

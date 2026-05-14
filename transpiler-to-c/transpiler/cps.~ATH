@@ -1,0 +1,308 @@
+// cps.~ATH — CPS analysis pass
+// analyze(ast, branchNames) -> {ast: annotatedAst, asyncRites: asyncRiteSet}
+// Annotates each node with "async": ALIVE or DEAD.
+// A node is async if it contains (directly or transitively) an AthLoop
+// whose entity is not a known branch entity.
+
+RITE entityIsAsync(entityNode, branchNames) {
+    SHOULD entityNode.t == "EntityIdent" {
+        SHOULD HAS(branchNames, entityNode.name) { BEQUEATH DEAD; }
+        BEQUEATH ALIVE;
+    }
+    SHOULD entityNode.t == "EntityAnd" OR entityNode.t == "EntityOr" {
+        BEQUEATH entityIsAsync(entityNode.left, branchNames) OR entityIsAsync(entityNode.right, branchNames);
+    }
+    SHOULD entityNode.t == "EntityNot" {
+        BEQUEATH DEAD;
+    }
+    BEQUEATH DEAD;
+}
+
+RITE stmtsAsync(stmts, branchNames, asyncRites) {
+    BIRTH i WITH 0;
+    BIRTH len WITH LENGTH(stmts);
+    BIRTH found WITH DEAD;
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        found = found OR r.async;
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    BEQUEATH {async: found, asyncRites: asyncRites};
+}
+
+RITE stmtAsync(node, branchNames, asyncRites) {
+    BIRTH nt WITH node.t;
+    SHOULD nt == "AthLoop" {
+        BIRTH isA WITH entityIsAsync(node.entity, branchNames);
+        BIRTH newBn WITH branchNames;
+        SHOULD NOT isA AND node.entity.t == "EntityIdent" {
+            newBn = SET(newBn, node.entity.name, ALIVE);
+        }
+        BIRTH bodyR WITH stmtsAsync(node.body, newBn, asyncRites);
+        asyncRites = bodyR.asyncRites;
+        BIRTH execR WITH stmtsAsync(node.exec, newBn, asyncRites);
+        asyncRites = execR.asyncRites;
+        BEQUEATH {async: isA, asyncRites: asyncRites};
+    }
+    SHOULD nt == "Bifurcate" {
+        BIRTH newBn WITH SET(SET(branchNames, node.br1, ALIVE), node.br2, ALIVE);
+        BEQUEATH {async: DEAD, asyncRites: asyncRites};
+    }
+    SHOULD nt == "RiteDef" {
+        BIRTH bodyR WITH stmtsAsync(node.body, branchNames, asyncRites);
+        asyncRites = bodyR.asyncRites;
+        SHOULD bodyR.async {
+            asyncRites = SET(asyncRites, node.name, ALIVE);
+        }
+        BEQUEATH {async: DEAD, asyncRites: asyncRites};
+    }
+    SHOULD nt == "Cond" {
+        BIRTH thenR WITH stmtsAsync(node.then, branchNames, asyncRites);
+        asyncRites = thenR.asyncRites;
+        BIRTH elsAsync WITH DEAD;
+        SHOULD TYPEOF(node.els) == "ARRAY" {
+            BIRTH elsR WITH stmtsAsync(node.els, branchNames, asyncRites);
+            asyncRites = elsR.asyncRites;
+            elsAsync = elsR.async;
+        }
+        SHOULD TYPEOF(node.els) == "MAP" AND node.els.t == "Cond" {
+            BIRTH elsR WITH stmtAsync(node.els, branchNames, asyncRites);
+            asyncRites = elsR.asyncRites;
+            elsAsync = elsR.async;
+        }
+        BEQUEATH {async: thenR.async OR elsAsync, asyncRites: asyncRites};
+    }
+    SHOULD nt == "AttemptSalvage" {
+        BIRTH attR WITH stmtsAsync(node.attempt, branchNames, asyncRites);
+        asyncRites = attR.asyncRites;
+        BIRTH salR WITH stmtsAsync(node.salvage, branchNames, asyncRites);
+        asyncRites = salR.asyncRites;
+        BEQUEATH {async: attR.async OR salR.async, asyncRites: asyncRites};
+    }
+    BEQUEATH {async: DEAD, asyncRites: asyncRites};
+}
+
+RITE analyze(ast, branchNames) {
+    BIRTH asyncRites WITH {};
+    BIRTH stmts WITH ast.stmts;
+    BIRTH i WITH 0;
+    BIRTH len WITH LENGTH(stmts);
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    SHOULD i < len {
+        BIRTH r WITH stmtAsync(stmts[i], branchNames, asyncRites);
+        asyncRites = r.asyncRites;
+        i = i + 1;
+    }
+    BEQUEATH {ast: ast, asyncRites: asyncRites};
+}
+
+THIS.DIE();
