@@ -433,7 +433,7 @@ The EXECUTE clause runs after the entity dies (wait mode) or as part of the bran
 } EXECUTE(UTTER("done"));
 ```
 
-**Multiple statements** (semicolon-separated, final semicolon optional):
+**Multiple statements**: Zero or more statements (each terminated by `;` per its own production), optionally followed by a single trailing bare expression with no `;`:
 ```
 } EXECUTE(
     BIRTH x WITH 5;
