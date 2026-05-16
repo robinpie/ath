@@ -472,24 +472,40 @@ RITE continueAnds(toks, pos, left) {
 
 RITE parseEq(toks, pos) {
     BIRTH rl WITH parseCmp(toks, pos);
-    BIRTH left WITH rl.node;
     pos = rl.pos;
     SHOULD toks[pos].t == "==" OR toks[pos].t == "!=" {
         BIRTH op WITH toks[pos].t; pos = pos + 1;
         BIRTH rr WITH parseCmp(toks, pos);
-        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueEqs(toks, rr.pos, {t:"BinOp",op:op,left:rl.node,right:rr.node,l:rl.node.l});
+    }
+    BEQUEATH {node: rl.node, pos: pos};
+}
+
+RITE continueEqs(toks, pos, left) {
+    SHOULD toks[pos].t == "==" OR toks[pos].t == "!=" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseCmp(toks, pos);
+        BEQUEATH continueEqs(toks, rr.pos, {t:"BinOp",op:op,left:left,right:rr.node,l:left.l});
     }
     BEQUEATH {node: left, pos: pos};
 }
 
 RITE parseCmp(toks, pos) {
     BIRTH rl WITH parseBitOr(toks, pos);
-    BIRTH left WITH rl.node;
     pos = rl.pos;
     SHOULD toks[pos].t == "<" OR toks[pos].t == ">" OR toks[pos].t == "<=" OR toks[pos].t == ">=" {
         BIRTH op WITH toks[pos].t; pos = pos + 1;
         BIRTH rr WITH parseBitOr(toks, pos);
-        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueCmps(toks, rr.pos, {t:"BinOp",op:op,left:rl.node,right:rr.node,l:rl.node.l});
+    }
+    BEQUEATH {node: rl.node, pos: pos};
+}
+
+RITE continueCmps(toks, pos, left) {
+    SHOULD toks[pos].t == "<" OR toks[pos].t == ">" OR toks[pos].t == "<=" OR toks[pos].t == ">=" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseBitOr(toks, pos);
+        BEQUEATH continueCmps(toks, rr.pos, {t:"BinOp",op:op,left:left,right:rr.node,l:left.l});
     }
     BEQUEATH {node: left, pos: pos};
 }
@@ -516,36 +532,60 @@ RITE continueBitOrs(toks, pos, left) {
 
 RITE parseBitXor(toks, pos) {
     BIRTH rl WITH parseBitAnd(toks, pos);
-    BIRTH left WITH rl.node;
     pos = rl.pos;
     SHOULD toks[pos].t == "^" {
-        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        pos = pos + 1;
         BIRTH rr WITH parseBitAnd(toks, pos);
-        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueBitXors(toks, rr.pos, {t:"BinOp",op:"^",left:rl.node,right:rr.node,l:rl.node.l});
+    }
+    BEQUEATH {node: rl.node, pos: pos};
+}
+
+RITE continueBitXors(toks, pos, left) {
+    SHOULD toks[pos].t == "^" {
+        pos = pos + 1;
+        BIRTH rr WITH parseBitAnd(toks, pos);
+        BEQUEATH continueBitXors(toks, rr.pos, {t:"BinOp",op:"^",left:left,right:rr.node,l:left.l});
     }
     BEQUEATH {node: left, pos: pos};
 }
 
 RITE parseBitAnd(toks, pos) {
     BIRTH rl WITH parseShift(toks, pos);
-    BIRTH left WITH rl.node;
     pos = rl.pos;
     SHOULD toks[pos].t == "&" {
-        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        pos = pos + 1;
         BIRTH rr WITH parseShift(toks, pos);
-        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueBitAnds(toks, rr.pos, {t:"BinOp",op:"&",left:rl.node,right:rr.node,l:rl.node.l});
+    }
+    BEQUEATH {node: rl.node, pos: pos};
+}
+
+RITE continueBitAnds(toks, pos, left) {
+    SHOULD toks[pos].t == "&" {
+        pos = pos + 1;
+        BIRTH rr WITH parseShift(toks, pos);
+        BEQUEATH continueBitAnds(toks, rr.pos, {t:"BinOp",op:"&",left:left,right:rr.node,l:left.l});
     }
     BEQUEATH {node: left, pos: pos};
 }
 
 RITE parseShift(toks, pos) {
     BIRTH rl WITH parseTerm(toks, pos);
-    BIRTH left WITH rl.node;
     pos = rl.pos;
     SHOULD toks[pos].t == "<<" OR toks[pos].t == ">>" {
         BIRTH op WITH toks[pos].t; pos = pos + 1;
         BIRTH rr WITH parseTerm(toks, pos);
-        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueShifts(toks, rr.pos, {t:"BinOp",op:op,left:rl.node,right:rr.node,l:rl.node.l});
+    }
+    BEQUEATH {node: rl.node, pos: pos};
+}
+
+RITE continueShifts(toks, pos, left) {
+    SHOULD toks[pos].t == "<<" OR toks[pos].t == ">>" {
+        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        BIRTH rr WITH parseTerm(toks, pos);
+        BEQUEATH continueShifts(toks, rr.pos, {t:"BinOp",op:op,left:left,right:rr.node,l:left.l});
     }
     BEQUEATH {node: left, pos: pos};
 }

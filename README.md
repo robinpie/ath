@@ -1,95 +1,23 @@
-# Try the web interpreter at [https://robinpie.neocities.org/ath/](https://robinpie.neocities.org/ath/?code=Ly8gRml6ekJ1enogdXNpbmcgcmVjdXJzaW9uIHdpdGggdGltZXIgY2hhaW5zClJJVEUgZml6emJ1enoobiwgbWF4KSB7CiAgICBTSE9VTEQgbiA8PSBtYXggewogICAgICAgIFNIT1VMRCBuICUgMTUgPT0gMCB7CiAgICAgICAgICAgIFVUVEVSKCJGaXp6QnV6eiIpOwogICAgICAgIH0gTEVTVCBTSE9VTEQgbiAlIDMgPT0gMCB7CiAgICAgICAgICAgIFVUVEVSKCJGaXp6Iik7CiAgICAgICAgfSBMRVNUIFNIT1VMRCBuICUgNSA9PSAwIHsKICAgICAgICAgICAgVVRURVIoIkJ1enoiKTsKICAgICAgICB9IExFU1QgewogICAgICAgICAgICBVVFRFUihuKTsKICAgICAgICB9CgogICAgICAgIGltcG9ydCB0aW1lciBUKDFtcyk7CiAgICAgICAgfkFUSCghVCkgewogICAgICAgIH0gRVhFQ1VURShmaXp6YnV6eihuICsgMSwgbWF4KSk7CiAgICB9Cn0KCmZpenpidXp6KDEsIDUwKTsKVEhJUy5ESUUoKTs%3D)
+# Try the old Web interpreter at [https://robinpie.neocities.org/ath/](https://robinpie.neocities.org/ath/?code=Ly8gRml6ekJ1enogdXNpbmcgcmVjdXJzaW9uIHdpdGggdGltZXIgY2hhaW5zClJJVEUgZml6emJ1enoobiwgbWF4KSB7CiAgICBTSE9VTEQgbiA8PSBtYXggewogICAgICAgIFNIT1VMRCBuICUgMTUgPT0gMCB7CiAgICAgICAgICAgIFVUVEVSKCJGaXp6QnV6eiIpOwogICAgICAgIH0gTEVTVCBTSE9VTEQgbiAlIDMgPT0gMCB7CiAgICAgICAgICAgIFVUVEVSKCJGaXp6Iik7CiAgICAgICAgfSBMRVNUIFNIT1VMRCBuICUgNSA9PSAwIHsKICAgICAgICAgICAgVVRURVIoIkJ1enoiKTsKICAgICAgICB9IExFU1QgewogICAgICAgICAgICBVVFRFUihuKTsKICAgICAgICB9CgogICAgICAgIGltcG9ydCB0aW1lciBUKDFtcyk7CiAgICAgICAgfkFUSCghVCkgewogICAgICAgIH0gRVhFQ1VURShmaXp6YnV6eihuICsgMSwgbWF4KSk7CiAgICB9Cn0KCmZpenpidXp6KDEsIDUwKTsKVEhJUy5ESUUoKTs%3D)
 
 ---
 
 **!~ATH** (pronounced "until death") is an esoteric programming language where all control flow is predicated on waiting for things to die. Inspired by the fictional ~ATH language from Homestuck. Everything is about death. Loops wait for entities to die. Computation happens in death callbacks. The language is deliberately inconvenient. 
 
-## Implementations
+## Implementation
 
 | Implementation | Location | Notes |
 |---|---|---|
-| Python interpreter | `python-interpreter/` | Reference implementation, async via `asyncio` |
-| JavaScript interpreter | `js-interpreter/` | Browser-compatible, no OS entities |
-| Web playground | `webpage/` | Bundled JS interpreter at [robinpie.neocities.org/ath](https://robinpie.neocities.org/ath/) |
 | **C89 transpiler** | `transpiler-to-c/` | Compiles !~ATH → C89 via CPS transform. Self-hosting: the transpiler itself is written in !~ATH. |
+| Deprecated Python interpreter for !~ATH 1.3| `python-interpreter/` | async via `asyncio` |
+| Deprecated JavaScript interpreter for !~ATH 1.3 | `js-interpreter/` | Browser-compatible, no OS entities |
+| Deprecated Web playground for !~ATH 1.3 | `webpage/` | Bundled JS interpreter at [robinpie.neocities.org/ath](https://robinpie.neocities.org/ath/) |
 
 ## Usage
 
-All commands for the Python interpreter run from the `python-interpreter/` directory:
-
-```
-# Run a !~ATH program
-python3 untildeath.py ./examples/hello.~ATH
-
-# Start the REPL
-python3 untildeath.py
-
-# Install as package
-pip install -e .
-```
-
-Use the JavaScript interpreter at `js-interpreter/ath.js`.
-
-## Debugging !~ATH programs
-
-Both the Python and JavaScript interpreters include a stepping debugger that pauses after each statement, allowing you to inspect variables, entities, and async tasks.
-
-#### Python interpreter
-
-**CLI debugger:**
-Use the `--step` (or `-d`) flag:
-
-```
-python3 untildeath.py --step ./examples/hello.~ATH
-```
-
-In the REPL, type `:step` to toggle debugging for the next execution.
-
-##### Debugger commands
-
-|   Command   |   Shortcut    |                Action                 |
-|-------------|---------------|---------------------------------------|
-| `step`      | `s` / `Enter` | Step to the next statement            |
-| `continue`  | `c`           | Continue execution freely             |
-| `variables` | `v`           | Show variables in current scope chain |
-| `entities`  | `e`           | Show status of all entities           |
-| `tasks`     | `t`           | Show pending async tasks              |
-| `quit`      | `q`           | Quit the debugger and program         |
-
-**TUI debugger (Textual):**
-For a richer graphical interface in the terminal, use the `--tui` flag:
-
-```
-python3 untildeath.py --tui ./examples/hello.~ATH
-```
-
-Requires Textual. Just `pip install textual` if not installed.
-
-The TUI includes an integrated source code editor for an edit-debug loop:
-
-| Key      | Action                                          |
-|----------|-------------------------------------------------|
-| `s`      | Step to next statement                          |
-| `c`      | Continue execution                              |
-| `r`      | Reset program (discards unsaved edits)          |
-| `e`      | Toggle edit mode (source becomes editable)      |
-| `Ctrl+S` | Save edited source to disk and re-run           |
-| `Escape` | Exit edit mode without saving                   |
-| `q`      | Quit                                            |
-
-In edit mode, the source panel border turns magenta and the title shows `[EDITING]`. Parse errors on save are displayed in the output panel without leaving edit mode.
-
-For non-interactive JSON logging to stderr, use `--trace`. Useful for machine-readability. May produce infinite output when in an infinite loop; always use timeouts and truncation in automated/agentic use.
-
-### C89 transpiler
-
-Translates !~ATH source to C89, which can then be compiled with any standard C compiler. The generated code uses continuation-passing style (CPS) to model !~ATH's cooperative async execution model without threads or OS-specific async APIs.
-
-The transpiler itself is written in !~ATH and is fully self-hosting: `athtoc-bin` is the !~ATH transpiler compiled to a native binary by itself.
+All commands run from `transpiler-to-c/`:
 
 ```bash
-# From transpiler-to-c/
-
 # Transpile stdin → C89 stdout
 ./athtoc-bin < program.~ATH > program.c
 
@@ -101,18 +29,17 @@ make lib
 gcc -std=c89 program.c -L. -lath_runtime -Iruntime -o program && ./program
 ```
 
-**Requirements:** Any C89-compatible compiler (gcc, clang, etc.). No other dependencies — `athtoc-bin` is fully self-hosting and the repo ships a pre-built x86_64 Linux binary as the bootstrap seed.
+Works with any C89-compatible compiler (gcc, clang, etc.). The repo ships a pre-built x86_64 Linux `athtoc-bin` as the bootstrap seed.
 
 ```bash
-# Rebuild athtoc-bin from the latest transpiler/*.~ATH source files (~8 seconds).
-# Uses the existing athtoc-bin to transpile itself.
+# Rebuild athtoc-bin from source
 make
 ```
 
-If you're on a non-x86_64-Linux platform, the shipped binary won't run. You'll need a working `athtoc-bin` from somewhere (another machine, a CI artifact, etc.) to bootstrap.
+If you're on a non-x86_64-Linux platform, you'll need a working `athtoc-bin` from another machine to bootstrap.
 
-**C-specific notes:**
-- Integers are C `long` (64-bit on LP64 systems), not Python's unbounded integers
+**C-specific limitations:**
+- Integers are C `long` (64-bit on LP64 systems), not unbounded
 - Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
 - `ProcessEntity`, `ConnectionEntity`, `WatcherEntity` require POSIX (Linux/macOS)
 - Sync rites recurse on the C call stack; deep recursion will stack-overflow
@@ -121,19 +48,15 @@ If you're on a non-x86_64-Linux platform, the shipped binary won't run. You'll n
 
 ```bash
 cd transpiler-to-c
-make test     # runs all 330 tests using athtoc-bin
+make test     # runs all 330 tests
 make smoke    # quick hello-world sanity check
 ```
 
-### JavaScript interpreter
+## Debugging !~ATH programs
 
-Use the `ath.js` CLI script with the `--step` flag:
+No specialized tools beyond existing C debugging tools exist for !~ATH.
 
-```
-node js-interpreter/ath.js --step ./examples/hello.~ATH
-```
-
-`--trace` is also available for non-interactive JSON logging.
+The deprecated Python interpreter at `deprecated/python-interpreter/` includes a stepping debugger (`--step`), TUI debugger (`--tui`), and non-interactive JSON trace mode (`--trace`). These are useful for debugging !~ATH 1.3 logic. Run from that directory with `python3 untildeath.py --help`.
 
 
 ## Spec and Reference

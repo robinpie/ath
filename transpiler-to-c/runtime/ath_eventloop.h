@@ -42,4 +42,9 @@ void          ath_eventloop_schedule_entity_die(struct AthEntity *e);
 /* Wall clock in milliseconds */
 unsigned long ath_eventloop_now_ms(void);
 
+/* Register the program's THIS entity. When THIS dies, the event loop exits
+   on its next iteration, regardless of pending timers. Per spec §"Program
+   Termination": "The program terminates when THIS.DIE() is called". */
+void          ath_eventloop_set_this(struct AthEntity *e);
+
 #endif /* ATH_EVENTLOOP_H */

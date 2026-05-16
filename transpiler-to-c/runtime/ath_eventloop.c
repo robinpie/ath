@@ -206,15 +206,28 @@ void ath_eventloop_schedule_at(AthCont *cont, AthValue result, unsigned long abs
 
 /* ===== Main event loop ===== */
 
+static AthEntity *_this_entity = NULL;
+
+void ath_eventloop_set_this(AthEntity *e) {
+    _this_entity = e;
+}
+
 void ath_eventloop_run(void) {
     for (;;) {
-        /* 1. Drain FIFO (run-to-completion) */
+        /* 1. Drain FIFO (run-to-completion). Drain all the way: continuations
+           added by the death of THIS (e.g. ~ATH(THIS) waiters) need to fire
+           before the loop exits. */
         while (!fifo_empty()) {
             AthCont  *cont;
             AthValue  result;
             if (fifo_dequeue(&cont, &result))
                 cont->resume(cont, result);
         }
+
+        /* Per spec: THIS.DIE() terminates the program. After draining all
+           ready continuations, if THIS has died, exit — don't wait on
+           pending timers or poll other entities. */
+        if (_this_entity && _this_entity->is_dead) return;
 
         /* Check if anything remains */
         if (heap_empty()) break;
