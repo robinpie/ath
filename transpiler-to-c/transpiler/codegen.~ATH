@@ -56,7 +56,10 @@ RITE escChar(c) {
     SHOULD c == "\t" { BEQUEATH "\\t"; }
     BIRTH code WITH CODE(c);
     SHOULD code == 13 { BEQUEATH "\\r"; }
-    SHOULD code < 32 OR code > 126 {
+    // Escape ASCII control chars and DEL (0-31, 127) with \xNN.
+    // Characters >= 128 are passed through as raw UTF-8 bytes; the C
+    // compiler sees them as byte sequences in the string literal.
+    SHOULD code < 32 OR code == 127 {
         BIRTH h WITH HEX(code);
         SHOULD LENGTH(h) < 2 { h = "0" + h; }
         BEQUEATH "\\x" + LOWERCASE(h);
@@ -350,10 +353,18 @@ RITE genSyncStmt(stmt, depth, ctx) {
     }
 
     SHOULD nt == "Bequeath" {
+        // Async context: ctx.fn is set to current frame name
+        BIRTH inAsync WITH ctx.fn != "";
         SHOULD TYPEOF(stmt.val) == "VOID" {
+            SHOULD inAsync {
+                BEQUEATH {ctx:ctx, s:p+"{ if(f->base.next)ath_cont_resume(f->base.next,ath_void()); "+ctx.fn+"_free(f); return; }\n"};
+            }
             BEQUEATH {ctx:ctx, s:p+"{ _ret=ath_void(); goto _done; }\n"};
         }
         BIRTH re WITH genExpr(stmt.val, ctx); ctx = re.ctx;
+        SHOULD inAsync {
+            BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+"if(f->base.next)ath_cont_resume(f->base.next,"+re.t+"); "+ctx.fn+"_free(f); return;\n"+p+"}\n"};
+        }
         BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+"_ret="+re.t+"; goto _done;\n"+p+"}\n"};
     }
 
@@ -519,8 +530,9 @@ RITE genSyncImport(stmt, depth, ctx) {
 
 RITE genSyncStmtList(stmts, i, depth, ctx) {
     SHOULD i >= LENGTH(stmts) { BEQUEATH {ctx:ctx, s:""}; }
+    ctx = resetTc(ctx);
     BIRTH r WITH genSyncStmt(stmts[i], depth, ctx); ctx = r.ctx;
-    BIRTH rest WITH genSyncStmtList(stmts, i+1, depth, ctx); ctx = rest.ctx;
+    BIRTH rest WITH genSyncStmtList(stmts, i+1, depth, resetTc(ctx)); ctx = rest.ctx;
     BEQUEATH {ctx:ctx, s:r.s+rest.s};
 }
 
@@ -530,27 +542,32 @@ RITE genSyncRite(stmt, ctx) {
     BIRTH name WITH stmt.name;
     BIRTH params WITH stmt.params;
     BIRTH np WITH LENGTH(params);
+    BIRTH saved_fn WITH ctx.fn;
+    BIRTH saved_cl WITH ctx.cl;
 
     ctx = emitFwd(ctx, "static AthValue _rite_"+name+"(AthScope*,int,AthValue*);");
 
-    BIRTH rctx WITH SET(resetTc(ctx),"sv","_sc");
+    // Clear fn/cl so BEQUEATH inside this sync rite emits sync-style goto _done
+    BIRTH rctx WITH SET(SET(SET(resetTc(ctx),"sv","_sc"),"fn",""),"cl","");
     BIRTH rb WITH genSyncStmtList(stmt.body, 0, 2, rctx); rctx = rb.ctx;
 
     BIRTH fn WITH "static AthValue _rite_"+name+"(AthScope *_closure,int _argc,AthValue *_argv) {\n"+
         "    AthScope *_sc;\n"+
-        "    AthValue _t[128]; AthValue _args[16]; AthValue _ret;\n"+
+        "    AthValue *_t; AthValue _args[16]; AthValue _ret;\n"+
         "    (void)_argc;\n"+
         "    _sc = ath_scope_new(_closure);\n"+
-        "    memset(_t,0,sizeof(_t));\n"+
+        "    _t = (AthValue*)calloc(128, sizeof(AthValue));\n"+
         genParamBinds(params, 0, "_sc") +
         "    _ret = ath_void();\n"+
         rb.s +
         "    _done:\n"+
+        "    free(_t);\n"+
         "    ath_scope_decref(_sc);\n"+
         "    return _ret;\n"+
         "}\n";
 
-    BEQUEATH emitDef(ctx, fn);
+    ctx = emitDef(ctx, fn);
+    BEQUEATH SET(SET(ctx,"fn",saved_fn),"cl",saved_cl);
 }
 
 RITE genParamBinds(params, i, sc) {
@@ -936,7 +953,18 @@ RITE genBranchAthLoop(stmt, encFname, ctx) {
 
 RITE genBranchFrame(fname, brName, bodyStmts, execStmts, ctx) {
     BIRTH saved_pm WITH ctx.pm;
+    BIRTH saved_sr WITH ctx.sr;
     ctx = SET(ctx,"pm",ALIVE);
+
+    BIRTH allStmts WITH CONCAT(bodyStmts, execStmts);
+
+    // Pre-pass: generate top-level rites of the branch body before opening
+    // the segment function, so they don't end up nested inside it.
+    BIRTH brSyncRites WITH collectSyncRites(allStmts, 0, ctx.ar);
+    BIRTH brAsyncNames WITH collectAsyncRiteNames(allStmts, 0, ctx.ar);
+    ctx = genAllRites(allStmts, 0, ctx.ar, ctx);
+    ctx = SET(ctx, "sr", mergeIntoSr(mergeIntoSr(ctx.sr, KEYS(brSyncRites), 0), KEYS(brAsyncNames), 0));
+
     BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
     BIRTH seg0 WITH "_s"+STRING(rn.v)+"_"+fname;
     ctx = emitFwd(ctx, "typedef struct "+fname+" "+fname+";");
@@ -953,12 +981,11 @@ RITE genBranchFrame(fname, brName, bodyStmts, execStmts, ctx) {
     ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
     BIRTH cl WITH "    ath_entity_die(ath_scope_get(f->scope,\""+brName+"\").as.entity);\n    "+fname+"_free(f);\n";
     BIRTH rctx WITH SET(SET(ctx,"cl",cl),"fn",fname);
-    BIRTH allStmts WITH CONCAT(bodyStmts, execStmts);
     BIRTH ctx2 WITH genAsyncSegments(allStmts, fname, resetTc(rctx));
     ctx2 = emitDef(ctx2, "    ath_entity_die(ath_scope_get(f->scope,\""+brName+"\").as.entity);");
     ctx2 = emitDef(ctx2, "    "+fname+"_free(f);");
     ctx2 = emitDef(ctx2, "}");
-    BEQUEATH SET(SET(SET(ctx2,"cl",""),"fn",""),"pm",saved_pm);
+    BEQUEATH SET(SET(SET(SET(ctx2,"cl",""),"fn",""),"pm",saved_pm),"sr",saved_sr);
 }
 
 // ===== Async Rite =====

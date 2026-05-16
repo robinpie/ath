@@ -6,7 +6,7 @@ import tempfile
 
 TESTS_DIR  = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR   = os.path.dirname(TESTS_DIR)
-ATHTOC     = os.path.join(ROOT_DIR, "athtoc")
+ATHTOC     = os.environ.get("ATHTOC", os.path.join(ROOT_DIR, "athtoc"))
 RUNTIME_DIR = os.path.join(ROOT_DIR, "runtime")
 
 RUNTIME_SRCS = [

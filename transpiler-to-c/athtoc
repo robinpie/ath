@@ -1,6 +1,0 @@
-#!/bin/sh
-# athtoc — transpile !~ATH source (stdin) to C89 (stdout)
-# Usage: ./athtoc < program.~ATH > program.c
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-exec python3 "$SCRIPT_DIR/athtoc_runner.py" \
-    "$SCRIPT_DIR/transpiler/main.~ATH" "$@"

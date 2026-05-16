@@ -4,6 +4,15 @@
 
 **!~ATH** (pronounced "until death") is an esoteric programming language where all control flow is predicated on waiting for things to die. Inspired by the fictional ~ATH language from Homestuck. Everything is about death. Loops wait for entities to die. Computation happens in death callbacks. The language is deliberately inconvenient. 
 
+## Implementations
+
+| Implementation | Location | Notes |
+|---|---|---|
+| Python interpreter | `python-interpreter/` | Reference implementation, async via `asyncio` |
+| JavaScript interpreter | `js-interpreter/` | Browser-compatible, no OS entities |
+| Web playground | `webpage/` | Bundled JS interpreter at [robinpie.neocities.org/ath](https://robinpie.neocities.org/ath/) |
+| **C89 transpiler** | `transpiler-to-c/` | Compiles !~ATH → C89 via CPS transform. Self-hosting: the transpiler itself is written in !~ATH. |
+
 ## Usage
 
 All commands for the Python interpreter run from the `python-interpreter/` directory:
@@ -71,6 +80,50 @@ The TUI includes an integrated source code editor for an edit-debug loop:
 In edit mode, the source panel border turns magenta and the title shows `[EDITING]`. Parse errors on save are displayed in the output panel without leaving edit mode.
 
 For non-interactive JSON logging to stderr, use `--trace`. Useful for machine-readability. May produce infinite output when in an infinite loop; always use timeouts and truncation in automated/agentic use.
+
+### C89 transpiler
+
+Translates !~ATH source to C89, which can then be compiled with any standard C compiler. The generated code uses continuation-passing style (CPS) to model !~ATH's cooperative async execution model without threads or OS-specific async APIs.
+
+The transpiler itself is written in !~ATH and is fully self-hosting: `athtoc-bin` is the !~ATH transpiler compiled to a native binary by itself.
+
+```bash
+# From transpiler-to-c/
+
+# Transpile stdin → C89 stdout
+./athtoc-bin < program.~ATH > program.c
+
+# Compile and run
+gcc -std=c89 program.c runtime/*.c -Iruntime -o program && ./program
+
+# Or: build the runtime library and link against it
+make lib
+gcc -std=c89 program.c -L. -lath_runtime -Iruntime -o program && ./program
+```
+
+**Requirements:** Any C89-compatible compiler (gcc, clang, etc.). No other dependencies — `athtoc-bin` is fully self-hosting and the repo ships a pre-built x86_64 Linux binary as the bootstrap seed.
+
+```bash
+# Rebuild athtoc-bin from the latest transpiler/*.~ATH source files (~8 seconds).
+# Uses the existing athtoc-bin to transpile itself.
+make
+```
+
+If you're on a non-x86_64-Linux platform, the shipped binary won't run. You'll need a working `athtoc-bin` from somewhere (another machine, a CI artifact, etc.) to bootstrap.
+
+**C-specific notes:**
+- Integers are C `long` (64-bit on LP64 systems), not Python's unbounded integers
+- Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
+- `ProcessEntity`, `ConnectionEntity`, `WatcherEntity` require POSIX (Linux/macOS)
+- Sync rites recurse on the C call stack; deep recursion will stack-overflow
+
+**Test suite:**
+
+```bash
+cd transpiler-to-c
+make test     # runs all 330 tests using athtoc-bin
+make smoke    # quick hello-world sanity check
+```
 
 ### JavaScript interpreter
 

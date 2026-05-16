@@ -432,24 +432,40 @@ RITE parseExpr(toks, pos) { BEQUEATH parseOr(toks, pos); }
 
 RITE parseOr(toks, pos) {
     BIRTH rl WITH parseAnd(toks, pos);
-    BIRTH left WITH rl.node;
     pos = rl.pos;
     SHOULD toks[pos].t == "OR" {
         pos = pos + 1;
         BIRTH rr WITH parseAnd(toks, pos);
-        BEQUEATH {node:{t:"BinOp",op:"OR",left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueOrs(toks, rr.pos, {t:"BinOp",op:"OR",left:rl.node,right:rr.node,l:rl.node.l});
+    }
+    BEQUEATH {node: rl.node, pos: pos};
+}
+
+RITE continueOrs(toks, pos, left) {
+    SHOULD toks[pos].t == "OR" {
+        pos = pos + 1;
+        BIRTH rr WITH parseAnd(toks, pos);
+        BEQUEATH continueOrs(toks, rr.pos, {t:"BinOp",op:"OR",left:left,right:rr.node,l:left.l});
     }
     BEQUEATH {node: left, pos: pos};
 }
 
 RITE parseAnd(toks, pos) {
     BIRTH rl WITH parseEq(toks, pos);
-    BIRTH left WITH rl.node;
     pos = rl.pos;
     SHOULD toks[pos].t == "AND" {
         pos = pos + 1;
         BIRTH rr WITH parseEq(toks, pos);
-        BEQUEATH {node:{t:"BinOp",op:"AND",left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueAnds(toks, rr.pos, {t:"BinOp",op:"AND",left:rl.node,right:rr.node,l:rl.node.l});
+    }
+    BEQUEATH {node: rl.node, pos: pos};
+}
+
+RITE continueAnds(toks, pos, left) {
+    SHOULD toks[pos].t == "AND" {
+        pos = pos + 1;
+        BIRTH rr WITH parseEq(toks, pos);
+        BEQUEATH continueAnds(toks, rr.pos, {t:"BinOp",op:"AND",left:left,right:rr.node,l:left.l});
     }
     BEQUEATH {node: left, pos: pos};
 }
@@ -480,12 +496,20 @@ RITE parseCmp(toks, pos) {
 
 RITE parseBitOr(toks, pos) {
     BIRTH rl WITH parseBitXor(toks, pos);
-    BIRTH left WITH rl.node;
     pos = rl.pos;
     SHOULD toks[pos].t == "|" {
-        BIRTH op WITH toks[pos].t; pos = pos + 1;
+        pos = pos + 1;
         BIRTH rr WITH parseBitXor(toks, pos);
-        BEQUEATH {node:{t:"BinOp",op:op,left:left,right:rr.node,l:left.l}, pos: rr.pos};
+        BEQUEATH continueBitOrs(toks, rr.pos, {t:"BinOp",op:"|",left:rl.node,right:rr.node,l:rl.node.l});
+    }
+    BEQUEATH {node: rl.node, pos: pos};
+}
+
+RITE continueBitOrs(toks, pos, left) {
+    SHOULD toks[pos].t == "|" {
+        pos = pos + 1;
+        BIRTH rr WITH parseBitXor(toks, pos);
+        BEQUEATH continueBitOrs(toks, rr.pos, {t:"BinOp",op:"|",left:left,right:rr.node,l:left.l});
     }
     BEQUEATH {node: left, pos: pos};
 }
