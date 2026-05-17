@@ -2,6 +2,7 @@
 #include "ath_builtins.h"
 #include "ath_error.h"
 #include "ath_eventloop.h"
+#include "ath_sylladex.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +49,7 @@ static struct { const char *name; AthBuiltinFn fn; } _builtins[] = {
     {"INSCRIBE",    ath_builtin_INSCRIBE},
     {"TYPEOF",      ath_builtin_TYPEOF},
     {"LENGTH",      ath_builtin_LENGTH},
+    {"COUNT",       ath_builtin_COUNT},
     {"PARSE_INT",   ath_builtin_PARSE_INT},
     {"PARSE_FLOAT", ath_builtin_PARSE_FLOAT},
     {"STRING",      ath_builtin_STRING},
@@ -219,6 +221,14 @@ AthValue ath_builtin_LENGTH(AthScope *s, int argc, AthValue *argv) {
     ath_runtime_error_fmt("LENGTH: expected STRING or ARRAY, got %s",
                            ath_typeof_str(argv[0]));
     return ath_void();
+}
+
+AthValue ath_builtin_COUNT(AthScope *s, int argc, AthValue *argv) {
+    (void)s; REQUIRE_ARGC(1, "COUNT");
+    if (argv[0].type != ATH_SYLLADEX)
+        ath_runtime_error_fmt("COUNT: expected a sylladex, got %s",
+                              ath_typeof_str(argv[0]));
+    return ath_int(ath_syl_count(argv[0].as.sylladex));
 }
 
 AthValue ath_builtin_PARSE_INT(AthScope *s, int argc, AthValue *argv) {

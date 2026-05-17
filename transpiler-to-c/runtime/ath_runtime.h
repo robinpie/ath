@@ -8,5 +8,6 @@
 #include "ath_eventloop.h"
 #include "ath_builtins.h"
 #include "ath_error.h"
+#include "ath_sylladex.h"
 
 #endif /* ATH_RUNTIME_H */

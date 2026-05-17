@@ -3,6 +3,7 @@
 #include "ath_entity.h"
 #include "ath_scope.h"
 #include "ath_error.h"
+#include "ath_sylladex.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -411,26 +412,35 @@ AthValue ath_rite_val(AthRite *r) {
     return v;
 }
 
+AthValue ath_sylladex_val(struct AthSylladex *s) {
+    AthValue v;
+    v.type = ATH_SYLLADEX;
+    v.as.sylladex = s;
+    return v;
+}
+
 /* ===== Refcount ===== */
 
 void ath_value_incref(AthValue v) {
     switch (v.type) {
-    case ATH_STRING: ath_string_incref(v.as.string); break;
-    case ATH_ARRAY:  ath_array_incref(v.as.array);   break;
-    case ATH_MAP:    ath_map_incref(v.as.map);        break;
-    case ATH_MODULE: ath_map_incref(v.as.map);        break;
-    case ATH_RITE:   ath_rite_incref(v.as.rite);      break;
+    case ATH_STRING:   ath_string_incref(v.as.string); break;
+    case ATH_ARRAY:    ath_array_incref(v.as.array);   break;
+    case ATH_MAP:      ath_map_incref(v.as.map);        break;
+    case ATH_MODULE:   ath_map_incref(v.as.map);        break;
+    case ATH_RITE:     ath_rite_incref(v.as.rite);      break;
+    case ATH_SYLLADEX: ath_syl_incref(v.as.sylladex);   break;
     default: break;
     }
 }
 
 void ath_value_decref(AthValue v) {
     switch (v.type) {
-    case ATH_STRING: ath_string_decref(v.as.string); break;
-    case ATH_ARRAY:  ath_array_decref(v.as.array);   break;
-    case ATH_MAP:    ath_map_decref(v.as.map);        break;
-    case ATH_MODULE: ath_map_decref(v.as.map);        break;
-    case ATH_RITE:   ath_rite_decref(v.as.rite);      break;
+    case ATH_STRING:   ath_string_decref(v.as.string); break;
+    case ATH_ARRAY:    ath_array_decref(v.as.array);   break;
+    case ATH_MAP:      ath_map_decref(v.as.map);        break;
+    case ATH_MODULE:   ath_map_decref(v.as.map);        break;
+    case ATH_RITE:     ath_rite_decref(v.as.rite);      break;
+    case ATH_SYLLADEX: ath_syl_decref(v.as.sylladex);   break;
     default: break;
     }
 }
@@ -452,6 +462,7 @@ AthValue ath_value_copy(AthValue v) {
         return ath_module_val(m);
     }
     case ATH_RITE: ath_rite_incref(v.as.rite); return v;
+    case ATH_SYLLADEX: ath_syl_incref(v.as.sylladex); return v;
     default: return v;
     }
 }
@@ -468,6 +479,7 @@ int ath_is_truthy(AthValue v) {
     case ATH_ARRAY:   return v.as.array  && v.as.array->length > 0;
     case ATH_MAP:     return v.as.map    && v.as.map->count > 0;
     case ATH_MODULE:  return 1;
+    case ATH_SYLLADEX: return ath_syl_is_truthy(v.as.sylladex);
     default:          return 1;
     }
 }
@@ -484,6 +496,7 @@ const char *ath_typeof_str(AthValue v) {
     case ATH_ENTITY:  return "ENTITY";
     case ATH_RITE:    return "RITE";
     case ATH_MODULE:  return "MODULE";
+    case ATH_SYLLADEX: return ath_syl_typeof_str(v.as.sylladex);
     default:          return "UNKNOWN";
     }
 }
@@ -525,6 +538,8 @@ char *ath_stringify(AthValue v) {
     }
     case ATH_RITE:
         buf = (char*)malloc(8); strcpy(buf,"<rite>"); return buf;
+    case ATH_SYLLADEX:
+        return ath_syl_stringify(v.as.sylladex);
     default:
         buf = (char*)malloc(8); strcpy(buf,"<?>"); return buf;
     }
@@ -725,6 +740,7 @@ static int ath_values_equal(AthValue a, AthValue b) {
         return a.as.string->length == b.as.string->length &&
                memcmp(a.as.string->data, b.as.string->data, a.as.string->length) == 0;
     case ATH_ENTITY:  return a.as.entity == b.as.entity;
+    case ATH_SYLLADEX: return ath_syl_eq(a.as.sylladex, b.as.sylladex);
     default: return 0;
     }
 }
@@ -773,6 +789,9 @@ AthValue ath_index(AthValue obj, AthValue idx) {
         free(key);
         return v;
     }
+    case ATH_SYLLADEX:
+        ath_runtime_error("sylladex is not indexable; use EJECT", 0, 0);
+        return ath_void();
     default:
         ath_runtime_error("cannot index this type", 0, 0);
         return ath_void();
@@ -784,6 +803,9 @@ AthValue ath_member(AthValue obj, const char *member) {
     case ATH_MAP:
     case ATH_MODULE:
         return ath_map_get(obj.as.map, member);
+    case ATH_SYLLADEX:
+        ath_runtime_error_fmt("sylladex has no member '%s'", member);
+        return ath_void();
     default:
         ath_runtime_error_fmt("cannot access member '%s' on non-map value", member);
         return ath_void();

@@ -48,6 +48,7 @@ RITE parseStmt(toks, pos) {
     SHOULD ty == "ATTEMPT" { BEQUEATH parseAttemptSalvage(toks, pos); }
     SHOULD ty == "CONDEMN" { BEQUEATH parseCondemnStmt(toks, pos); }
     SHOULD ty == "BEQUEATH" { BEQUEATH parseBequeathStmt(toks, pos); }
+    SHOULD ty == "CAPTCHALOGUE" { BEQUEATH parseCaptchalogue(toks, pos); }
     SHOULD ty == "ID" OR ty == "THIS" OR ty == "[" { BEQUEATH parseDieOrAssignOrExpr(toks, pos); }
     CONDEMN "Unexpected token: " + ty + " at line " + STRING(toks[pos].l);
 }
@@ -64,6 +65,7 @@ RITE parseExprStmt(toks, pos) {
     SHOULD ty == "ATTEMPT" { BEQUEATH parseAttemptSalvage(toks, pos); }
     SHOULD ty == "CONDEMN" { BEQUEATH parseCondemnStmt(toks, pos); }
     SHOULD ty == "BEQUEATH" { BEQUEATH parseBequeathStmt(toks, pos); }
+    SHOULD ty == "CAPTCHALOGUE" { BEQUEATH parseCaptchalogue(toks, pos); }
     SHOULD ty == "VOID" {
         BIRTH p WITH pos + 1;
         BIRTH mr WITH matchTok(toks, p, ";");
@@ -710,6 +712,11 @@ RITE parsePrimary(toks, pos) {
     SHOULD ty == "VOID" { BEQUEATH {node:{t:"Lit",vt:"VOID",v:VOID,l:l}, pos:pos+1}; }
     SHOULD ty == "THIS" { BEQUEATH {node:{t:"Ident",name:"THIS",l:l}, pos:pos+1}; }
     SHOULD ty == "ID"   { BEQUEATH {node:{t:"Ident",name:v,l:l}, pos:pos+1}; }
+    SHOULD ty == "EJECT" { BEQUEATH parseEject(toks, pos); }
+    SHOULD ty == "STACK" OR ty == "QUEUE" OR ty == "TREE" OR ty == "HASHMAP"
+        OR ty == "OUIJA" OR ty == "BOTTLE" OR ty == "TECHHOP" OR ty == "JUJU" {
+        BEQUEATH parseSylladexCtor(toks, pos);
+    }
     SHOULD ty == "(" {
         pos = pos + 1;
         BIRTH re WITH parseExpr(toks, pos);
@@ -780,6 +787,98 @@ RITE parseAssignExprStmt(toks, pos) {
     }
     SHOULD toks[p].t != ";" { CONDEMN "Expected ; after expression at line " + STRING(toks[p].l); }
     BEQUEATH {node:{t:"ExprStmt",expr:expr,l:expr.l}, pos: p+1};
+}
+
+// --- !~ATH 2.0: CAPTCHALOGUE statement ---
+RITE parseCaptchalogue(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1; // consume CAPTCHALOGUE
+    BIRTH rv WITH parseExpr(toks, pos);
+    BIRTH val WITH rv.node;
+    pos = rv.pos;
+    BIRTH withKey WITH VOID;
+    SHOULD toks[pos].t == "WITH" {
+        pos = pos + 1;
+        BIRTH rk WITH parseExpr(toks, pos);
+        withKey = rk.node;
+        pos = rk.pos;
+    }
+    pos = expect(toks, pos, "INTO");
+    BIRTH rt WITH parseExpr(toks, pos);
+    BIRTH target WITH rt.node;
+    pos = rt.pos;
+    BIRTH slotIdx WITH VOID;
+    SHOULD toks[pos].t == "SLOT" {
+        pos = pos + 1;
+        BIRTH rs WITH parseExpr(toks, pos);
+        slotIdx = rs.node;
+        pos = rs.pos;
+    }
+    pos = expect(toks, pos, ";");
+    BEQUEATH {node:{t:"Captchalogue", value:val, withKey:withKey,
+                    target:target, slotIdx:slotIdx, l:l}, pos: pos};
+}
+
+// --- !~ATH 2.0: EJECT expression with modifier disambiguation ---
+RITE parseEject(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1; // consume EJECT
+    BIRTH nt WITH toks[pos].t;
+    SHOULD nt == "FROM" {
+        pos = pos + 1;
+        BIRTH rt WITH parseExpr(toks, pos);
+        BEQUEATH {node:{t:"Eject", mod:"NONE", a:VOID, b:VOID,
+                        target:rt.node, l:l}, pos: rt.pos};
+    }
+    SHOULD nt == "ROOT" {
+        pos = pos + 1;
+        pos = expect(toks, pos, "FROM");
+        BIRTH rt WITH parseExpr(toks, pos);
+        BEQUEATH {node:{t:"Eject", mod:"ROOT", a:VOID, b:VOID,
+                        target:rt.node, l:l}, pos: rt.pos};
+    }
+    SHOULD nt == "LEAF" {
+        pos = pos + 1;
+        pos = expect(toks, pos, "FROM");
+        BIRTH rt WITH parseExpr(toks, pos);
+        BEQUEATH {node:{t:"Eject", mod:"LEAF", a:VOID, b:VOID,
+                        target:rt.node, l:l}, pos: rt.pos};
+    }
+    SHOULD nt == "SLOT" {
+        pos = pos + 1;
+        BIRTH ra WITH parseExpr(toks, pos);
+        pos = expect(toks, ra.pos, "FROM");
+        BIRTH rt WITH parseExpr(toks, pos);
+        BEQUEATH {node:{t:"Eject", mod:"SLOT", a:ra.node, b:VOID,
+                        target:rt.node, l:l}, pos: rt.pos};
+    }
+    SHOULD nt == "GROOVE" {
+        pos = pos + 1;
+        BIRTH ra WITH parseExpr(toks, pos);
+        pos = expect(toks, ra.pos, "SHADE");
+        BIRTH rb WITH parseExpr(toks, pos);
+        pos = expect(toks, rb.pos, "FROM");
+        BIRTH rt WITH parseExpr(toks, pos);
+        BEQUEATH {node:{t:"Eject", mod:"GROOVE_SHADE", a:ra.node, b:rb.node,
+                        target:rt.node, l:l}, pos: rt.pos};
+    }
+    // Default: hashmap by-name key expression
+    BIRTH ra WITH parseExpr(toks, pos);
+    pos = expect(toks, ra.pos, "FROM");
+    BIRTH rt WITH parseExpr(toks, pos);
+    BEQUEATH {node:{t:"Eject", mod:"KEY", a:ra.node, b:VOID,
+                    target:rt.node, l:l}, pos: rt.pos};
+}
+
+// --- !~ATH 2.0: sylladex constructor (STACK(n), HASHMAP(n, rite), ...) ---
+RITE parseSylladexCtor(toks, pos) {
+    BIRTH kind WITH toks[pos].t;
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1;
+    pos = expect(toks, pos, "(");
+    BIRTH ra WITH parseArgList(toks, pos, []);
+    pos = expect(toks, ra.pos, ")");
+    BEQUEATH {node:{t:"Sylladex", kind:kind, args:ra.args, l:l}, pos: pos};
 }
 
 THIS.DIE();

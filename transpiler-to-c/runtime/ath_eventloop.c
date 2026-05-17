@@ -212,6 +212,18 @@ void ath_eventloop_set_this(AthEntity *e) {
     _this_entity = e;
 }
 
+/* Current bifurcate branch context (for JUJU sylladex). NULL outside any
+   branch. Single-threaded — no locking needed. */
+static AthEntity *_current_branch = NULL;
+
+AthEntity *ath_eventloop_get_current_branch(void) {
+    return _current_branch;
+}
+
+void ath_eventloop_set_current_branch(AthEntity *e) {
+    _current_branch = e;
+}
+
 void ath_eventloop_run(void) {
     for (;;) {
         /* 1. Drain FIFO (run-to-completion). Drain all the way: continuations

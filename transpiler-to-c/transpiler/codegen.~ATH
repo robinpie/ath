@@ -3,7 +3,8 @@
 
 ENTOMB BUILTINS WITH {
     "UTTER":ALIVE,"HEED":ALIVE,"SCRY":ALIVE,"INSCRIBE":ALIVE,
-    "TYPEOF":ALIVE,"LENGTH":ALIVE,"PARSE_INT":ALIVE,"PARSE_FLOAT":ALIVE,
+    "TYPEOF":ALIVE,"LENGTH":ALIVE,"COUNT":ALIVE,
+    "PARSE_INT":ALIVE,"PARSE_FLOAT":ALIVE,
     "STRING":ALIVE,"INT":ALIVE,"FLOAT":ALIVE,"CHAR":ALIVE,"CODE":ALIVE,
     "BIN":ALIVE,"HEX":ALIVE,"APPEND":ALIVE,"PREPEND":ALIVE,
     "SLICE":ALIVE,"FIRST":ALIVE,"LAST":ALIVE,"CONCAT":ALIVE,
@@ -11,6 +12,18 @@ ENTOMB BUILTINS WITH {
     "SPLIT":ALIVE,"JOIN":ALIVE,"SUBSTRING":ALIVE,"UPPERCASE":ALIVE,
     "LOWERCASE":ALIVE,"TRIM":ALIVE,"REPLACE":ALIVE,
     "RANDOM":ALIVE,"RANDOM_INT":ALIVE,"TIME":ALIVE
+};
+
+ENTOMB EJECT_MODS WITH {
+    "NONE":"EJ_NONE","ROOT":"EJ_ROOT","LEAF":"EJ_LEAF",
+    "SLOT":"EJ_SLOT","GROOVE_SHADE":"EJ_GROOVE_SHADE","KEY":"EJ_KEY"
+};
+
+ENTOMB SYL_CTORS WITH {
+    "STACK":"ath_syl_stack_new","QUEUE":"ath_syl_queue_new",
+    "TREE":"ath_syl_tree_new","HASHMAP":"ath_syl_hashmap_new",
+    "OUIJA":"ath_syl_ouija_new","BOTTLE":"ath_syl_bottle_new",
+    "TECHHOP":"ath_syl_techhop_new","JUJU":"ath_syl_juju_new"
 };
 
 ENTOMB BINOPS WITH {
@@ -24,7 +37,15 @@ ENTOMB BINOPS WITH {
 // fn: current frame name
 
 RITE mkCtx(asyncRites, syncRites, branchNames, pipeline) {
-    BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],pre:[],defs:[],pm:DEAD,ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline};
+    BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],pre:[],defs:[],pm:DEAD,ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline,cb:DEAD};
+}
+
+// If we're emitting a segment inside a branch frame (ctx.cb is truthy),
+// produce the prologue line that re-installs current_branch on resume.
+// Otherwise empty.
+RITE branchPrologue(ctx) {
+    SHOULD ctx.cb { BEQUEATH "    ath_eventloop_set_current_branch(f->branch);\n"; }
+    BEQUEATH "";
 }
 
 RITE freshN(ctx) {
@@ -239,9 +260,100 @@ RITE genExpr(expr, ctx) {
 
     SHOULD et == "Array" { BEQUEATH genArrayExpr(expr, ctx); }
     SHOULD et == "Map"   { BEQUEATH genMapExpr(expr, ctx); }
+    SHOULD et == "Eject" { BEQUEATH genEjectExpr(expr, ctx); }
+    SHOULD et == "Sylladex" { BEQUEATH genSylladexExpr(expr, ctx); }
 
     BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
     BEQUEATH {ctx:ctx, stmts:t+"=ath_void();\n", t:t};
+}
+
+// !~ATH 2.0: EJECT [modifier] FROM target
+RITE genEjectExpr(expr, ctx) {
+    BIRTH rt WITH genExpr(expr.target, ctx); ctx = rt.ctx;
+    BIRTH stmts WITH rt.stmts;
+    BIRTH aRef WITH "NULL";
+    BIRTH bRef WITH "NULL";
+    SHOULD expr.mod == "SLOT" OR expr.mod == "KEY" OR expr.mod == "GROOVE_SHADE" {
+        BIRTH ra WITH genExpr(expr.a, ctx); ctx = ra.ctx;
+        stmts = stmts + ra.stmts;
+        aRef = "&" + ra.t;
+        SHOULD expr.mod == "GROOVE_SHADE" {
+            BIRTH rb WITH genExpr(expr.b, ctx); ctx = rb.ctx;
+            stmts = stmts + rb.stmts;
+            bRef = "&" + rb.t;
+        }
+    }
+    BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+    BIRTH chk WITH "if(("+rt.t+").type!=ATH_SYLLADEX){ath_runtime_error(\"EJECT target is not a sylladex\",0,0);}\n";
+    BEQUEATH {ctx:ctx, stmts:stmts+chk+
+        t+"=ath_syl_eject(("+rt.t+").as.sylladex,"+EJECT_MODS[expr.mod]+","+aRef+","+bRef+");\n", t:t};
+}
+
+// !~ATH 2.0: Sylladex constructor (STACK(n), HASHMAP(n, rite), etc.)
+//   Constructors take raw C types: int for sizes, AthRite* for rites.
+//   We evaluate each arg into an AthValue temp, then unwrap appropriately.
+RITE genSylladexExpr(expr, ctx) {
+    BIRTH kind WITH expr.kind;
+    BIRTH args WITH expr.args;
+    BIRTH n WITH LENGTH(args);
+    BIRTH ra WITH genSylladexArgTmps(args, 0, ctx); ctx = ra.ctx;
+    BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
+    BIRTH ctor WITH SYL_CTORS[kind];
+    BIRTH stmts WITH ra.stmts;
+    BIRTH callArgs WITH "";
+
+    SHOULD kind == "STACK" OR kind == "QUEUE" OR kind == "OUIJA"
+        OR kind == "BOTTLE" OR kind == "JUJU" {
+        SHOULD n != 1 { CONDEMN kind + " requires 1 argument"; }
+        stmts = stmts + checkInt(ra.tmps_arr[0], kind+" size");
+        callArgs = "(int)("+ra.tmps_arr[0]+").as.integer";
+    }
+    SHOULD kind == "TREE" {
+        SHOULD n == 0 { callArgs = "0"; }
+        LEST SHOULD n == 1 {
+            callArgs = "ath_is_truthy("+ra.tmps_arr[0]+")";
+        }
+        LEST { CONDEMN "TREE takes 0 or 1 arguments"; }
+    }
+    SHOULD kind == "HASHMAP" {
+        SHOULD n == 1 {
+            stmts = stmts + checkInt(ra.tmps_arr[0], "HASHMAP size");
+            callArgs = "(int)("+ra.tmps_arr[0]+").as.integer,NULL";
+        }
+        LEST SHOULD n == 2 {
+            stmts = stmts + checkInt(ra.tmps_arr[0], "HASHMAP size");
+            stmts = stmts + checkRite(ra.tmps_arr[1], "HASHMAP hash");
+            callArgs = "(int)("+ra.tmps_arr[0]+").as.integer,("+ra.tmps_arr[1]+").as.rite";
+        }
+        LEST { CONDEMN "HASHMAP takes 1 or 2 arguments"; }
+    }
+    SHOULD kind == "TECHHOP" {
+        SHOULD n != 4 { CONDEMN "TECHHOP requires 4 arguments"; }
+        stmts = stmts + checkInt(ra.tmps_arr[0], "TECHHOP grooves");
+        stmts = stmts + checkInt(ra.tmps_arr[1], "TECHHOP shades");
+        stmts = stmts + checkRite(ra.tmps_arr[2], "TECHHOP groove predicate");
+        stmts = stmts + checkRite(ra.tmps_arr[3], "TECHHOP shade predicate");
+        callArgs = "(int)("+ra.tmps_arr[0]+").as.integer,(int)("+ra.tmps_arr[1]+").as.integer,("+
+                   ra.tmps_arr[2]+").as.rite,("+ra.tmps_arr[3]+").as.rite";
+    }
+    BEQUEATH {ctx:ctx, stmts:stmts+
+        t+"=ath_sylladex_val("+ctor+"("+callArgs+"));\n", t:t};
+}
+
+RITE checkInt(t, what) {
+    BEQUEATH "if(("+t+").type!=ATH_INTEGER){ath_runtime_error(\""+what+" must be INTEGER\",0,0);}\n";
+}
+RITE checkRite(t, what) {
+    BEQUEATH "if(("+t+").type!=ATH_RITE){ath_runtime_error(\""+what+" must be a rite\",0,0);}\n";
+}
+
+// Evaluate each arg into a temp; return array of temp names (tmps_arr).
+RITE genSylladexArgTmps(args, i, ctx) {
+    SHOULD i >= LENGTH(args) { BEQUEATH {ctx:ctx, stmts:"", tmps_arr:[]}; }
+    BIRTH ra WITH genExpr(args[i], ctx); ctx = ra.ctx;
+    BIRTH rest WITH genSylladexArgTmps(args, i+1, ctx); ctx = rest.ctx;
+    BEQUEATH {ctx:ctx, stmts:ra.stmts+rest.stmts,
+              tmps_arr: PREPEND(rest.tmps_arr, ra.t)};
 }
 
 RITE genCallExpr(expr, ctx) {
@@ -445,7 +557,32 @@ RITE genSyncStmt(stmt, depth, ctx) {
         BEQUEATH {ctx:ctx, s:p+"/* ~ATH in sync ctx - unsupported */\n"};
     }
 
+    SHOULD nt == "Captchalogue" { BEQUEATH genCaptchalogueStmt(stmt, depth, ctx); }
+
     BEQUEATH {ctx:ctx, s:p+"/* unhandled: "+nt+" */\n"};
+}
+
+// !~ATH 2.0: CAPTCHALOGUE value [WITH key] INTO target [SLOT slot];
+RITE genCaptchalogueStmt(stmt, depth, ctx) {
+    BIRTH p WITH ind(depth);
+    BIRTH rv WITH genExpr(stmt.value, ctx); ctx = rv.ctx;
+    BIRTH rt WITH genExpr(stmt.target, ctx); ctx = rt.ctx;
+    BIRTH stmts WITH rv.stmts + rt.stmts;
+    BIRTH keyRef WITH "NULL";
+    BIRTH slotRef WITH "NULL";
+    SHOULD TYPEOF(stmt.withKey) != "VOID" {
+        BIRTH rk WITH genExpr(stmt.withKey, ctx); ctx = rk.ctx;
+        stmts = stmts + rk.stmts;
+        keyRef = "&" + rk.t;
+    }
+    SHOULD TYPEOF(stmt.slotIdx) != "VOID" {
+        BIRTH rs WITH genExpr(stmt.slotIdx, ctx); ctx = rs.ctx;
+        stmts = stmts + rs.stmts;
+        slotRef = "&" + rs.t;
+    }
+    BIRTH chk WITH "if(("+rt.t+").type!=ATH_SYLLADEX){ath_runtime_error(\"CAPTCHALOGUE target is not a sylladex\",0,0);}\n";
+    BEQUEATH {ctx:ctx, s:p+"{\n"+p+stmts+p+chk+
+        p+"ath_syl_captchalogue(("+rt.t+").as.sylladex,"+rv.t+","+keyRef+","+slotRef+");\n"+p+"}\n"};
 }
 
 RITE genDieStmt(target, p, sv) {
@@ -648,8 +785,9 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
         ctx2 = emitFwd(ctx2, "static void "+nextName+"(AthCont*,AthValue);");
         ctx2 = emitDef(ctx2, "static void "+nextName+"(AthCont *_self, AthValue _result) {");
         ctx2 = emitDef(ctx2, "    "+fname+" *f = ("+fname+"*)_self;");
-        ctx2 = emitDef(ctx2, "    AthValue _t[128]; AthValue _args[16];");
+        ctx2 = emitDef(ctx2, "    AthValue _t[512]; AthValue _args[16];");
         ctx2 = emitDef(ctx2, "    (void)_result; memset(_t,0,sizeof(_t));");
+        SHOULD ctx2.cb { ctx2 = emitDef(ctx2, "    ath_eventloop_set_current_branch(f->branch);"); }
         ctx2 = resetTc(ctx2);
         BIRTH efn WITH freshN(ctx2); ctx2 = efn.ctx;
         BIRTH ef WITH "_ef"+STRING(efn.v);
@@ -713,7 +851,7 @@ RITE genModuleFrame(frameName, modName, exports, stmts, modAsyncRites, outerCtx)
 
     outerCtx = emitDef(outerCtx, "static void "+seg0+"(AthCont *_self, AthValue _result) {");
     outerCtx = emitDef(outerCtx, "    "+frameName+" *f=("+frameName+"*)_self;");
-    outerCtx = emitDef(outerCtx, "    AthValue _t[128]; AthValue _args[16];");
+    outerCtx = emitDef(outerCtx, "    AthValue _t[512]; AthValue _args[16];");
     outerCtx = emitDef(outerCtx, "    (void)_result; memset(_t,0,sizeof(_t));");
 
     // Build module-specific context (ar/sr/bn from the module, not outer program)
@@ -751,8 +889,9 @@ RITE genModuleImport(stmt, post, fname, ctx) {
         ctx = emitFwd(ctx, "static void "+nextName+"(AthCont*,AthValue);");
         ctx = emitDef(ctx, "static void "+nextName+"(AthCont *_self, AthValue _result) {");
         ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
-        ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+        ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
         ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+        SHOULD ctx.cb { ctx = emitDef(ctx, "    ath_eventloop_set_current_branch(f->branch);"); }
         BEQUEATH genAsyncSegments(post, fname, resetTc(ctx));
     }
 
@@ -786,8 +925,9 @@ RITE genModuleImport(stmt, post, fname, ctx) {
     ctx = emitFwd(ctx, "static void "+nextName+"(AthCont*,AthValue);");
     ctx = emitDef(ctx, "static void "+nextName+"(AthCont *_self, AthValue _result) {");
     ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
-    ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
     ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+    SHOULD ctx.cb { ctx = emitDef(ctx, "    ath_eventloop_set_current_branch(f->branch);"); }
     BEQUEATH genAsyncSegments(post, fname, resetTc(ctx));
 }
 
@@ -822,8 +962,9 @@ RITE genAsyncSegments(stmts, fname, ctx) {
         ctx2 = emitFwd(ctx2, "static void "+nextName+"(AthCont*,AthValue);");
         ctx2 = emitDef(ctx2, "static void "+nextName+"(AthCont *_self, AthValue _result) {");
         ctx2 = emitDef(ctx2, "    "+fname+" *f = ("+fname+"*)_self;");
-        ctx2 = emitDef(ctx2, "    AthValue _t[128]; AthValue _args[16];");
+        ctx2 = emitDef(ctx2, "    AthValue _t[512]; AthValue _args[16];");
         ctx2 = emitDef(ctx2, "    (void)_result; memset(_t,0,sizeof(_t));");
+        SHOULD ctx2.cb { ctx2 = emitDef(ctx2, "    ath_eventloop_set_current_branch(f->branch);"); }
         BIRTH post WITH SLICE(stmts, k+1, LENGTH(stmts));
         BIRTH execAndPost WITH CONCAT(node.exec, post);
         BEQUEATH genAsyncSegments(execAndPost, fname, resetTc(ctx2));
@@ -916,8 +1057,9 @@ RITE genAsyncCallSplit(callExpr, post, fname, ctx) {
         ctx = emitFwd(ctx, "static void "+nextName+"(AthCont*,AthValue);");
         ctx = emitDef(ctx, "static void "+nextName+"(AthCont *_self,AthValue _result) {");
         ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
-        ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+        ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
         ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+        SHOULD ctx.cb { ctx = emitDef(ctx, "    ath_eventloop_set_current_branch(f->branch);"); }
         BEQUEATH genAsyncSegments(post, fname, resetTc(ctx));
     }
     BEQUEATH ctx;
@@ -969,23 +1111,27 @@ RITE genBranchFrame(fname, brName, bodyStmts, execStmts, ctx) {
     BIRTH seg0 WITH "_s"+STRING(rn.v)+"_"+fname;
     ctx = emitFwd(ctx, "typedef struct "+fname+" "+fname+";");
     ctx = emitFwd(ctx, "static void "+seg0+"(AthCont*,AthValue);");
-    ctx = emitDef(ctx, "struct "+fname+" { AthCont base; AthScope *scope; };");
+    ctx = emitDef(ctx, "struct "+fname+" { AthCont base; AthScope *scope; AthEntity *branch; };");
     ctx = emitDef(ctx, "static "+fname+"* "+fname+"_new(AthCont *next,AthScope *par) {");
     ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)malloc(sizeof("+fname+"));");
     ctx = emitDef(ctx, "    f->base.resume="+seg0+"; f->base.next=next; f->base.refcount=1;");
-    ctx = emitDef(ctx, "    f->scope=ath_scope_new(par); return f; }");
+    ctx = emitDef(ctx, "    f->scope=ath_scope_new(par);");
+    ctx = emitDef(ctx, "    f->branch=ath_scope_get(par,\""+brName+"\").as.entity;");
+    ctx = emitDef(ctx, "    return f; }");
     ctx = emitDef(ctx, "static void "+fname+"_free("+fname+" *f){ath_scope_decref(f->scope);free(f);}");
     ctx = emitDef(ctx, "static void "+seg0+"(AthCont *_self,AthValue _result) {");
     ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
-    ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
     ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
-    BIRTH cl WITH "    ath_entity_die(ath_scope_get(f->scope,\""+brName+"\").as.entity);\n    "+fname+"_free(f);\n";
-    BIRTH rctx WITH SET(SET(ctx,"cl",cl),"fn",fname);
+    ctx = emitDef(ctx, "    ath_eventloop_set_current_branch(f->branch);");
+    BIRTH cl WITH "    ath_entity_die(ath_scope_get(f->scope,\""+brName+"\").as.entity);\n    ath_eventloop_set_current_branch(NULL);\n    "+fname+"_free(f);\n";
+    BIRTH rctx WITH SET(SET(SET(ctx,"cl",cl),"fn",fname),"cb",ALIVE);
     BIRTH ctx2 WITH genAsyncSegments(allStmts, fname, resetTc(rctx));
     ctx2 = emitDef(ctx2, "    ath_entity_die(ath_scope_get(f->scope,\""+brName+"\").as.entity);");
+    ctx2 = emitDef(ctx2, "    ath_eventloop_set_current_branch(NULL);");
     ctx2 = emitDef(ctx2, "    "+fname+"_free(f);");
     ctx2 = emitDef(ctx2, "}");
-    BEQUEATH SET(SET(SET(SET(ctx2,"cl",""),"fn",""),"pm",saved_pm),"sr",saved_sr);
+    BEQUEATH SET(SET(SET(SET(SET(ctx2,"cl",""),"fn",""),"pm",saved_pm),"sr",saved_sr),"cb",DEAD);
 }
 
 // ===== Async Rite =====
@@ -1018,7 +1164,7 @@ RITE genAsyncRite(stmt, ctx) {
 
     ctx = emitDef(ctx, "static void "+seg0+"(AthCont *_self,AthValue _result) {");
     ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
-    ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
     ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
 
     BIRTH cl WITH "    if(f->base.next)ath_cont_resume(f->base.next,ath_void());\n    "+fname+"_free(f);\n";
@@ -1045,7 +1191,7 @@ RITE genMainFrame(stmts, syncRiteNames, asyncRiteNames, ctx) {
     ctx = emitDef(ctx, "static void _FMain_free(_FMain *f){ath_scope_decref(f->scope);free(f);}");
     ctx = emitDef(ctx, "static void "+seg0+"(AthCont *_self,AthValue _result) {");
     ctx = emitDef(ctx, "    _FMain *f=(_FMain*)_self;");
-    ctx = emitDef(ctx, "    AthValue _t[128]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
     ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
 
     BIRTH cl WITH "    _FMain_free(f);\n";

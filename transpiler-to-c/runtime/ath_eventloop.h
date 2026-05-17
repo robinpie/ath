@@ -47,4 +47,11 @@ unsigned long ath_eventloop_now_ms(void);
    Termination": "The program terminates when THIS.DIE() is called". */
 void          ath_eventloop_set_this(struct AthEntity *e);
 
+/* Track the currently-executing bifurcate branch (or NULL outside any
+   branch). Used by JUJU sylladex operations to identify the active branch.
+   Generated branch-frame code is responsible for calling set on segment
+   entry and restoring on exit. */
+struct AthEntity *ath_eventloop_get_current_branch(void);
+void              ath_eventloop_set_current_branch(struct AthEntity *e);
+
 #endif /* ATH_EVENTLOOP_H */

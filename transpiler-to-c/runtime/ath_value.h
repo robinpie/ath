@@ -12,18 +12,20 @@ struct AthEntity;
 struct AthRite;
 struct AthScope;
 struct AthCont;
+struct AthSylladex;
 
 typedef enum {
-    ATH_VOID    = 0,
-    ATH_BOOLEAN = 1,
-    ATH_INTEGER = 2,
-    ATH_FLOAT   = 3,
-    ATH_STRING  = 4,
-    ATH_ARRAY   = 5,
-    ATH_MAP     = 6,
-    ATH_ENTITY  = 7,
-    ATH_RITE    = 8,
-    ATH_MODULE  = 9  /* like MAP but TYPEOF returns "MODULE" */
+    ATH_VOID     = 0,
+    ATH_BOOLEAN  = 1,
+    ATH_INTEGER  = 2,
+    ATH_FLOAT    = 3,
+    ATH_STRING   = 4,
+    ATH_ARRAY    = 5,
+    ATH_MAP      = 6,
+    ATH_ENTITY   = 7,
+    ATH_RITE     = 8,
+    ATH_MODULE   = 9, /* like MAP but TYPEOF returns "MODULE" */
+    ATH_SYLLADEX = 10 /* sylladex (kind tag carried internally) */
 } AthType;
 
 typedef struct AthValue {
@@ -36,6 +38,7 @@ typedef struct AthValue {
         struct AthMap    *map;
         struct AthEntity *entity;
         struct AthRite   *rite;
+        struct AthSylladex *sylladex;
     } as;
 } AthValue;
 
@@ -135,6 +138,7 @@ AthValue ath_map_val(AthMap *m);
 AthValue ath_module_val(AthMap *m);
 AthValue ath_entity_val(struct AthEntity *e);
 AthValue ath_rite_val(AthRite *r);
+AthValue ath_sylladex_val(struct AthSylladex *s);
 
 /* ---- Refcount management ---- */
 void ath_value_incref(AthValue v);

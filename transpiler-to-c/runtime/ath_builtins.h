@@ -25,6 +25,7 @@ AthValue ath_builtin_INSCRIBE(AthScope *s, int argc, AthValue *argv);
 
 AthValue ath_builtin_TYPEOF(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_LENGTH(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_COUNT(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_PARSE_INT(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_PARSE_FLOAT(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_STRING(AthScope *s, int argc, AthValue *argv);
