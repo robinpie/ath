@@ -164,7 +164,7 @@ EJECT SLOT n FROM H                      // HASHMAP: by physical slot index
 EJECT "key" FROM H                       // HASHMAP: by name (returns VOID on miss/collision)
 EJECT ROOT FROM T                        // TREE: removes all, returns in-order ARRAY
 EJECT LEAF FROM T                        // TREE: removes leftmost deepest leaf
-EJECT GROOVE g SHADE s FROM TH          // TECHHOP: specific cell (required)
+EJECT GROOVE g SHADE s FROM TH           // TECHHOP: specific cell (required)
 EJECT SLOT n FROM J                      // JUJU: must be different branch from writer
 ```
 
