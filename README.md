@@ -142,6 +142,87 @@ TECHHOP(g, s, gp, sp)     // 2D predicate-routed sylladex
 JUJU(n)                   // cross-branch sylladex
 ```
 
+#### SYLLADICES
+
+Sylladices are mutable structured collections where reads consume values. Write with `CAPTCHALOGUE`, read with `EJECT`. No random access or iteration — to traverse, eject repeatedly.
+
+**Write:**
+
+```ath
+CAPTCHALOGUE value INTO S;               // STACK, QUEUE, TREE, OUIJA, BOTTLE, TECHHOP
+CAPTCHALOGUE value WITH key INTO H;      // HASHMAP (WITH key required)
+CAPTCHALOGUE value INTO J SLOT n;        // JUJU (SLOT required)
+```
+
+**Read:**
+
+```ath
+EJECT FROM S                             // STACK, QUEUE, OUIJA
+EJECT FROM B                             // BOTTLE: lowest non-dead slot
+EJECT SLOT n FROM B                      // BOTTLE: specific slot (becomes dead)
+EJECT SLOT n FROM H                      // HASHMAP: by physical slot index
+EJECT "key" FROM H                       // HASHMAP: by name (returns VOID on miss/collision)
+EJECT ROOT FROM T                        // TREE: removes all, returns in-order ARRAY
+EJECT LEAF FROM T                        // TREE: removes leftmost deepest leaf
+EJECT GROOVE g SHADE s FROM TH          // TECHHOP: specific cell (required)
+EJECT SLOT n FROM J                      // JUJU: must be different branch from writer
+```
+
+**Per-type summary:**
+
+| Type | Size | Write inserts at | Read returns from | Overflow |
+|---|---|---|---|---|
+| STACK | fixed | front (slot 0), others shift right | front (slot 0) | last slot discarded |
+| QUEUE | fixed | front (slot 0), others shift right | back (slot n-1) | last slot discarded |
+| TREE | unbounded | BST position (string-coerced comparison) | ROOT (all, sorted) or LEAF (deepest left) | never overflows |
+| HASHMAP | fixed | `abs(hash(key)) % size` | by key or by slot index | collision discards old pair |
+| OUIJA | fixed | random slot | random slot | random slot discarded |
+| BOTTLE | fixed | lowest empty slot | lowest non-dead slot (then slot dies) | discarded if no empty slots |
+| TECHHOP | fixed 2D | lowest valid cell per predicate rites | explicit (groove, shade) required | discarded if no valid empty cell |
+| JUJU | fixed | explicit SLOT n; records writer branch | explicit SLOT n; different branch required | error if slot occupied |
+
+**Example (STACK):**
+
+```ath
+BIRTH S WITH STACK(3);
+CAPTCHALOGUE 1 INTO S;
+CAPTCHALOGUE 3 INTO S;
+CAPTCHALOGUE 5 INTO S;
+// S is STACK[5, 3, 1]
+
+BIRTH top WITH EJECT FROM S;
+UTTER(top);               // 5
+UTTER(STRING(S));         // STACK[3, 1, VOID]
+THIS.DIE();
+```
+
+**Example (JUJU — cross-branch communication):**
+
+```ath
+BIRTH J WITH JUJU(2);
+bifurcate THIS[ALICE, BOB];
+
+~ATH(ALICE) {
+    CAPTCHALOGUE "hello bob" INTO J SLOT 0;
+    import timer TA(10ms);
+    ~ATH(TA) { } EXECUTE(VOID);
+} EXECUTE(VOID);
+
+~ATH(BOB) {
+    import timer TB(5ms);
+    ~ATH(TB) { } EXECUTE(
+        BIRTH msg WITH EJECT SLOT 0 FROM J;
+        UTTER("Bob got:", msg);      // Bob got: hello bob
+    );
+} EXECUTE(VOID);
+
+[ALICE, BOB].DIE();
+```
+
+**Truthiness and COUNT:**
+
+A sylladex is truthy if it contains any non-`VOID` value. A dead JUJU is always falsy. `COUNT(s)` returns the number of non-`VOID` occupied slots/nodes. `TYPEOF(s)` returns the uppercase type name (`"STACK"`, `"TREE"`, etc.).
+
 #### OPERATORS
 
 ```ath
