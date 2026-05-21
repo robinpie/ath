@@ -6,12 +6,11 @@
 
 ## Implementation
 
-| Implementation | Location | Notes |
-|---|---|---|
-| **C89 transpiler** | `transpiler-to-c/` | Compiles !~ATH → C89 via CPS transform. Self-hosting: the transpiler itself is written in !~ATH. |
-| Deprecated Python interpreter for !~ATH 1.3| `python-interpreter/` | async via `asyncio` |
-| Deprecated JavaScript interpreter for !~ATH 1.3 | `js-interpreter/` | Browser-compatible, no OS entities |
-| Deprecated Web playground for !~ATH 1.3 | `webpage/` | Bundled JS interpreter at [robinpie.neocities.org/ath](https://robinpie.neocities.org/ath/) |
+The primary implementation of !~ATH is a transpiler to C89 that compiles via CPS transform. It is self-hosting, the transpiler itself is written in !~ATH.
+
+There is also a deprecated Python interpreter for !~ATH 1.3, and a partial deprecated JavaScript interpreter for !~ATH 1.3.
+
+The JavaScript interpreter powers [a Web playground for !~ATH 1.3](https://robinpie.neocities.org/ath/).
 
 ## Usage
 
