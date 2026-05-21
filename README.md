@@ -37,7 +37,8 @@ make
 
 If you're on a non-x86_64-Linux platform, you'll need a working `athtoc-bin` from another machine to bootstrap.
 
-**C-specific limitations:**
+CUrrent limitations of the implementation (may be worked around in the future):
+
 - Integers are C `long` (64-bit on LP64 systems), not unbounded
 - Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
 - `ProcessEntity`, `ConnectionEntity`, `WatcherEntity` require POSIX (Linux/macOS)
