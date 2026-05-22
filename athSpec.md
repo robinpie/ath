@@ -1762,10 +1762,14 @@ expression      = logic_or ;
 logic_or        = logic_and { "OR" logic_and } ;
 logic_and       = equality { "AND" equality } ;
 equality        = comparison { ( "==" | "!=" ) comparison } ;
-comparison      = term { ( "<" | ">" | "<=" | ">=" ) term } ;
+comparison      = bit_or { ( "<" | ">" | "<=" | ">=" ) bit_or } ;
+bit_or          = bit_xor { "|" bit_xor } ;
+bit_xor         = bit_and { "^" bit_and } ;
+bit_and         = shift { "&" shift } ;
+shift           = term { ( "<<" | ">>" ) term } ;
 term            = factor { ( "+" | "-" ) factor } ;
 factor          = unary { ( "*" | "/" | "%" ) unary } ;
-unary           = ( "NOT" | "-" ) unary | postfix ;
+unary           = ( "NOT" | "-" | "~" ) unary | postfix ;
 postfix         = primary { "[" expression "]" | "." IDENTIFIER | "(" [ arg_list ] ")" } ;
 primary         = INTEGER | FLOAT | STRING | "ALIVE" | "DEAD" | "VOID"
                 | IDENTIFIER
