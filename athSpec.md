@@ -190,9 +190,9 @@ Entities are mortal things that can be waited upon. Each entity is either `ALIVE
 
 ### Entity Lifecycle
 
-1. **Birth**: Entity is created via `import` or implicitly (`THIS`)
-2. **Life**: Entity is alive; ~ATH loops bound to it will block
-3. **Death**: Entity dies (naturally or via `.DIE()`); ~ATH loops unblock and execute
+1. Birth: Entity is created via `import` or implicitly (`THIS`)
+2. Life: Entity is alive; ~ATH loops bound to it will block
+3. Death: Entity dies (naturally or via `.DIE()`); ~ATH loops unblock and execute
 
 ### Built-in Entity Types
 
@@ -224,12 +224,12 @@ THIS.DIE();  // Terminate program
 
 Dies after a specified duration elapses.
 
-**Syntax**:
+Syntax:
 ```
 import timer <identifier>(<duration>);
 ```
 
-**Examples**:
+Examples:
 ```
 import timer T(1000ms);
 import timer delay(5s);
@@ -242,12 +242,12 @@ The timer begins counting immediately upon import. When the duration elapses, th
 
 Dies when an external process exits.
 
-**Syntax**:
+Syntax:
 ```
 import process <identifier>(<command>, <arg1>, <arg2>, ...);
 ```
 
-**Examples**:
+Examples:
 ```
 import process P("./script.sh");
 import process P2("python", "myscript.py", "--verbose");
@@ -260,12 +260,12 @@ The process is spawned immediately upon import. When it exits (for any reason, i
 
 Dies when a TCP connection closes.
 
-**Syntax**:
+Syntax:
 ```
 import connection <identifier>(<host>, <port>);
 ```
 
-**Examples**:
+Examples:
 ```
 import connection C("localhost", 8080);
 import connection remote("example.com", 443);
@@ -279,12 +279,12 @@ A TCP connection is opened immediately upon import. When the connection closes (
 
 Dies when a file is deleted.
 
-**Syntax**:
+Syntax:
 ```
 import watcher <identifier>(<filepath>);
 ```
 
-**Examples**:
+Examples:
 ```
 import watcher W("./config.txt");
 import watcher W2("/tmp/lockfile");
@@ -449,12 +449,12 @@ See the **Bifurcation** section for details.
 
 The EXECUTE clause runs after the entity dies (wait mode) or as part of the branch (branch mode). It contains expression language code.
 
-**Single expression**:
+Single expression:
 ```
 } EXECUTE(UTTER("done"));
 ```
 
-**Multiple statements**: Zero or more statements (each terminated by `;` per its own production), optionally followed by a single trailing bare expression with no `;`:
+Multiple statements: Zero or more statements (each terminated by `;` per its own production), optionally followed by a single trailing bare expression with no `;`:
 ```
 } EXECUTE(
     BIRTH x WITH 5;
@@ -464,14 +464,14 @@ The EXECUTE clause runs after the entity dies (wait mode) or as part of the bran
 ```
 Statements such as variable declarations, assignments, and nested `~ATH` loops must each end in `;`. Only the optional final bare expression may omit its semicolon.
 
-**Empty EXECUTE**: Use `VOID` as the canonical no-op:
+Empty EXECUTE: Use `VOID` as the canonical no-op:
 ```
 } EXECUTE(VOID);
 ```
 
 Note: `EXECUTE()` with nothing inside is a syntax error. Always use `EXECUTE(VOID)` for an empty execution.
 
-**Nested ~ATH** (for chaining):
+Nested ~ATH (for chaining):
 ```
 } EXECUTE(
     import timer T2(1s);
@@ -641,14 +641,14 @@ Minimal implicit coercion:
 
 ### Variables
 
-**Declaration with initialization** (required):
+Declaration with initialization (required):
 ```
 BIRTH x WITH 5;
 BIRTH name WITH "Karkat";
 BIRTH list WITH [1, 2, 3];
 ```
 
-**Constant declaration** (immutable):
+Constant declaration (immutable):
 ```
 ENTOMB PI WITH 3.14159;
 ENTOMB GREETING WITH "Hello";
@@ -656,7 +656,7 @@ ENTOMB GREETING WITH "Hello";
 
 Attempting to reassign an entombed variable is a runtime error.
 
-**Reassignment**:
+Reassignment:
 ```
 BIRTH x WITH 5;
 x = 10;
@@ -830,7 +830,7 @@ CONDEMN immediately exits to the nearest SALVAGE block, or terminates the progra
 
 #### I/O
 
-**UTTER(value, ...)** — Print to stdout
+UTTER(value, ...) — Print to stdout
 ```
 UTTER("Hello");              // prints: Hello
 UTTER("x =", x);             // prints: x = <value of x>
@@ -838,20 +838,20 @@ UTTER(1, 2, 3);              // prints: 1 2 3
 ```
 Multiple arguments are space-separated. A newline is appended.
 
-**HEED()** — Read line from stdin
+HEED() — Read line from stdin
 ```
 BIRTH input WITH HEED();     // blocks until line entered
 ```
 Returns the line as a STRING (without trailing newline).
 
-**SCRY(path)** — Read file contents or stdin
+SCRY(path) — Read file contents or stdin
 ```
 BIRTH contents WITH SCRY("./data.txt");
 BIRTH stdin WITH SCRY(VOID); // read from stdin until EOF
 ```
 Returns file contents as a STRING. Throws error if file doesn't exist or can't be read.
 
-**INSCRIBE(path, content)** — Write to file
+INSCRIBE(path, content) — Write to file
 ```
 INSCRIBE("./output.txt", "Hello, world!");
 ```
@@ -859,7 +859,7 @@ Overwrites file if it exists, creates if it doesn't. Throws error on failure.
 
 #### Type Operations
 
-**TYPEOF(value)** — Get type as string
+TYPEOF(value) — Get type as string
 ```
 TYPEOF(42)           // "INTEGER"
 TYPEOF(3.14)         // "FLOAT"
@@ -873,13 +873,13 @@ TYPEOF(TREE())       // "TREE"
 // ...and similarly "QUEUE", "HASHMAP", "OUIJA", "BOTTLE", "TECHHOP", "JUJU"
 ```
 
-**LENGTH(value)** — Length of string or array
+LENGTH(value) — Length of string or array
 ```
 LENGTH("hello")      // 5
 LENGTH([1, 2, 3])    // 3
 ```
 
-**COUNT(sylladex)** — Number of non-`VOID` values held by a sylladex
+COUNT(sylladex) — Number of non-`VOID` values held by a sylladex
 ```
 COUNT(STACK(3))                  // 0 (empty stack)
 COUNT(myTree)                    // number of nodes
@@ -887,124 +887,124 @@ COUNT(myHashmap)                 // number of occupied slots
 ```
 The precise definition varies by sylladex type; see the **Sylladices** section.
 
-**PARSE_INT(string)** — Parse string to integer
+PARSE_INT(string) — Parse string to integer
 ```
 PARSE_INT("42")      // 42
 PARSE_INT("3.14")    // error
 PARSE_INT("abc")     // error
 ```
 
-**PARSE_FLOAT(string)** — Parse string to float
+PARSE_FLOAT(string) — Parse string to float
 ```
 PARSE_FLOAT("3.14")  // 3.14
 PARSE_FLOAT("42")    // 42.0
 PARSE_FLOAT("abc")   // error
 ```
 
-**STRING(value)** — Convert to string representation
+STRING(value) — Convert to string representation
 ```
 STRING(42)           // "42"
 STRING([1,2,3])      // "[1, 2, 3]"
 STRING({a:1})        // "{a: 1}"
 ```
 
-**INT(value)** — Convert float to integer (truncates)
+INT(value) — Convert float to integer (truncates)
 ```
 INT(3.7)             // 3
 INT(-2.9)            // -2
 ```
 
-**FLOAT(value)** — Convert integer to float
+FLOAT(value) — Convert integer to float
 ```
 FLOAT(42)            // 42.0
 ```
 
-**CHAR(value)** — Convert integer code point to character string
+CHAR(value) — Convert integer code point to character string
 ```
 CHAR(65)             // "A"
 CHAR(9786)           // "☺"
 ```
 
-**CODE(value)** — Get integer code point of first character in string
+CODE(value) — Get integer code point of first character in string
 ```
 CODE("A")            // 65
 CODE("☺")            // 9786
 ```
 
-**BIN(value)** — Convert integer to binary string
+BIN(value) — Convert integer to binary string
 ```
 BIN(10)              // "1010"
 ```
 
-**HEX(value)** — Convert integer to hexadecimal string
+HEX(value) — Convert integer to hexadecimal string
 ```
 HEX(255)             // "FF"
 ```
 
 #### Array Operations
 
-**APPEND(array, value)** — Add element to end
+APPEND(array, value) — Add element to end
 ```
 BIRTH arr WITH [1, 2];
 arr = APPEND(arr, 3);    // [1, 2, 3]
 ```
 Returns a new array (does not mutate).
 
-**PREPEND(array, value)** — Add element to beginning
+PREPEND(array, value) — Add element to beginning
 ```
 BIRTH arr WITH [2, 3];
 arr = PREPEND(arr, 1);   // [1, 2, 3]
 ```
 
-**SLICE(array, start, end)** — Extract subsequence
+SLICE(array, start, end) — Extract subsequence
 ```
 SLICE([1,2,3,4,5], 1, 4)   // [2, 3, 4]
 ```
 Indices are 0-based. End is exclusive.
 
-**FIRST(array)** — Get first element
+FIRST(array) — Get first element
 ```
 FIRST([1, 2, 3])     // 1
 FIRST([])            // error
 ```
 
-**LAST(array)** — Get last element
+LAST(array) — Get last element
 ```
 LAST([1, 2, 3])      // 3
 LAST([])             // error
 ```
 
-**CONCAT(array1, array2)** — Concatenate arrays
+CONCAT(array1, array2) — Concatenate arrays
 ```
 CONCAT([1, 2], [3, 4])   // [1, 2, 3, 4]
 ```
 
 #### Map Operations
 
-**KEYS(map)** — Get array of keys
+KEYS(map) — Get array of keys
 ```
 KEYS({a: 1, b: 2})   // ["a", "b"]
 ```
 
-**VALUES(map)** — Get array of values
+VALUES(map) — Get array of values
 ```
 VALUES({a: 1, b: 2}) // [1, 2]
 ```
 
-**HAS(map, key)** — Check if key exists
+HAS(map, key) — Check if key exists
 ```
 HAS({a: 1}, "a")     // ALIVE
 HAS({a: 1}, "b")     // DEAD
 ```
 
-**SET(map, key, value)** — Set key-value pair
+SET(map, key, value) — Set key-value pair
 ```
 BIRTH m WITH {a: 1};
 m = SET(m, "b", 2);      // {a: 1, b: 2}
 ```
 Returns a new map (does not mutate).
 
-**DELETE(map, key)** — Remove key
+DELETE(map, key) — Remove key
 ```
 BIRTH m WITH {a: 1, b: 2};
 m = DELETE(m, "a");      // {b: 2}
@@ -1012,55 +1012,55 @@ m = DELETE(m, "a");      // {b: 2}
 
 #### String Operations
 
-**SPLIT(string, delimiter)** — Split string into array
+SPLIT(string, delimiter) — Split string into array
 ```
 SPLIT("a,b,c", ",")      // ["a", "b", "c"]
 SPLIT("hello", "")       // ["h", "e", "l", "l", "o"]
 ```
 
-**JOIN(array, delimiter)** — Join array into string
+JOIN(array, delimiter) — Join array into string
 ```
 JOIN(["a", "b", "c"], ",")   // "a,b,c"
 ```
 
-**SUBSTRING(string, start, end)** — Extract substring
+SUBSTRING(string, start, end) — Extract substring
 ```
 SUBSTRING("hello", 1, 4)     // "ell"
 ```
 
-**UPPERCASE(string)** — Convert to uppercase
+UPPERCASE(string) — Convert to uppercase
 ```
 UPPERCASE("hello")       // "HELLO"
 ```
 
-**LOWERCASE(string)** — Convert to lowercase
+LOWERCASE(string) — Convert to lowercase
 ```
 LOWERCASE("HELLO")       // "hello"
 ```
 
-**TRIM(string)** — Remove leading/trailing whitespace
+TRIM(string) — Remove leading/trailing whitespace
 ```
 TRIM("  hello  ")        // "hello"
 ```
 
-**REPLACE(string, old, new)** — Replace occurrences
+REPLACE(string, old, new) — Replace occurrences
 ```
 REPLACE("hello", "l", "w")   // "hewwo"
 ```
 
 #### Utility
 
-**RANDOM()** — Random float between 0 (inclusive) and 1 (exclusive)
+RANDOM() — Random float between 0 (inclusive) and 1 (exclusive)
 ```
 BIRTH r WITH RANDOM();   // e.g., 0.7291...
 ```
 
-**RANDOM_INT(min, max)** — Random integer in range (inclusive)
+RANDOM_INT(min, max) — Random integer in range (inclusive)
 ```
 BIRTH r WITH RANDOM_INT(1, 6);   // e.g., 4
 ```
 
-**TIME()** — Current Unix timestamp in milliseconds
+TIME() — Current Unix timestamp in milliseconds
 ```
 BIRTH now WITH TIME();
 ```
