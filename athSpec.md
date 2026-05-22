@@ -12,13 +12,9 @@ Everything is about death. Loops wait for entities to die. Computation happens i
 
 ## Lexical Structure
 
-### File Extension
+### Files
 
-!~ATH source code files are recommended to use the file extension `.~ATH` (e.g., `program.~ATH`).
-
-### Character Set
-
-!~ATH source files are UTF-8 encoded.
+!~ATH source code files are recommended to use the file extension `.~ATH` (e.g., `program.~ATH`). !~ATH source files are UTF-8 encoded.
 
 ### Comments
 
@@ -165,19 +161,19 @@ import timer T(1ms);
 THIS.DIE();
 ```
 
-This program imports a 1ms timer, waits for it to die, executes VOID (doing nothing), then terminates.
+This program imports a 1ms timer, waits for it to die, executes `VOID` (doing nothing), then terminates.
 
-**Note**: A program that tries to `~ATH(THIS)` before calling `THIS.DIE()` will deadlock—the loop waits for THIS to die, but `THIS.DIE()` is never reached. This is faithful to the original ~ATH's "insufferable" design.
+**Note**: A program that tries to `~ATH(THIS)` before calling `THIS.DIE()` will deadlock—the loop waits for `THIS` to die, but `THIS.DIE()` is never reached. This is faithful to the original ~ATH's "insufferable" design.
 
 ---
 
 ## Entity System
 
-Entities are mortal things that can be waited upon. Each entity is either **alive** or **dead**. ~ATH loops block until their bound entity dies.
+Entities are mortal things that can be waited upon. Each entity is either `ALIVE` or `DEAD`. ~ATH loops block until their bound entity dies.
 
 ### Entity Lifecycle
 
-1. **Birth**: Entity is created via `import` or implicitly (THIS)
+1. **Birth**: Entity is created via `import` or implicitly (`THIS`)
 2. **Life**: Entity is alive; ~ATH loops bound to it will block
 3. **Death**: Entity dies (naturally or via `.DIE()`); ~ATH loops unblock and execute
 
