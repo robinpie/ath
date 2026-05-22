@@ -83,7 +83,7 @@ import watcher Lib("lib.~ATH");  // loads .~ATH file as module
 `THIS` is an implicit entity representing the program itself. Kill entities manually with `.DIE()`. The program ends when `THIS.DIE();` is called.
 
 #### ~ATH LOOPS
-The fundamental control structure. Waits for an entity to die, then runs the EXECUTE clause:
+The fundamental control structure. Waits for an entity to die, then runs the `EXECUTE` clause:
 
 ```ath
 import timer T(1s);
@@ -246,7 +246,7 @@ SHOULD condition {
 }
 ```
 
-**No loops in the expression language.** Use ~ATH for iteration:
+**No loops in the expression language.** Use `~ATH` for iteration:
 
 ```ath
 RITE countdown(n) {
