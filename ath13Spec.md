@@ -1,4 +1,4 @@
-# !~ATH Language Specification
+# (OUTDATED, PARTIALLY CONTRADICTORY, AND POORLY STLYED. Check athSpec.md for the current version) !~ATH Language Specification
 
 Version 1.3
 
