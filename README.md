@@ -41,7 +41,7 @@ Current limitations of the implementation (may be worked around in the future):
 
 - Integers are C `long` (64-bit on LP64 systems), not unbounded
 - Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
-- `ProcessEntity`, `ConnectionEntity`, `WatcherEntity` require POSIX (Linux/macOS)
+- `ProcessEntity`, `ConnectionEntity`, `WatcherEntity` require a POSIX-ish environment
 - Sync rites recurse on the C call stack; deep recursion will stack-overflow
 
 ### Test suite
