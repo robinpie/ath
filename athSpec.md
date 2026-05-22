@@ -1048,7 +1048,7 @@ Each sylladex type defines its own capacity model (fixed-size with overflow ejec
 
 The currently defined sylladex types are **STACK**, **QUEUE**, **TREE**, **HASHMAP**, **OUIJA**, **BOTTLE**, **TECHHOP**, and **JUJU**.
 
-> **Naming note (informal).** Sylladices are named after the Homestuck inventory system of the same name, in which each "fetch modus" imposes deliberately inconvenient rules on item retrieval. !~ATH preserves the spirit of this inconvenience: every operation displaces or consumes something, and the choice of sylladex type is a commitment to a particular flavor of inconvenience.
+> *Naming note:* Sylladices are named after the Homestuck inventory system of the same name, in which most "fetch modi" impose deliberately inconvenient rules on item retrieval. !~ATH preserves this inconvenience: every operation displaces or consumes something, and the choice of sylladex type is a commitment to a particular flavor of inconvenience. `STACK`, `QUEUE`, and `TREE` are not exactly like the typical abstract data types of the same name
 
 ### Common operations
 
