@@ -69,7 +69,7 @@ The full !~ATH spec is located at ./athSpec.md, but a quick reference is located
 ### Quick Reference
 
 #### ENTITIES
-Entities are mortal things that can be waited upon. Each entity is either **alive** or **dead**. Create entities with `import`:
+Entities are mortal things that can be waited upon. Each entity is either `ALIVE` or `DEAD`. Create entities with `import`:
 
 ```ath
 import timer T(1s);        // dies after 1 second
