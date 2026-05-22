@@ -203,23 +203,23 @@ THIS.DIE();
 
 ```ath
 BIRTH J WITH JUJU(2);
-bifurcate THIS[ALICE, BOB];
+bifurcate THIS[CALIBORN, CALLIOPE];
 
-~ATH(ALICE) {
-    CAPTCHALOGUE "hello bob" INTO J SLOT 0;
+~ATH(CALIBORN) {
+    CAPTCHALOGUE "HELLO WORLD" INTO J SLOT 0;
     import timer TA(10ms);
     ~ATH(TA) { } EXECUTE(VOID);
 } EXECUTE(VOID);
 
-~ATH(BOB) {
+~ATH(CALLIOPE) {
     import timer TB(5ms);
     ~ATH(TB) { } EXECUTE(
         BIRTH msg WITH EJECT SLOT 0 FROM J;
-        UTTER("Bob got:", msg);      // Bob got: hello bob
+        UTTER("Calliope got:", msg);      // Calliope got: HELLO WORLD
     );
 } EXECUTE(VOID);
 
-[ALICE, BOB].DIE();
+[CALIBORN, CALLIOPE].DIE();
 ```
 
 **Truthiness and COUNT:**
