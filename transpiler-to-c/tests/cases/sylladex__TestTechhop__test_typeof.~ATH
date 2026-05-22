@@ -1,0 +1,5 @@
+
+RITE pg(v, g) { BEQUEATH ALIVE; }
+RITE ps(v, s) { BEQUEATH ALIVE; }
+UTTER(TYPEOF(TECHHOP(2, 2, pg, ps)));
+THIS.DIE();

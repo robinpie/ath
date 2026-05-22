@@ -1,0 +1,6 @@
+# Build/run artifacts produced by run.sh and runcase.sh.
+work/
+# Scratch copy of the manifest made by the smoke-test workflow.
+manifest.full.txt
+__pycache__/
+.pytest_cache/

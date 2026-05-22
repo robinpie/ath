@@ -1,0 +1,1 @@
+import timer T(1ms); T.DIE(); T.DIE(); UTTER("ok"); THIS.DIE();

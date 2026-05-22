@@ -1,0 +1,1 @@
+UTTER(FIRST([1,2,3])); UTTER(LAST([1,2,3])); THIS.DIE();

@@ -1,0 +1,17 @@
+
+            BIRTH counter WITH 0;
+            bifurcate THIS[A, B];
+
+            ~ATH(A) {
+                counter = counter + 10;
+            } EXECUTE(VOID);
+
+            ~ATH(B) {
+                counter = counter + 100;
+            } EXECUTE(VOID);
+
+            [A, B].DIE();
+            import timer W(20ms);
+            ~ATH(W) {} EXECUTE(UTTER(counter));
+            THIS.DIE();
+        

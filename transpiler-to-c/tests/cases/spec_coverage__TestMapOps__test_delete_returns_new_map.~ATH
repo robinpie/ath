@@ -1,0 +1,1 @@
+BIRTH m WITH {a: 1, b: 2}; BIRTH m2 WITH DELETE(m, "a"); SHOULD HAS(m2, "a") { UTTER("kept"); } LEST { UTTER("gone"); } UTTER(m2.b); THIS.DIE();

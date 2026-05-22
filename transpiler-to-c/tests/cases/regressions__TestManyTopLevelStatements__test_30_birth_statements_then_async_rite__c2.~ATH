@@ -1,0 +1,42 @@
+BIRTH v0 WITH 0;
+BIRTH v1 WITH 1;
+BIRTH v2 WITH 2;
+BIRTH v3 WITH 3;
+BIRTH v4 WITH 4;
+BIRTH v5 WITH 5;
+BIRTH v6 WITH 6;
+BIRTH v7 WITH 7;
+BIRTH v8 WITH 8;
+BIRTH v9 WITH 9;
+BIRTH v10 WITH 10;
+BIRTH v11 WITH 11;
+BIRTH v12 WITH 12;
+BIRTH v13 WITH 13;
+BIRTH v14 WITH 14;
+BIRTH v15 WITH 15;
+BIRTH v16 WITH 16;
+BIRTH v17 WITH 17;
+BIRTH v18 WITH 18;
+BIRTH v19 WITH 19;
+BIRTH v20 WITH 20;
+BIRTH v21 WITH 21;
+BIRTH v22 WITH 22;
+BIRTH v23 WITH 23;
+BIRTH v24 WITH 24;
+BIRTH v25 WITH 25;
+BIRTH v26 WITH 26;
+BIRTH v27 WITH 27;
+BIRTH v28 WITH 28;
+BIRTH v29 WITH 29;
+            BIRTH counter WITH 0;
+            RITE tick(n) {
+                SHOULD n <= 0 {
+                    UTTER("done counter=" + STRING(counter));
+                    BEQUEATH VOID;
+                }
+                counter = counter + 1;
+                import timer T(1ms);
+                ~ATH(T) {} EXECUTE(tick(n - 1));
+            }
+            tick(3);
+        

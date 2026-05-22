@@ -1,0 +1,21 @@
+
+            BIRTH counter WITH 0;
+            bifurcate THIS[A, B];
+
+            ~ATH(A) {
+                RITE tick_a() {
+                    SHOULD counter >= 3 { BEQUEATH VOID; }
+                    counter = counter + 1;
+                    UTTER("A " + STRING(counter));
+                    import timer t(1ms);
+                    ~ATH(t) {} EXECUTE(tick_a());
+                }
+                tick_a();
+            } EXECUTE(UTTER("A done"));
+
+            ~ATH(B) {
+                UTTER("B ran");
+            } EXECUTE(VOID);
+
+            [A, B].DIE();
+        

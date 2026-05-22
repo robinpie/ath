@@ -1,0 +1,7 @@
+
+        // import timer FAKE(1ms);
+        import timer T(1ms);
+        // ~ATH(FAKE) { } EXECUTE(UTTER("fake"));
+        ~ATH(T) { } EXECUTE(UTTER("real"));
+        THIS.DIE();
+    

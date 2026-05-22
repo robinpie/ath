@@ -1,0 +1,7 @@
+
+ATTEMPT {
+    BIRTH S WITH STACK(3);
+    BIRTH x WITH S.foo;
+    UTTER(x);
+} SALVAGE err { UTTER("caught"); }
+THIS.DIE();

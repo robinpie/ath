@@ -1,0 +1,7 @@
+
+ATTEMPT {
+    BIRTH H WITH HASHMAP(4);
+    CAPTCHALOGUE 1 INTO H;
+    UTTER("no error");
+} SALVAGE err { UTTER("caught"); }
+THIS.DIE();

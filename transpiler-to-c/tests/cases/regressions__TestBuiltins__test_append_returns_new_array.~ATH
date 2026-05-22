@@ -1,0 +1,7 @@
+
+            BIRTH a WITH [1, 2];
+            BIRTH b WITH APPEND(a, 3);
+            UTTER(LENGTH(a));
+            UTTER(LENGTH(b));
+            THIS.DIE();
+        

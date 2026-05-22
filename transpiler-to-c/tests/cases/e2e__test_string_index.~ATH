@@ -1,0 +1,9 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH s WITH "hello";
+            UTTER(s[0]);
+            UTTER(s[4]);
+        );
+        THIS.DIE();
+    

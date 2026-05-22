@@ -1,0 +1,15 @@
+
+            BIRTH total WITH 0;
+            BIRTH i WITH 0;
+
+            RITE step() {
+                SHOULD i < 100 {
+                    total = total + i;
+                    i = i + 1;
+                    import timer T(1ms);
+                    ~ATH(T) {} EXECUTE(step());
+                }
+            }
+            step();
+            THIS.DIE();
+        

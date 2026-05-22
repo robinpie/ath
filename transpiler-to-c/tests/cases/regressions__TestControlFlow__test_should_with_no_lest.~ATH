@@ -1,0 +1,9 @@
+
+            BIRTH r WITH "untouched";
+            SHOULD ALIVE { r = "yes"; }
+            UTTER(r);
+            r = "x";
+            SHOULD DEAD { r = "no"; }
+            UTTER(r);
+            THIS.DIE();
+        

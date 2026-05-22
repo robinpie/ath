@@ -1,0 +1,7 @@
+
+            import timer TFast(1ms);
+            import timer TSlow(100ms);
+            ~ATH(TFast) {} EXECUTE(UTTER("fast"));
+            ~ATH(TSlow) {} EXECUTE(UTTER("slow"));
+            THIS.DIE();
+        

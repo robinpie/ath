@@ -1,0 +1,8 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH arr WITH [10, 20, 30];
+            UTTER(arr[1]);
+        );
+        THIS.DIE();
+    

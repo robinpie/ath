@@ -1,0 +1,5 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER(BIN(10)));
+        THIS.DIE();
+    

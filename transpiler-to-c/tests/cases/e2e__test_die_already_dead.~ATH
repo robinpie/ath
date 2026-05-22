@@ -1,0 +1,6 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER("timer died"));
+        T.DIE();
+        THIS.DIE();
+    

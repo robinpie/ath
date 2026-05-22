@@ -1,0 +1,7 @@
+
+            BIRTH a WITH {x: 1};
+            BIRTH b WITH SET(a, "y", 2);
+            UTTER(HAS(a, "y"));
+            UTTER(HAS(b, "y"));
+            THIS.DIE();
+        

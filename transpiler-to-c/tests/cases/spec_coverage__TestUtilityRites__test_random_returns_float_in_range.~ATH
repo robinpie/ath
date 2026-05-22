@@ -1,0 +1,1 @@
+BIRTH r WITH RANDOM(); UTTER(TYPEOF(r)); SHOULD r >= 0.0 AND r < 1.0 { UTTER("ok"); } LEST { UTTER("bad"); } THIS.DIE();

@@ -1,0 +1,5 @@
+
+            BIRTH x WITH 1000000000;
+            UTTER(x * 1000);
+            THIS.DIE();
+        

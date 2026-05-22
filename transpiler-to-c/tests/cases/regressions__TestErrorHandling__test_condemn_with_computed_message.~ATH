@@ -1,0 +1,9 @@
+
+            ATTEMPT {
+                BIRTH n WITH 5;
+                CONDEMN "value=" + STRING(n);
+            } SALVAGE e {
+                UTTER(e);
+            }
+            THIS.DIE();
+        

@@ -1,0 +1,1 @@
+import watcher L("spec_coverage__TestModules__test_module_entomb_export.mod0.~ATH"); UTTER(L.PI); THIS.DIE();

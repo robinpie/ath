@@ -1,0 +1,8 @@
+
+            BIRTH base WITH 100;
+            RITE add_base(x) { BEQUEATH x + base; }
+            UTTER(add_base(5));
+            base = 200;
+            UTTER(add_base(5));
+            THIS.DIE();
+        

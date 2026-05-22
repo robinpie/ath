@@ -1,0 +1,14 @@
+
+        BIRTH count WITH 0;
+        RITE increment() {
+            count = count + 1;
+            SHOULD count < 5 {
+                import timer T(1ms);
+                ~ATH(T) { } EXECUTE(increment());
+            } LEST {
+                UTTER(count);
+            }
+        }
+        increment();
+        THIS.DIE();
+    

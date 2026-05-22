@@ -1,0 +1,5 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER(60 << 2));
+        THIS.DIE();
+    

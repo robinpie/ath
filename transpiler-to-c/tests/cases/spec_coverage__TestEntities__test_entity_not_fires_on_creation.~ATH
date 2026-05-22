@@ -1,0 +1,1 @@
+import timer T(5s); ~ATH(!T) {} EXECUTE(UTTER("created")); THIS.DIE();

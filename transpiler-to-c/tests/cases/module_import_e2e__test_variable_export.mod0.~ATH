@@ -1,0 +1,4 @@
+
+            BIRTH greeting WITH "Hello from module";
+            THIS.DIE();
+        

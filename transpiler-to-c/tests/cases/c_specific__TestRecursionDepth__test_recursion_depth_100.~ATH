@@ -1,0 +1,8 @@
+
+            RITE count(n) {
+                SHOULD n <= 0 { BEQUEATH 0; }
+                BEQUEATH 1 + count(n - 1);
+            }
+            UTTER(count(100));
+            THIS.DIE();
+        

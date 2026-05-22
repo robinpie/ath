@@ -1,0 +1,1 @@
+BIRTH x WITH 2; SHOULD x == 1 { UTTER("one"); } LEST SHOULD x == 2 { UTTER("two"); } LEST { UTTER("other"); } THIS.DIE();

@@ -1,0 +1,7 @@
+
+            import watcher M("module_import_e2e__test_multiple_rites.mod0.~ATH");
+            UTTER(M.double(5));
+            UTTER(M.triple(5));
+            UTTER(M.negate(5));
+            THIS.DIE();
+        

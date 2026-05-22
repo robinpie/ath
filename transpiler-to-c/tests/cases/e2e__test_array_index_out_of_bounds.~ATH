@@ -1,0 +1,12 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH arr WITH [1, 2, 3];
+            ATTEMPT {
+                UTTER(arr[10]);
+            } SALVAGE err {
+                UTTER("out of bounds");
+            }
+        );
+        THIS.DIE();
+    

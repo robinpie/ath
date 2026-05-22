@@ -1,0 +1,5 @@
+
+            BIRTH s WITH "Hello" + ", " + "world!";
+            UTTER(s);
+            THIS.DIE();
+        

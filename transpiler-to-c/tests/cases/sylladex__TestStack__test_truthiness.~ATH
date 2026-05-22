@@ -1,0 +1,6 @@
+
+BIRTH S WITH STACK(3);
+SHOULD S { UTTER("truthy"); } LEST { UTTER("falsy"); }
+CAPTCHALOGUE 1 INTO S;
+SHOULD S { UTTER("truthy"); } LEST { UTTER("falsy"); }
+THIS.DIE();

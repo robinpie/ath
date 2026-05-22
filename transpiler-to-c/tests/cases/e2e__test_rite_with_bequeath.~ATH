@@ -1,0 +1,11 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            RITE double(x) {
+                BEQUEATH x * 2;
+            }
+            BIRTH result WITH double(21);
+            UTTER(result);
+        );
+        THIS.DIE();
+    

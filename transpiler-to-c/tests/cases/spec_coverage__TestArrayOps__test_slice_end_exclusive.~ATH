@@ -1,0 +1,1 @@
+BIRTH s WITH SLICE([1,2,3,4,5], 1, 4); UTTER(LENGTH(s)); UTTER(s[0]); UTTER(s[2]); THIS.DIE();

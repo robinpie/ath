@@ -1,0 +1,10 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            RITE add(a, b) {
+                BEQUEATH a + b;
+            }
+            UTTER(add(3, 4));
+        );
+        THIS.DIE();
+    

@@ -1,0 +1,5 @@
+
+            BIRTH f WITH FLOAT(7);
+            UTTER(f);
+            THIS.DIE();
+        

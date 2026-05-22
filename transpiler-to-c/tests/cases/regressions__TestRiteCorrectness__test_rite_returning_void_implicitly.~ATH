@@ -1,0 +1,6 @@
+
+            RITE nop() { UTTER("hi"); }
+            BIRTH r WITH nop();
+            UTTER(TYPEOF(r));
+            THIS.DIE();
+        

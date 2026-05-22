@@ -1,0 +1,8 @@
+
+            import timer T1(1ms);
+            ~ATH(T1) {} EXECUTE(
+                import timer T2(1ms);
+                ~ATH(T2) {} EXECUTE(UTTER("chained"));
+            );
+            THIS.DIE();
+        

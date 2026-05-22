@@ -1,0 +1,9 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH x WITH 5;
+            x = 10;
+            UTTER(x);
+        );
+        THIS.DIE();
+    

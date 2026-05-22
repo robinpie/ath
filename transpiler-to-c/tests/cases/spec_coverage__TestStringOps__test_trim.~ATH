@@ -1,0 +1,1 @@
+UTTER("[" + TRIM("  hi  ") + "]"); THIS.DIE();

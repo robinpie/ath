@@ -1,0 +1,14 @@
+
+        import timer T1(1ms);
+        ~ATH(T1) { } EXECUTE(
+            ATTEMPT {
+                import timer T2(1ms);
+                ~ATH(T2) { } EXECUTE(
+                    CONDEMN "nested error";
+                );
+            } SALVAGE err {
+                UTTER("Outer caught: " + err);
+            }
+        );
+        THIS.DIE();
+    

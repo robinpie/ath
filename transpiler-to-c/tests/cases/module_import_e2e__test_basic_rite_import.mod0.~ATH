@@ -1,0 +1,6 @@
+
+            RITE add(a, b) {
+                BEQUEATH a + b;
+            }
+            THIS.DIE();
+        

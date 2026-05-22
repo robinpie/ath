@@ -254,8 +254,10 @@ void ath_eventloop_run(void) {
            pending timers or poll other entities. */
         if (_this_entity && _this_entity->is_dead) return;
 
-        /* Check if anything remains */
-        if (heap_empty()) break;
+        /* Check if anything remains. A pending process/connection/watcher
+           keeps the loop alive even when the timer heap is empty — otherwise
+           ~ATH on such an entity would never resolve. */
+        if (heap_empty() && ath_entity_pending_count() == 0) break;
 
         /* 2. Poll process/connection/watcher entities */
         {
@@ -280,6 +282,10 @@ void ath_eventloop_run(void) {
                 if (sleep_ms > 100) sleep_ms = 100;
                 platform_sleep_ms(sleep_ms);
             }
+        } else {
+            /* No timers, but pollable entities are still pending — sleep
+               briefly so the next poll doesn't busy-spin the CPU. */
+            platform_sleep_ms(10);
         }
     }
 }

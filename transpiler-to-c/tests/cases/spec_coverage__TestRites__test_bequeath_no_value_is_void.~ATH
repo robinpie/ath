@@ -1,0 +1,1 @@
+RITE nothing() { BEQUEATH; } UTTER(TYPEOF(nothing())); THIS.DIE();

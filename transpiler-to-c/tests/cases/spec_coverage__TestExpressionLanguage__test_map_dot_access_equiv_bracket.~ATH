@@ -1,0 +1,1 @@
+BIRTH m WITH {a: 11}; UTTER(m.a); UTTER(m["a"]); THIS.DIE();

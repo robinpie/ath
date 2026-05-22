@@ -1,0 +1,1 @@
+ATTEMPT { CONDEMN "boom"; } SALVAGE e { UTTER(TYPEOF(e)); UTTER(e); } THIS.DIE();

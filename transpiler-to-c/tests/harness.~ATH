@@ -1,0 +1,133 @@
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// !~ATH test harness.
+//
+// Reads manifest.txt (one "name|mode|stdin" line per corpus case), and for
+// each case spawns runcase.sh as a process entity. runcase.sh transpiles
+// cases/<name>.~ATH with the mainline transpiler, compiles it, runs it, and
+// leaves the program output in work/<name>.actual. When the process dies the
+// harness compares that output against cases/<name>.expected and tallies the
+// result. A non-zero exit (via CONDEMN) signals any failure.
+//
+// Cases are run one at a time: each is chained onto the death of the
+// previous case's process, so iteration is expressed -- as the language
+// demands -- by waiting for things to die.
+
+// ---------------------------------------------------------------------------
+// Sorted-mode comparison.
+//
+// Bifurcated programs interleave their branches nondeterministically, so the
+// corpus stores their expected output line-sorted and the harness compares
+// line-sorted too. The sort is done by pouring the lines into a TREE and
+// ejecting the root: an in-order traversal of a BST is sorted output.
+// ---------------------------------------------------------------------------
+
+RITE insertLines(t, parts, i, n) {
+    SHOULD i < n {
+        CAPTCHALOGUE parts[i] INTO t;
+        insertLines(t, parts, i + 1, n);
+    }
+}
+
+RITE sortText(text) {
+    BIRTH t WITH TREE();
+    BIRTH parts WITH SPLIT(TRIM(text), "\n");
+    insertLines(t, parts, 0, LENGTH(parts));
+    BIRTH ordered WITH EJECT ROOT FROM t;
+    BEQUEATH JOIN(ordered, "\n");
+}
+
+RITE matches(actual, expected, mode) {
+    SHOULD mode == "sorted" {
+        BEQUEATH sortText(actual) == sortText(expected);
+    }
+    BEQUEATH actual == expected;
+}
+
+// ---------------------------------------------------------------------------
+// Reporting.
+// ---------------------------------------------------------------------------
+
+RITE printFailures(failures, i, n) {
+    SHOULD i < n {
+        UTTER("    " + failures[i]);
+        printFailures(failures, i + 1, n);
+    }
+}
+
+RITE report(total, passed, failed, failures) {
+    UTTER("");
+    UTTER("==== !~ATH test harness ====");
+    UTTER("total:  ", total);
+    UTTER("passed: ", passed);
+    UTTER("failed: ", failed);
+    SHOULD failed > 0 {
+        UTTER("failing cases:");
+        printFailures(failures, 0, LENGTH(failures));
+        CONDEMN "test failures";
+    }
+    UTTER("all tests passed");
+}
+
+// ---------------------------------------------------------------------------
+// Case runner. `passed`, `failed` and `failures` are threaded through the
+// recursion rather than held as mutated globals.
+// ---------------------------------------------------------------------------
+
+BIRTH manifestRaw WITH SCRY("manifest.txt");
+BIRTH lines WITH SPLIT(TRIM(manifestRaw), "\n");
+BIRTH total WITH LENGTH(lines);
+
+RITE runCase(i, passed, failed, failures) {
+    SHOULD i >= total {
+        report(total, passed, failed, failures);
+        BEQUEATH VOID;
+    }
+
+    BIRTH fields WITH SPLIT(lines[i], "|");
+    BIRTH name WITH fields[0];
+    BIRTH mode WITH fields[1];
+
+    import process P("sh", "runcase.sh", name);
+    ~ATH(P) {
+    } EXECUTE(
+        BIRTH ok WITH DEAD;
+        ATTEMPT {
+            BIRTH actual WITH SCRY("work/" + name + ".actual");
+            BIRTH expected WITH SCRY("cases/" + name + ".expected");
+            ok = matches(actual, expected, mode);
+        } SALVAGE err {
+            ok = DEAD;
+        }
+
+        // The branches only tally sync state; the recursive (async) call is
+        // made once, after the conditional — a flat, easy-to-read shape.
+        BIRTH nextPassed WITH passed;
+        BIRTH nextFailed WITH failed;
+        BIRTH nextFailures WITH failures;
+        SHOULD ok {
+            UTTER("  pass  " + name);
+            nextPassed = passed + 1;
+        } LEST {
+            UTTER("  FAIL  " + name);
+            nextFailed = failed + 1;
+            nextFailures = APPEND(failures, name);
+        }
+
+        runCase(i + 1, nextPassed, nextFailed, nextFailures);
+    );
+}
+
+UTTER("running ", total, " cases...");
+runCase(0, 0, 0, []);
+
+THIS.DIE();

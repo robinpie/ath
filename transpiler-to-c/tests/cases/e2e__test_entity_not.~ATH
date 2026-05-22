@@ -1,0 +1,6 @@
+
+        import timer T(1s);
+        ~ATH(!T) { } EXECUTE(UTTER("timer exists"));
+        T.DIE();
+        THIS.DIE();
+    

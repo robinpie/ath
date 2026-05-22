@@ -1,0 +1,17 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            RITE mayFail(x) {
+                SHOULD x < 0 {
+                    CONDEMN "negative value";
+                }
+                BEQUEATH x * 2;
+            }
+            ATTEMPT {
+                UTTER(mayFail(-5));
+            } SALVAGE err {
+                UTTER("Error: " + err);
+            }
+        );
+        THIS.DIE();
+    

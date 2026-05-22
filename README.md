@@ -48,9 +48,12 @@ Current limitations of the implementation (may be worked around in the future):
 
 ```bash
 cd transpiler-to-c
-make test     # runs all 396 tests
+make test     # runs the !~ATH test harness over all 397 cases
 make smoke    # quick hello-world sanity check
 ```
+
+The test harness is itself an !~ATH program (`tests/harness.~ATH`); see
+`transpiler-to-c/tests/README.md`.
 
 ## Debugging !~ATH programs
 

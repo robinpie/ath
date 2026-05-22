@@ -82,4 +82,7 @@ void ath_entity_register_pollable(AthEntity *e);
 void ath_entity_unregister_pollable(AthEntity *e);
 void ath_entity_poll_all(unsigned long now_ms);
 
+/* number of live (non-dead) pollable entities — keeps the event loop alive */
+int ath_entity_pending_count(void);
+
 #endif /* ATH_ENTITY_H */

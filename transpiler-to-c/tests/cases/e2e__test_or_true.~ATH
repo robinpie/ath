@@ -1,0 +1,7 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            SHOULD DEAD OR ALIVE { UTTER("yes"); }
+        );
+        THIS.DIE();
+    

@@ -1,0 +1,7 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            UTTER("Value: " + 42 + " and " + 3.14);
+        );
+        THIS.DIE();
+    

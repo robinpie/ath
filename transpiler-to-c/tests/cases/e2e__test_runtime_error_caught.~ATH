@@ -1,0 +1,11 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            ATTEMPT {
+                BIRTH x WITH PARSE_INT("not a number");
+            } SALVAGE err {
+                UTTER("Caught error");
+            }
+        );
+        THIS.DIE();
+    

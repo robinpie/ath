@@ -1,0 +1,1 @@
+BIRTH a WITH [10, 20, 30]; UTTER(a[0]); UTTER(a[2]); THIS.DIE();

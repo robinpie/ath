@@ -1,0 +1,11 @@
+
+            BIRTH falsy_count WITH 0;
+            SHOULD NOT [] { falsy_count = falsy_count + 1; }
+            SHOULD NOT {} { falsy_count = falsy_count + 1; }
+            SHOULD NOT "" { falsy_count = falsy_count + 1; }
+            SHOULD NOT VOID { falsy_count = falsy_count + 1; }
+            SHOULD NOT DEAD { falsy_count = falsy_count + 1; }
+            SHOULD NOT 0 { falsy_count = falsy_count + 1; }
+            UTTER(falsy_count);
+            THIS.DIE();
+        

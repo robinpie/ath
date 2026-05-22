@@ -1,0 +1,4 @@
+
+        THIS.DIE();
+        ~ATH(THIS) { } EXECUTE(UTTER("THIS died"));
+    

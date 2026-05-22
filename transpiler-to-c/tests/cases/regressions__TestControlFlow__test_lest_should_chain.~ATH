@@ -1,0 +1,13 @@
+
+            RITE classify(n) {
+                SHOULD n < 0 { BEQUEATH "neg"; }
+                LEST SHOULD n == 0 { BEQUEATH "zero"; }
+                LEST SHOULD n < 10 { BEQUEATH "small"; }
+                LEST { BEQUEATH "big"; }
+            }
+            UTTER(classify(-5));
+            UTTER(classify(0));
+            UTTER(classify(7));
+            UTTER(classify(100));
+            THIS.DIE();
+        

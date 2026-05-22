@@ -1,0 +1,5 @@
+
+            RITE id(x) { BEQUEATH x; }
+            UTTER(id(42));
+            THIS.DIE();
+        

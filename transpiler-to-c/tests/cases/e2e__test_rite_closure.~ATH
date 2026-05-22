@@ -1,0 +1,11 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH multiplier WITH 10;
+            RITE multiply(x) {
+                BEQUEATH x * multiplier;
+            }
+            UTTER(multiply(5));
+        );
+        THIS.DIE();
+    

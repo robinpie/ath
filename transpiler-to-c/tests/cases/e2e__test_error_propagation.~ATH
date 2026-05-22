@@ -1,0 +1,17 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            RITE outer() {
+                inner();
+            }
+            RITE inner() {
+                CONDEMN "inner error";
+            }
+            ATTEMPT {
+                outer();
+            } SALVAGE err {
+                UTTER("Caught: " + err);
+            }
+        );
+        THIS.DIE();
+    

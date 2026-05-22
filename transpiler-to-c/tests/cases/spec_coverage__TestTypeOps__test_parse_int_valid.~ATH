@@ -1,0 +1,1 @@
+UTTER(PARSE_INT("42")); THIS.DIE();

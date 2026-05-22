@@ -1,0 +1,6 @@
+
+            BIRTH t WITH TIME();
+            UTTER(TYPEOF(t));
+            UTTER(t > 0);
+            THIS.DIE();
+        

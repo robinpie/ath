@@ -1,0 +1,4 @@
+
+            UTTER(SUBSTRING("hello", 1, 4));
+            THIS.DIE();
+        

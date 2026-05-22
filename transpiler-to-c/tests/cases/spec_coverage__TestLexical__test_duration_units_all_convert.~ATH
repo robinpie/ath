@@ -1,0 +1,1 @@
+import timer T(1ms); ~ATH(T) {} EXECUTE(UTTER("done")); THIS.DIE();

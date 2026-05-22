@@ -1,0 +1,9 @@
+
+            BIRTH c WITH 65;
+            BIRTH ch WITH "A";
+            BIRTH r WITH (c >= 65 AND c <= 90)
+                      OR (c >= 97 AND c <= 122)
+                      OR ch == "_";
+            UTTER(r);
+            THIS.DIE();
+        

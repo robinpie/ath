@@ -1,0 +1,6 @@
+
+        BIRTH x WITH 10;
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(UTTER(x));
+        THIS.DIE();
+    

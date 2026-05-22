@@ -1,0 +1,22 @@
+
+BIRTH J WITH JUJU(2);
+bifurcate THIS[ALICE, BOB];
+
+~ATH(ALICE) {
+    CAPTCHALOGUE "hello bob" INTO J SLOT 0;
+    import timer TA(10ms);
+    ~ATH(TA) {
+    } EXECUTE(VOID);
+} EXECUTE(VOID);
+
+~ATH(BOB) {
+    import timer TB(5ms);
+    ~ATH(TB) {
+    } EXECUTE(
+        BIRTH msg WITH EJECT SLOT 0 FROM J;
+        UTTER("Bob got:");
+        UTTER(msg);
+    );
+} EXECUTE(VOID);
+
+[ALICE, BOB].DIE();

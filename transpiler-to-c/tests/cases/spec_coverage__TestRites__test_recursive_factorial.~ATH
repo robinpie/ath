@@ -1,0 +1,1 @@
+RITE fact(n) { SHOULD n <= 1 { BEQUEATH 1; } BEQUEATH n * fact(n - 1); } UTTER(fact(5)); THIS.DIE();
