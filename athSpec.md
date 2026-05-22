@@ -1042,7 +1042,7 @@ A **sylladex** is a mutable, structured collection of values. Unlike arrays, syl
 
 Each sylladex type defines its own capacity model (fixed-size with overflow ejection, or unbounded), its own insertion rule, and its own read access points. Slots and nodes may hold any value (INTEGER, FLOAT, STRING, BOOLEAN, VOID, ARRAY, MAP, or another sylladex); element types need not be uniform within a single sylladex.
 
-The currently defined sylladex types are **STACK**, **QUEUE**, **TREE**, **HASHMAP**, **OUIJA**, **BOTTLE**, **TECHHOP**, and **JUJU**.
+The currently defined sylladex types are STACK, QUEUE, TREE, HASHMAP, OUIJA, BOTTLE, TECHHOP, and JUJU.
 
 > *Naming note:* Sylladices are named after the Homestuck inventory system of the same name, in which most "fetch modi" impose deliberately inconvenient rules on item retrieval. !~ATH preserves this inconvenience: every operation displaces or consumes something, and the choice of sylladex type is a commitment to a particular flavor of inconvenience. `STACK`, `QUEUE`, and `TREE` are not exactly like the typical abstract data types of the same name
 
@@ -1589,9 +1589,9 @@ import timer T(1s);
 
 !~ATH uses a **single-threaded event loop** for all execution. This has important implications:
 
-1. **No true parallelism**: Only one piece of code runs at a time
-2. **Cooperative yielding**: Code yields control at ~ATH wait points
-3. **Asynchronous death**: Entity deaths are processed via the event loop, never inline
+1. No true parallelism: Only one piece of code runs at a time
+2. Cooperative yielding: Code yields control at ~ATH wait points
+3. Asynchronous death: Entity deaths are processed via the event loop, never inline
 
 ### Death Notification
 
