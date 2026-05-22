@@ -65,21 +65,30 @@ OUIJA BOTTLE TECHHOP JUJU
 
 ### Literals
 
-**Integers**: Decimal digits, optionally prefixed with `-`
+#### Integers
+
+Decimal digits, optionally prefixed with `-`
+
 ```
 42
 -7
 0
 ```
 
-**Floats**: Decimal digits with a decimal point, optionally prefixed with `-`
+#### Floats
+
+Decimal digits with a decimal point, optionally prefixed with `-`
+
 ```
 3.14
 -0.5
 0.0
 ```
 
-**Strings**: Double-quoted, with escape sequences
+#### Strings
+
+Double-quoted, with escape sequences
+
 ```
 "hello"
 "line1\nline2"
@@ -92,18 +101,23 @@ Escape sequences:
 - `\n` — newline
 - `\t` — tab
 
-**Booleans**:
+#### Booleans
+
 ```
 ALIVE   // truthy
 DEAD    // falsy
 ```
 
-**Void**:
+#### Void
+
 ```
 VOID    // absence of value
 ```
 
-**Arrays**: Square brackets, comma-separated
+#### Arrays
+
+Square brackets, comma-separated
+
 ```
 [1, 2, 3]
 ["a", "b", "c"]
@@ -111,7 +125,10 @@ VOID    // absence of value
 []
 ```
 
-**Maps**: Curly braces, colon-separated key-value pairs
+#### Maps
+
+Curly braces, colon-separated key-value pairs
+
 ```
 {name: "Karkat", age: 6}
 {x: 1, y: 2}
@@ -648,7 +665,8 @@ x = x + 1;
 
 ### Operators
 
-**Arithmetic** (INTEGER and FLOAT):
+#### Arithmetic
+
 | Operator |                   Description                    |
 |----------|------------------------------------------------|
 | `+`      | Addition (also string concatenation)             |
@@ -657,7 +675,8 @@ x = x + 1;
 | `/`      | Division (integer division for INTEGER operands) |
 | `%`      | Modulo                                           |
 
-**Bitwise** (INTEGER only):
+#### Bitwise
+
 | Operator |      Description       |
 |---------|------------------------|
 | `&`      | Bitwise AND            |
@@ -667,7 +686,8 @@ x = x + 1;
 | `<<`     | Left shift             |
 | `>>`     | Right shift            |
 
-**Comparison** (returns BOOLEAN):
+#### Comparison
+
 | Operator |      Description      |
 |----------|----------------------|
 | `==`     | Equal                 |
@@ -677,21 +697,23 @@ x = x + 1;
 | `<=`     | Less than or equal    |
 | `>=`     | Greater than or equal |
 
-**Logical** (operate on truthiness):
+#### Logical
+
 | Operator |         Description         |
 |----------|----------------------------|
 | `AND`    | Logical and (short-circuit) |
 | `OR`     | Logical or (short-circuit)  |
 | `NOT`    | Logical negation            |
 
-**Indexing**:
+#### Indexing
+
 ```
 arr[0]          // array index (0-based)
 map["key"]      // map access with string
 map.key         // map access with identifier (equivalent to map["key"])
 ```
 
-**Operator Precedence** (highest to lowest):
+#### Operator Precedence
 1. `.` `[]` (member access, indexing)
 2. `NOT` `-` `~` (unary negation, bitwise NOT)
 3. `*` `/` `%`
@@ -709,14 +731,16 @@ Parentheses override precedence.
 
 ### Control Flow
 
-**Conditional**:
+#### Conditional
+
 ```
 SHOULD condition {
     // executes if truthy
 }
 ```
 
-**Conditional with alternative**:
+#### Conditional with alternative
+
 ```
 SHOULD condition {
     // executes if truthy
@@ -725,7 +749,8 @@ SHOULD condition {
 }
 ```
 
-**Chained conditional**:
+#### Chained conditional
+
 ```
 SHOULD condition1 {
     // ...
@@ -740,7 +765,8 @@ SHOULD condition1 {
 
 ### Functions (Rites)
 
-**Definition**:
+#### Definition
+
 ```
 RITE functionName(param1, param2) {
     // body
@@ -748,17 +774,20 @@ RITE functionName(param1, param2) {
 }
 ```
 
-**Calling**:
+#### Calling
+
 ```
 BIRTH result WITH functionName(arg1, arg2);
 ```
 
-**Return value**:
+#### Return value
+
 - `BEQUEATH value;` returns a value and exits the rite
 - If no BEQUEATH is reached, the rite returns `VOID`
 - BEQUEATH with no value returns `VOID`
 
-**Example**:
+#### Example
+
 ```
 RITE factorial(n) {
     SHOULD n <= 1 {
@@ -775,7 +804,8 @@ Note: Recursion is allowed but deep recursion may hit stack limits. For iteratio
 
 ### Error Handling
 
-**Try-catch equivalent**:
+#### Try-catch equivalent
+
 ```
 ATTEMPT {
     // code that might fail
@@ -788,7 +818,8 @@ ATTEMPT {
 
 The `error` variable in SALVAGE is a STRING describing the error.
 
-**Throwing errors**:
+#### Throwing errors
+
 ```
 CONDEMN "Something went wrong";
 ```
@@ -1081,7 +1112,7 @@ A single `CAPTCHALOGUE` or `EJECT` operation is atomic with respect to branch sc
 
 A STACK is a fixed-size, LIFO (last-in, first-out) sylladex. Both writes and reads operate at the **front** of the stack (slot 0).
 
-**Initialization:**
+#### Initialization
 
 ```
 BIRTH S WITH STACK(3);   // STACK[VOID, VOID, VOID]
@@ -1089,11 +1120,15 @@ BIRTH S WITH STACK(3);   // STACK[VOID, VOID, VOID]
 
 The size argument must be a non-negative integer. Negative sizes are a runtime error. Size is fixed at initialization and cannot change.
 
-**Write** (`CAPTCHALOGUE expr INTO S`): Inserts a value into slot 0. All existing slots shift one position toward higher indices. The value previously occupying the final slot is ejected (discarded).
+#### Write
 
-**Read** (`EJECT FROM S`): Removes and returns the value in slot 0. All remaining slots shift one position toward lower indices, and the final slot is refilled with `VOID`.
+`CAPTCHALOGUE expr INTO S` — Inserts a value into slot 0. All existing slots shift one position toward higher indices. The value previously occupying the final slot is ejected (discarded).
 
-**Example:**
+#### Read
+
+`EJECT FROM S` — Removes and returns the value in slot 0. All remaining slots shift one position toward lower indices, and the final slot is refilled with `VOID`.
+
+#### Example
 
 ```
 BIRTH S WITH STACK(3);
@@ -1113,11 +1148,15 @@ UTTER(STRING(S));                // STACK[5, 3, VOID]
 THIS.DIE();
 ```
 
-**Truthiness:** Truthy if any slot holds a non-`VOID` value; falsy if all slots are `VOID` (including zero-size stacks, vacuously).
+#### Truthiness
 
-**Degenerate case:** `STACK(0)` is legal. `CAPTCHALOGUE x INTO STACK(0)` discards `x` immediately. `EJECT FROM STACK(0)` returns `VOID`. The sylladex is unchanged in both cases.
+Truthy if any slot holds a non-`VOID` value; falsy if all slots are `VOID` (including zero-size stacks, vacuously).
 
-**Type and representation:**
+#### Degenerate case
+
+`STACK(0)` is legal. `CAPTCHALOGUE x INTO STACK(0)` discards `x` immediately. `EJECT FROM STACK(0)` returns `VOID`. The sylladex is unchanged in both cases.
+
+#### Type and representation
 - `TYPEOF(STACK(...))` returns `"STACK"`
 - `STRING(STACK(3))` returns `"STACK[VOID, VOID, VOID]"`
 
@@ -1125,7 +1164,7 @@ THIS.DIE();
 
 A QUEUE is a fixed-size, FIFO (first-in, first-out) sylladex. Writes operate at the **front** (slot 0); reads operate at the **back** (slot *n*−1).
 
-**Initialization:**
+#### Initialization
 
 ```
 BIRTH Q WITH QUEUE(5);   // QUEUE[VOID, VOID, VOID, VOID, VOID]
@@ -1133,11 +1172,15 @@ BIRTH Q WITH QUEUE(5);   // QUEUE[VOID, VOID, VOID, VOID, VOID]
 
 The size argument must be a non-negative integer. Negative sizes are a runtime error. Size is fixed at initialization and cannot change.
 
-**Write** (`CAPTCHALOGUE expr INTO Q`): Inserts a value into slot 0. All existing slots shift one position toward higher indices. The value previously occupying the final slot is ejected (discarded). *(Identical to STACK write.)*
+#### Write
 
-**Read** (`EJECT FROM Q`): Removes and returns the value in the final slot (slot *n*−1). All remaining slots shift one position toward higher indices to fill the vacated slot, and slot 0 is refilled with `VOID`.
+`CAPTCHALOGUE expr INTO Q` — Inserts a value into slot 0. All existing slots shift one position toward higher indices. The value previously occupying the final slot is ejected (discarded). *(Identical to STACK write.)*
 
-**Example:**
+#### Read
+
+`EJECT FROM Q` — Removes and returns the value in the final slot (slot *n*−1). All remaining slots shift one position toward higher indices to fill the vacated slot, and slot 0 is refilled with `VOID`.
+
+#### Example
 
 ```
 BIRTH Q WITH QUEUE(3);
@@ -1156,11 +1199,15 @@ UTTER(STRING(Q));                // QUEUE[VOID, 2, 1]
 THIS.DIE();
 ```
 
-**Truthiness:** Truthy if any slot holds a non-`VOID` value; falsy if all slots are `VOID` (including zero-size queues, vacuously).
+#### Truthiness
 
-**Degenerate case:** `QUEUE(0)` is legal. `CAPTCHALOGUE x INTO QUEUE(0)` discards `x` immediately. `EJECT FROM QUEUE(0)` returns `VOID`. The sylladex is unchanged in both cases.
+Truthy if any slot holds a non-`VOID` value; falsy if all slots are `VOID` (including zero-size queues, vacuously).
 
-**Type and representation:**
+#### Degenerate case
+
+`QUEUE(0)` is legal. `CAPTCHALOGUE x INTO QUEUE(0)` discards `x` immediately. `EJECT FROM QUEUE(0)` returns `VOID`. The sylladex is unchanged in both cases.
+
+#### Type and representation
 - `TYPEOF(QUEUE(...))` returns `"QUEUE"`
 - `STRING(QUEUE(2))` returns `"QUEUE[VOID, VOID]"`
 
@@ -1168,7 +1215,7 @@ THIS.DIE();
 
 A TREE is an unbounded binary-search-tree sylladex. Unlike STACK and QUEUE, it has no declared size and grows as values are captchalogued. Internal nodes are inaccessible; only the **root** and **leaf** nodes can be read.
 
-**Initialization:**
+#### Initialization
 
 ```
 BIRTH T1 WITH TREE();             // unbalanced (default)
@@ -1178,7 +1225,10 @@ BIRTH T2 WITH TREE(ALIVE);        // AVL-rebalancing on insert
 
 The optional argument is a BOOLEAN indicating whether to enable auto-balancing. `ALIVE` enables AVL-style rebalancing after each insert; `DEAD` (the default if no argument is given) leaves the tree as inserted. The flag is set at birth and cannot change. Although `ALIVE` and `DEAD` are the canonical arguments, any truthy value enables balancing and any falsy value disables it.
 
-**Write** (`CAPTCHALOGUE expr INTO T`):
+#### Write
+
+`CAPTCHALOGUE expr INTO T`:
+
 - If the tree is empty, the new value becomes the root.
 - Otherwise, the new value is compared against the root using string-coerced lexicographic comparison (`STRING(new) < STRING(node)` goes left, otherwise right). Recursion continues until an empty child slot is reached, where the new value is placed.
 - Equal-valued items (where `STRING(new) == STRING(node)`) are placed in the right subtree.
@@ -1186,7 +1236,9 @@ The optional argument is a BOOLEAN indicating whether to enable auto-balancing. 
 
 Trees are unbounded and never overflow. Captchaloguing never ejects an existing value.
 
-**Read** (`EJECT ROOT FROM T` or `EJECT LEAF FROM T`):
+#### Read
+
+`EJECT ROOT FROM T` or `EJECT LEAF FROM T`:
 
 Trees require an explicit modifier. Bare `EJECT FROM T` on a tree is a runtime error.
 
@@ -1195,7 +1247,7 @@ Trees require an explicit modifier. Bare `EJECT FROM T` on a tree is a runtime e
 
 Note that `EJECT ROOT` always returns an array (or `[]` for an empty tree), while `EJECT LEAF` returns a bare value or `VOID`. These return shapes are asymmetric by design.
 
-**Example:**
+#### Example
 
 ```
 BIRTH T WITH TREE();
@@ -1222,9 +1274,11 @@ UTTER(STRING(T));                // TREE[]
 THIS.DIE();
 ```
 
-**Truthiness:** Truthy if non-empty; falsy if empty.
+#### Truthiness
 
-**Type and representation:**
+Truthy if non-empty; falsy if empty.
+
+#### Type and representation
 - `TYPEOF(TREE())` returns `"TREE"`
 - `STRING()` represents a tree as `TREE[<root>: <in-order array>]`, e.g. `TREE["banana": ["apple", "banana", "cherry"]]`. An empty tree is `TREE[]`.
 
@@ -1232,7 +1286,7 @@ THIS.DIE();
 
 A HASHMAP is a fixed-size, key-indexed sylladex. Values are stored in slots determined by hashing their keys. Unlike STACK and QUEUE, retrieval is by key (or by slot index) rather than by position-in-order.
 
-**Initialization:**
+#### Initialization
 
 ```
 BIRTH H WITH HASHMAP(8);                  // size 8, default hash function
@@ -1245,7 +1299,9 @@ The optional second argument is a rite of signature `RITE(string) -> integer`. T
 
 The hash function is fixed at birth and cannot change.
 
-**Write** (`CAPTCHALOGUE value WITH key INTO H`):
+#### Write
+
+`CAPTCHALOGUE value WITH key INTO H`:
 
 The `WITH key` clause is **required** for hashmaps. `CAPTCHALOGUE value INTO H` without a key is a syntax error.
 
@@ -1254,7 +1310,9 @@ The `WITH key` clause is **required** for hashmaps. `CAPTCHALOGUE value INTO H` 
 - The value (paired internally with its key) is placed in that slot.
 - If the slot was already occupied, the previous (key, value) pair is ejected (discarded). This includes the case where the same key is captchalogued again — the old value is overwritten.
 
-**Read** (`EJECT key FROM H` or `EJECT SLOT n FROM H`):
+#### Read
+
+`EJECT key FROM H` or `EJECT SLOT n FROM H`:
 
 - `EJECT expr FROM H` — by-name access. The expression is coerced to a string, hashed to find the slot, and the slot's stored key is compared to the requested key.
   - If the slot is empty: returns `VOID`.
@@ -1265,7 +1323,7 @@ The `WITH key` clause is **required** for hashmaps. `CAPTCHALOGUE value INTO H` 
 
 Note that `EJECT 3 FROM H` looks up the key `"3"` (via string coercion), while `EJECT SLOT 3 FROM H` looks up the physical slot at index 3. These are different operations.
 
-**Example:**
+#### Example
 
 ```
 // HASHMAP(4) with the default hash function:
@@ -1296,35 +1354,53 @@ UTTER(STRING(empty));            // VOID
 THIS.DIE();
 ```
 
-**Truthiness:** Truthy if any slot is occupied; falsy if all slots are empty.
+#### Truthiness
 
-**Type and representation:**
+Truthy if any slot is occupied; falsy if all slots are empty.
+
+#### Type and representation
+
 - `TYPEOF(HASHMAP(...))` returns `"HASHMAP"`
 - `STRING()` represents a hashmap by showing all slots in order, with occupied slots formatted as `<key>-><value>` and empty slots as `VOID`. Example: `HASHMAP[VOID, VOID, VOID, "cd"->"second"]`.
 
-**Equality:** Two hashmaps are `==` iff they have the same size, the same hash function (compared by rite identity — not by extensional equivalence of outputs), and the same (key, value) pair in every slot. Two hashmaps with different hash functions are never `==` even if they happen to hold identical contents, since their subsequent operations would diverge.
+#### Equality
+
+Two hashmaps are `==` iff they have the same size, the same hash function (compared by rite identity — not by extensional equivalence of outputs), and the same (key, value) pair in every slot. Two hashmaps with different hash functions are never `==` even if they happen to hold identical contents, since their subsequent operations would diverge.
 
 ### OUIJA
 
 An OUIJA is a fixed-size sylladex where both writes and reads target uniformly random slots. The spirits decide what gets stored where, and what gets retrieved.
 
-**Initialization:** `BIRTH O WITH OUIJA(n);` — size *n* must be a positive integer.
+#### Initialization
 
-**Write** (`CAPTCHALOGUE value INTO O`): Selects a uniformly random slot index. The value previously at that slot is ejected (discarded). The new value is placed there.
+`BIRTH O WITH OUIJA(n);` — size *n* must be a positive integer.
 
-**Read** (`EJECT FROM O`): Selects a uniformly random slot index. Returns the value at that slot (possibly `VOID` if the spirits picked an empty one) and clears the slot.
+#### Write
 
-**Truthiness:** Truthy if any slot is occupied; falsy otherwise.
+`CAPTCHALOGUE value INTO O` — Selects a uniformly random slot index. The value previously at that slot is ejected (discarded). The new value is placed there.
 
-**Type and representation:**
+#### Read
+
+`EJECT FROM O` — Selects a uniformly random slot index. Returns the value at that slot (possibly `VOID` if the spirits picked an empty one) and clears the slot.
+
+#### Truthiness
+
+Truthy if any slot is occupied; falsy otherwise.
+
+#### Type and representation
+
 - `TYPEOF(OUIJA(...))` returns `"OUIJA"`
 - `STRING()` represents an ouija as `OUIJA[VOID, "hammer", VOID, "skateboard"]`
 
-**Equality:** Two ouijas are `==` iff same size and same contents in same positions.
+#### Equality
 
-**Concurrency:** Random selection is implementation-defined and not seedable. Concurrent operations on the same OUIJA get independent random choices.
+Two ouijas are `==` iff same size and same contents in same positions.
 
-**Example:**
+#### Concurrency
+
+Random selection is implementation-defined and not seedable. Concurrent operations on the same OUIJA get independent random choices.
+
+#### Example
 
 ```
 BIRTH O WITH OUIJA(4);
@@ -1347,11 +1423,17 @@ A BOTTLE is a fixed-size sylladex where each slot is single-use: once read, the 
 
 Slots have three states: *empty* (no value, usable), *occupied* (holds a value), or *dead* (used up, unusable).
 
-**Initialization:** `BIRTH B WITH BOTTLE(n);` — size *n* must be a positive integer. All slots start *empty*.
+#### Initialization
 
-**Write** (`CAPTCHALOGUE value INTO B`): Places the value in the lowest-indexed *empty* slot, which becomes *occupied*. If there is no empty slot (all are occupied or dead), the value is discarded.
+`BIRTH B WITH BOTTLE(n);` — size *n* must be a positive integer. All slots start *empty*.
 
-**Read** (`EJECT FROM B` or `EJECT SLOT n FROM B`):
+#### Write
+
+`CAPTCHALOGUE value INTO B` — Places the value in the lowest-indexed *empty* slot, which becomes *occupied*. If there is no empty slot (all are occupied or dead), the value is discarded.
+
+#### Read
+
+`EJECT FROM B` or `EJECT SLOT n FROM B`:
 
 - `EJECT FROM B` — reads from the lowest-indexed non-dead slot. If that slot is *occupied*, returns its value. If that slot is *empty*, returns `VOID`. Either way, the slot becomes *dead*. If all slots are dead, runtime error.
 
@@ -1359,17 +1441,22 @@ Slots have three states: *empty* (no value, usable), *occupied* (holds a value),
 
 Slot-dead and all-dead errors can be recovered via `ATTEMPT/SALVAGE`.
 
-**Truthiness:** Truthy if any slot is *occupied*; falsy otherwise. Dead slots do not affect truthiness.
+#### Truthiness
+
+Truthy if any slot is *occupied*; falsy otherwise. Dead slots do not affect truthiness.
 
 `COUNT(B)` returns the number of *occupied* slots; dead slots are not counted.
 
-**Type and representation:**
+#### Type and representation
+
 - `TYPEOF(BOTTLE(...))` returns `"BOTTLE"`
 - `STRING()` shows occupied slots as values, empty slots as `VOID`, and dead slots as `DEAD`, e.g. `BOTTLE[VOID, "msg1", DEAD, VOID, "msg2"]`
 
-**Equality:** Two bottles are `==` iff same size and same per-slot state (same values in occupied slots, same dead status in dead slots, same empty status in empty slots).
+#### Equality
 
-**Example:**
+Two bottles are `==` iff same size and same per-slot state (same values in occupied slots, same dead status in dead slots, same empty status in empty slots).
+
+#### Example
 
 ```
 BIRTH B WITH BOTTLE(3);
@@ -1401,7 +1488,7 @@ THIS.DIE();
 
 A TECHHOP is a fixed-size 2D sylladex organized into **groove rows** and **shade columns**. Membership in each row and column is determined by user-supplied predicate rites. A value can only be placed in a cell where both its row's groove-predicate and its column's shade-predicate evaluate truthy.
 
-**Initialization:**
+#### Initialization
 
 ```
 BIRTH TH WITH TECHHOP(grooves, shades, groovePredicate, shadePredicate);
@@ -1414,7 +1501,9 @@ BIRTH TH WITH TECHHOP(grooves, shades, groovePredicate, shadePredicate);
 
 Both predicates are fixed at birth.
 
-**Write** (`CAPTCHALOGUE value INTO TH`):
+#### Write
+
+`CAPTCHALOGUE value INTO TH`:
 
 1. The modus evaluates `groovePredicate(value, g)` for each groove index `g`, collecting the set of valid grooves.
 2. Similarly evaluates `shadePredicate(value, s)` for each shade index `s`, collecting the set of valid shades.
@@ -1425,21 +1514,28 @@ Both predicates are fixed at birth.
 
 Unlike HASHMAP, collisions do not overwrite — occupied cells are inviolate until explicitly ejected.
 
-**Read** (`EJECT GROOVE g SHADE s FROM TH`): Returns and clears the cell at (groove `g`, shade `s`). If the cell is empty, returns `VOID`. If `g` or `s` is out of range, runtime error.
+#### Read
+
+`EJECT GROOVE g SHADE s FROM TH` — Returns and clears the cell at (groove `g`, shade `s`). If the cell is empty, returns `VOID`. If `g` or `s` is out of range, runtime error.
 
 Bare `EJECT FROM TH` is a runtime error — TECHHOP requires explicit positional access.
 
-**Truthiness:** Truthy if any cell is occupied; falsy otherwise.
+#### Truthiness
+
+Truthy if any cell is occupied; falsy otherwise.
 
 `COUNT(TH)` returns the number of occupied cells.
 
-**Type and representation:**
+#### Type and representation
+
 - `TYPEOF(TECHHOP(...))` returns `"TECHHOP"`
 - `STRING()` shows the grid as nested arrays, rows-first, e.g. `TECHHOP[[VOID, "GameBro", VOID], ["Faygo", VOID, "sword"]]`
 
-**Equality:** Two techhops are `==` iff same dimensions, same predicate rites (by identity, not extensional equivalence), and same cell contents.
+#### Equality
 
-**Example:**
+Two techhops are `==` iff same dimensions, same predicate rites (by identity, not extensional equivalence), and same cell contents.
+
+#### Example
 
 ```
 // Groove 0 holds strings; groove 1 holds integers.
@@ -1490,31 +1586,46 @@ A JUJU is a fixed-size, slot-indexed sylladex enforcing that each value passes b
 
 JUJUs maintain internal references to bifurcate branches; these references are interpreter-managed bookkeeping, not first-class values. A user cannot retrieve a branch reference from a JUJU or compare them directly. The relevant comparisons (writer-of-slot vs. current-branch, alive/dead status of participants) are performed by the interpreter at the moment of each operation.
 
-**Initialization:** `BIRTH J WITH JUJU(n);` — size *n* must be a positive integer. No branch arguments; participants are determined dynamically by use.
+#### Initialization
 
-**Write** (`CAPTCHALOGUE value INTO J SLOT n`): Places the value in slot *n* and records the current branch as the slot's writer. The current branch is added to the JUJU's set of *participants*. If slot *n* is already occupied, runtime error. If *n* is out of range, runtime error. If executed outside any branch (e.g., at top level, before any `bifurcate`), runtime error — JUJUs require a branch context.
+`BIRTH J WITH JUJU(n);` — size *n* must be a positive integer. No branch arguments; participants are determined dynamically by use.
 
-**Read** (`EJECT SLOT n FROM J`): Reads slot *n*. The current branch must be a different branch from the one recorded as the slot's writer; if it is the same branch, runtime error. The current branch is added to the JUJU's set of *participants*. Returns the value and clears the slot (the slot becomes empty and has no recorded writer). If slot *n* is empty, returns `VOID` without error (but still records the current branch as a participant). If *n* is out of range, runtime error. If executed outside any branch, runtime error.
+#### Write
+
+`CAPTCHALOGUE value INTO J SLOT n` — Places the value in slot *n* and records the current branch as the slot's writer. The current branch is added to the JUJU's set of *participants*. If slot *n* is already occupied, runtime error. If *n* is out of range, runtime error. If executed outside any branch (e.g., at top level, before any `bifurcate`), runtime error — JUJUs require a branch context.
+
+#### Read
+
+`EJECT SLOT n FROM J` — Reads slot *n*. The current branch must be a different branch from the one recorded as the slot's writer; if it is the same branch, runtime error. The current branch is added to the JUJU's set of *participants*. Returns the value and clears the slot (the slot becomes empty and has no recorded writer). If slot *n* is empty, returns `VOID` without error (but still records the current branch as a participant). If *n* is out of range, runtime error. If executed outside any branch, runtime error.
 
 Bare `CAPTCHALOGUE value INTO J` and bare `EJECT FROM J` are syntax errors. JUJUs require explicit slot addressing.
 
-**Participants:** Any branch that successfully performs a CAPTCHALOGUE or EJECT on the JUJU becomes a participant. Participation is permanent until the branch dies.
+#### Participants
 
-**Death:** A JUJU dies when fewer than two of its participants remain alive. While at least two participants are alive, the JUJU functions normally. A JUJU with zero or one participants is alive but inert; operations still work and add new participants, but if a JUJU's only participant dies before a second one joins, the JUJU dies.
+Any branch that successfully performs a CAPTCHALOGUE or EJECT on the JUJU becomes a participant. Participation is permanent until the branch dies.
+
+#### Death
+
+A JUJU dies when fewer than two of its participants remain alive. While at least two participants are alive, the JUJU functions normally. A JUJU with zero or one participants is alive but inert; operations still work and add new participants, but if a JUJU's only participant dies before a second one joins, the JUJU dies.
 
 Operations on a dead JUJU are runtime errors (catchable via `ATTEMPT/SALVAGE`).
 
-**Truthiness:** Truthy if any slot is occupied; falsy otherwise. A dead JUJU is falsy regardless of contents.
+#### Truthiness
+
+Truthy if any slot is occupied; falsy otherwise. A dead JUJU is falsy regardless of contents.
 
 `COUNT(J)` returns the number of occupied slots; zero for a dead JUJU.
 
-**Type and representation:**
+#### Type and representation
+
 - `TYPEOF(JUJU(...))` returns `"JUJU"`
 - `STRING()` shows slots with a diagnostic writer annotation; the exact format of the writer label is implementation-defined since branches are not first-class values. A common rendering is `JUJU[VOID, "msg"<-#1, VOID]` where `#1` is some implementation-chosen identifier (branch name, internal ID, or similar). Empty slots and unrecorded-writer slots render as `VOID`.
 
-**Equality:** Two JUJUs are `==` iff same size, same slot contents with same writer branches, same participant set, and same death status.
+#### Equality
 
-**Example:**
+Two JUJUs are `==` iff same size, same slot contents with same writer branches, same participant set, and same death status.
+
+#### Example
 
 ```
 BIRTH J WITH JUJU(2);
