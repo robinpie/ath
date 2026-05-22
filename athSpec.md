@@ -2030,26 +2030,6 @@ THIS.DIE();
 
 ## Implementation Notes
 
-### Recommended Interpreter Architecture
-
-1. **Lexer**: Tokenize source into tokens
-2. **Parser**: Build AST from tokens
-3. **Interpreter**: Walk AST with async execution
-   - Use Python's `asyncio` for concurrency
-   - Entity watchers become async tasks
-   - ~ATH loops await entity death events
-4. **Entity Manager**: Track entity lifecycles
-   - Each entity has an `asyncio.Event` for death notification
-   - `.DIE()` sets the event
-   - `~ATH` loops await the event
-
-### Entity Implementation Suggestions
-
-- **timer**: `asyncio.sleep()` then die
-- **process**: `asyncio.create_subprocess_exec()`, await completion
-- **connection**: `asyncio.open_connection()`, detect close
-- **watcher**: Polling loop or `watchdog` library for file events
-
 ### Error Handling
 
 Runtime errors should:
