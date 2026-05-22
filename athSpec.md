@@ -564,7 +564,7 @@ Each branch has its own execution context:
 
 ### Memory Model
 
-!~ATH uses **cooperative concurrency** (single-threaded event loop), not true parallelism. This means:
+!~ATH uses cooperative concurrency (single-threaded event loop), not true parallelism. This means:
 
 - Only one branch executes at a time
 - Branches yield at ~ATH wait points (when waiting for an entity to die)
