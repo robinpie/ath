@@ -1,0 +1,6 @@
+
+            BIRTH result WITH 0;
+            import timer T(1ms);
+            ~ATH(T) { } EXECUTE(result = 42;);
+            THIS.DIE();
+        

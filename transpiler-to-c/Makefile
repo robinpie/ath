@@ -40,8 +40,12 @@ $(LIB): $(OBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Run the !~ATH-based test harness (tests/harness.~ATH). The harness itself
+# is built with the frozen tests/athtoc-stable, so a broken mainline athtoc
+# still lets the suite run; each test case is transpiled by $(BIN), the
+# mainline transpiler under test.
 test: $(LIB) $(BIN)
-	ATHTOC=$$PWD/$(BIN) python3 -m pytest tests/ -v
+	tests/run.sh
 
 # Quick smoke test using the self-hosted binary.
 smoke: $(BIN)
@@ -54,3 +58,4 @@ smoke: $(BIN)
 # only if you have another way to rebuild it.
 clean:
 	rm -f $(OBJS) $(LIB) $(BOOTSTRAP_C)
+	rm -rf tests/work

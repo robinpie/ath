@@ -1,0 +1,13 @@
+
+            BIRTH count WITH 0;
+            RITE step(n) {
+                SHOULD n <= 0 {
+                    UTTER("done at " + STRING(count));
+                    BEQUEATH VOID;
+                }
+                count = count + 1;
+                import timer T(1ms);
+                ~ATH(!T) {} EXECUTE(step(n - 1));
+            }
+            step(200);
+        

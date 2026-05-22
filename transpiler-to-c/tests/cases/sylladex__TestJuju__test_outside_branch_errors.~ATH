@@ -1,0 +1,9 @@
+
+BIRTH J WITH JUJU(2);
+ATTEMPT {
+    CAPTCHALOGUE "x" INTO J SLOT 0;
+    UTTER("no error");
+} SALVAGE err {
+    UTTER("caught");
+}
+THIS.DIE();

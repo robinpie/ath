@@ -1,0 +1,1 @@
+UTTER(TYPEOF(1 == 1)); UTTER(TYPEOF(1 < 2)); THIS.DIE();

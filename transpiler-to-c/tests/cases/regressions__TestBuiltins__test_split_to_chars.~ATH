@@ -1,0 +1,6 @@
+
+            BIRTH parts WITH SPLIT("abc", "");
+            UTTER(STRING(parts));
+            UTTER(LENGTH(parts));
+            THIS.DIE();
+        

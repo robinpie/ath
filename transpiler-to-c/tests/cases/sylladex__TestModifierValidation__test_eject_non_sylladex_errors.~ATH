@@ -1,0 +1,7 @@
+
+ATTEMPT {
+    BIRTH x WITH 42;
+    BIRTH y WITH EJECT FROM x;
+    UTTER(y);
+} SALVAGE err { UTTER("caught"); }
+THIS.DIE();

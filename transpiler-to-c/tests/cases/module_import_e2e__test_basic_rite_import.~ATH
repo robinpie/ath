@@ -1,0 +1,6 @@
+
+            import watcher W("module_import_e2e__test_basic_rite_import.mod0.~ATH");
+            BIRTH result WITH W.add(3, 4);
+            UTTER(result);
+            THIS.DIE();
+        

@@ -1,0 +1,10 @@
+
+            BIRTH x WITH 1;
+            RITE shadow() {
+                BIRTH x WITH 99;
+                BEQUEATH x;
+            }
+            UTTER(shadow());
+            UTTER(x);
+            THIS.DIE();
+        

@@ -1,0 +1,1 @@
+RITE add(a, b) { BEQUEATH a + b; } UTTER(add(2, 3)); THIS.DIE();

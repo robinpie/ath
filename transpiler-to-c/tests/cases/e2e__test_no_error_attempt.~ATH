@@ -1,0 +1,11 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            ATTEMPT {
+                UTTER("no error");
+            } SALVAGE err {
+                UTTER("caught: " + err);
+            }
+        );
+        THIS.DIE();
+    

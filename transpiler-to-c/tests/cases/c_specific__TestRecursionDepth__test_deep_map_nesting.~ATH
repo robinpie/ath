@@ -1,0 +1,5 @@
+
+            BIRTH m WITH {a: {b: {c: 42}}};
+            UTTER(m.a.b.c);
+            THIS.DIE();
+        

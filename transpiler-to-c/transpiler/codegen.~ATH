@@ -1008,34 +1008,53 @@ RITE genAsyncSegments(stmts, fname, ctx) {
     BEQUEATH ctx2;
 }
 
-// genAsyncCond: handle SHOULD cond { async_then } [LEST { sync_else }] in async context
+// genAsyncCond: handle SHOULD cond { then } [LEST { els }] in async context.
+// Either branch may contain async work (a ~ATH wait or an async rite call),
+// so each is generated as its own CPS segment: the true path continues the
+// current segment, the false path jumps to a fresh segment.
 RITE genAsyncCond(condNode, post, fname, ctx) {
     BIRTH sv WITH "f->scope";
     BIRTH rctx WITH SET(ctx,"sv",sv);
 
-    // Evaluate condition
+    // Evaluate condition.
     BIRTH rc WITH genExpr(condNode.cond, rctx); rctx = rc.ctx;
     ctx = SET(ctx,"n",rctx.n); ctx = SET(ctx,"tc",rctx.tc);
 
-    // Build false-path code: else stmts + sync post stmts + cleanup + return
-    BIRTH fpCode WITH "";
+    // Normalise the else branch to a statement list: an array of statements
+    // as-is, an else-if (Cond node) wrapped in a singleton list, VOID empty.
+    BIRTH elseStmts WITH [];
     SHOULD TYPEOF(condNode.els) == "ARRAY" {
-        BIRTH ectx WITH SET(resetTc(ctx),"sv",sv);
-        BIRTH re WITH genSyncStmtList(condNode.els, 0, 2, ectx);
-        fpCode = fpCode + re.s;
-        ctx = SET(ctx,"n",re.ctx.n);
+        elseStmts = condNode.els;
     }
-    BIRTH pctx WITH SET(resetTc(ctx),"sv",sv);
-    BIRTH rp WITH genSyncStmtList(post, 0, 2, pctx);
-    ctx = SET(ctx,"n",rp.ctx.n);
+    SHOULD TYPEOF(condNode.els) == "MAP" AND condNode.els.t == "Cond" {
+        elseStmts = [condNode.els];
+    }
 
-    BIRTH falseBlock WITH "    if (!ath_is_truthy("+rc.t+")) {\n"+
-        fpCode + rp.s + ctx.cl + "        return;\n    }\n";
-    ctx = emitDef(ctx, rc.stmts + falseBlock);
+    // Reserve the false-path segment name.
+    BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
+    BIRTH elseName WITH "_s"+STRING(rn.v)+"_"+fname;
+    ctx = emitFwd(ctx, "static void "+elseName+"(AthCont*,AthValue);");
 
-    // True path: then_stmts + post via genAsyncSegments
+    // Dispatch: a false condition hands control to the false-path segment.
+    ctx = emitDef(ctx, rc.stmts +
+        "    if (!ath_is_truthy("+rc.t+")) { "+elseName+"((AthCont*)f,ath_void()); return; }\n");
+
+    // True path: then ++ post continues the current open segment. Close it
+    // here, the same way the rite/branch caller would close a tail segment.
     BIRTH thenAndPost WITH CONCAT(condNode.then, post);
-    BEQUEATH genAsyncSegments(thenAndPost, fname, resetTc(ctx));
+    ctx = genAsyncSegments(thenAndPost, fname, resetTc(ctx));
+    ctx = emitDef(ctx, ctx.cl + "    return;");
+    ctx = emitDef(ctx, "}");
+
+    // False path: a fresh segment running els ++ post, left open for the
+    // caller to close like any other tail segment.
+    ctx = emitDef(ctx, "static void "+elseName+"(AthCont *_self,AthValue _result) {");
+    ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
+    ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+    SHOULD ctx.cb { ctx = emitDef(ctx, "    ath_eventloop_set_current_branch(f->branch);"); }
+    BIRTH elseAndPost WITH CONCAT(elseStmts, post);
+    BEQUEATH genAsyncSegments(elseAndPost, fname, resetTc(ctx));
 }
 
 // genAsyncCallSplit: async rite call in async context

@@ -1,0 +1,1 @@
+ENTOMB PI WITH 3; ATTEMPT { PI = 4; UTTER("nope"); } SALVAGE e { UTTER("caught"); } THIS.DIE();

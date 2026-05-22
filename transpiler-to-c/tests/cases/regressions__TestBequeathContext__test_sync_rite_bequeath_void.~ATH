@@ -1,0 +1,9 @@
+
+            RITE log_it(x) {
+                UTTER("logging");
+                BEQUEATH;
+            }
+            BIRTH r WITH log_it(99);
+            UTTER(TYPEOF(r));
+            THIS.DIE();
+        

@@ -1,0 +1,6 @@
+
+            BIRTH m WITH {a: 1};
+            UTTER(TYPEOF(HAS(m, "a")));
+            UTTER(TYPEOF(HAS(m, "b")));
+            THIS.DIE();
+        

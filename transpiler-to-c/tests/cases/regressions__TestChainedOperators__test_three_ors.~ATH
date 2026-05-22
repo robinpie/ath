@@ -1,0 +1,5 @@
+
+            BIRTH r WITH DEAD OR DEAD OR ALIVE;
+            UTTER(r);
+            THIS.DIE();
+        

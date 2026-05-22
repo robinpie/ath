@@ -1,0 +1,13 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            RITE factorial(n) {
+                SHOULD n <= 1 {
+                    BEQUEATH 1;
+                }
+                BEQUEATH n * factorial(n - 1);
+            }
+            UTTER(factorial(5));
+        );
+        THIS.DIE();
+    

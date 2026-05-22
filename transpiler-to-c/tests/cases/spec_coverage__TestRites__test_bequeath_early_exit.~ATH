@@ -1,0 +1,1 @@
+RITE early() { BEQUEATH 1; UTTER("unreached"); } UTTER(early()); THIS.DIE();

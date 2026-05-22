@@ -1,0 +1,1 @@
+BIRTH x WITH 0; bifurcate THIS[A, B]; ~ATH(A) { } EXECUTE(x = x + 1); ~ATH(B) { } EXECUTE(x = x + 10); [A, B].DIE(); import timer T(5ms); ~ATH(T) {} EXECUTE(UTTER(x)); THIS.DIE();

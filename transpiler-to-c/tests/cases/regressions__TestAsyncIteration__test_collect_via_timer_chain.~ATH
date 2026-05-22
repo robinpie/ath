@@ -1,0 +1,14 @@
+
+            BIRTH result WITH [];
+            RITE collect(n, max) {
+                SHOULD n > max {
+                    UTTER(STRING(result));
+                    BEQUEATH VOID;
+                }
+                result = APPEND(result, n * 2);
+                import timer t(1ms);
+                ~ATH(t) {} EXECUTE(collect(n + 1, max));
+            }
+            collect(1, 5);
+            THIS.DIE();
+        

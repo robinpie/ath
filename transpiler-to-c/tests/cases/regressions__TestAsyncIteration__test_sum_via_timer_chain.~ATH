@@ -1,0 +1,14 @@
+
+            BIRTH total WITH 0;
+            RITE sum_to(n) {
+                SHOULD n <= 0 {
+                    UTTER(total);
+                    BEQUEATH VOID;
+                }
+                total = total + n;
+                import timer t(1ms);
+                ~ATH(t) {} EXECUTE(sum_to(n - 1));
+            }
+            sum_to(10);
+            THIS.DIE();
+        

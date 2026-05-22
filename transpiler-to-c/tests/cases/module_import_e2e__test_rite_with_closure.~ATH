@@ -1,0 +1,6 @@
+
+            import watcher W("module_import_e2e__test_rite_with_closure.mod0.~ATH");
+            BIRTH msg WITH W.greet("World");
+            UTTER(msg);
+            THIS.DIE();
+        

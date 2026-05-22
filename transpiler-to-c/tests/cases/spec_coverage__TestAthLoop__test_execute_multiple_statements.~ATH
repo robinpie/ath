@@ -1,0 +1,1 @@
+import timer T(1ms); ~ATH(T) {} EXECUTE(  BIRTH x WITH 5;   BIRTH y WITH x + 10;   UTTER(y)); THIS.DIE();

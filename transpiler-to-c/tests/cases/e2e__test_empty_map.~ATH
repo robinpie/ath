@@ -1,0 +1,8 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH m WITH {};
+            UTTER(LENGTH(KEYS(m)));
+        );
+        THIS.DIE();
+    

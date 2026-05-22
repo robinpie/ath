@@ -1,0 +1,6 @@
+
+ATTEMPT {
+    BIRTH x WITH 42;
+    CAPTCHALOGUE 1 INTO x;
+} SALVAGE err { UTTER("caught"); }
+THIS.DIE();

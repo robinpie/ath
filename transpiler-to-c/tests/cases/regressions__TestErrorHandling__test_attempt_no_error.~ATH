@@ -1,0 +1,8 @@
+
+            ATTEMPT {
+                UTTER("ok");
+            } SALVAGE e {
+                UTTER("should not run");
+            }
+            THIS.DIE();
+        

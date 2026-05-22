@@ -1,0 +1,8 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            ENTOMB PI WITH 3.14159;
+            UTTER(PI);
+        );
+        THIS.DIE();
+    

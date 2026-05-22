@@ -1,0 +1,13 @@
+
+            ATTEMPT {
+                ATTEMPT {
+                    CONDEMN "inner";
+                } SALVAGE e {
+                    UTTER("inner caught: " + e);
+                    CONDEMN "outer";
+                }
+            } SALVAGE e {
+                UTTER("outer caught: " + e);
+            }
+            THIS.DIE();
+        

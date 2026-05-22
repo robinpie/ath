@@ -1,0 +1,8 @@
+
+            RITE fib(n) {
+                SHOULD n <= 1 { BEQUEATH n; }
+                BEQUEATH fib(n-1) + fib(n-2);
+            }
+            UTTER(fib(10));
+            THIS.DIE();
+        

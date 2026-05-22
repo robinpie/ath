@@ -1,0 +1,15 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            ATTEMPT {
+                ATTEMPT {
+                    CONDEMN "inner";
+                } SALVAGE e1 {
+                    CONDEMN "outer";
+                }
+            } SALVAGE e2 {
+                UTTER("Got: " + e2);
+            }
+        );
+        THIS.DIE();
+    

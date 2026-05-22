@@ -1,0 +1,1 @@
+SHOULD NOT DEAD { UTTER("a"); } SHOULD NOT ALIVE { UTTER("b"); } LEST { UTTER("c"); } THIS.DIE();

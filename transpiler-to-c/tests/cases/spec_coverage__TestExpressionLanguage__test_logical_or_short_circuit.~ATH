@@ -1,0 +1,1 @@
+ATTEMPT {   BIRTH r WITH ALIVE OR (1 / 0); UTTER("short"); } SALVAGE e { UTTER("crashed"); } THIS.DIE();

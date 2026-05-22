@@ -1,0 +1,1 @@
+SHOULD 0 { UTTER("a"); } LEST { UTTER("0f"); } SHOULD "" { UTTER("b"); } LEST { UTTER("strf"); } SHOULD [] { UTTER("c"); } LEST { UTTER("arrf"); } SHOULD VOID { UTTER("d"); } LEST { UTTER("voidf"); } SHOULD 1 { UTTER("nonzero"); } THIS.DIE();

@@ -1,0 +1,1 @@
+import timer T1(1ms); import timer T2(2ms); ~ATH(T1 && T2) {} EXECUTE(UTTER("both")); THIS.DIE();

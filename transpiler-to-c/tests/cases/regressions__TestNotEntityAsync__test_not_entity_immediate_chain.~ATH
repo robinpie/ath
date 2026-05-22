@@ -1,0 +1,10 @@
+
+            RITE step(n) {
+                SHOULD n > 5 { BEQUEATH VOID; }
+                UTTER(n);
+                import timer T(1ms);
+                ~ATH(!T) {} EXECUTE(step(n + 1));
+            }
+            step(1);
+            THIS.DIE();
+        

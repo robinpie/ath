@@ -1,0 +1,6 @@
+
+            BIRTH s WITH TRIM("   \t  ");
+            UTTER("[" + s + "]");
+            UTTER(LENGTH(s));
+            THIS.DIE();
+        

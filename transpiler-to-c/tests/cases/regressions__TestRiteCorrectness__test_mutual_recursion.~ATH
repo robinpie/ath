@@ -1,0 +1,14 @@
+
+            RITE is_even(n) {
+                SHOULD n == 0 { BEQUEATH ALIVE; }
+                BEQUEATH is_odd(n - 1);
+            }
+            RITE is_odd(n) {
+                SHOULD n == 0 { BEQUEATH DEAD; }
+                BEQUEATH is_even(n - 1);
+            }
+            UTTER(is_even(10));
+            UTTER(is_odd(7));
+            UTTER(is_even(1));
+            THIS.DIE();
+        

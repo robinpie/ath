@@ -56,6 +56,18 @@ void ath_entity_poll_all(unsigned long now_ms) {
     }
 }
 
+/* Number of live process/connection/watcher entities still being polled.
+   The event loop must not terminate while this is non-zero, even when the
+   timer heap is empty. */
+int ath_entity_pending_count(void) {
+    int i, n = 0;
+    for (i = 0; i < _pollable_count; i++) {
+        if (!_pollable[i]->is_dead)
+            n++;
+    }
+    return n;
+}
+
 /* ===== common helpers ===== */
 
 static AthEntity *ath_entity_alloc(AthEntityKind kind, const char *name) {

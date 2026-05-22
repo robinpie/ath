@@ -1,0 +1,8 @@
+
+            ATTEMPT {
+                CONDEMN "boom";
+            } SALVAGE e {
+                UTTER("caught: " + e);
+            }
+            THIS.DIE();
+        

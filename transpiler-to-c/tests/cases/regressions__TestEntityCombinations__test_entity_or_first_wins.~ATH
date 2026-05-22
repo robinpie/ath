@@ -1,0 +1,6 @@
+
+            import timer Fast(1ms);
+            import timer Slow(100ms);
+            ~ATH(Fast || Slow) {} EXECUTE(UTTER("one"));
+            THIS.DIE();
+        

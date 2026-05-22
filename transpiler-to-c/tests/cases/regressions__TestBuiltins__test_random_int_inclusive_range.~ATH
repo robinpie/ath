@@ -1,0 +1,8 @@
+
+            BIRTH lo WITH 5;
+            BIRTH hi WITH 5;
+            BIRTH r WITH RANDOM_INT(lo, hi);
+            UTTER(r);
+            UTTER(TYPEOF(r));
+            THIS.DIE();
+        

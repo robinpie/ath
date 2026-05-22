@@ -1,0 +1,10 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH t WITH TIME();
+            SHOULD t > 0 {
+                UTTER("valid");
+            }
+        );
+        THIS.DIE();
+    

@@ -1,0 +1,13 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH x WITH 5;
+            RITE test() {
+                BIRTH x WITH 10;
+                BEQUEATH x;
+            }
+            UTTER(test());
+            UTTER(x);
+        );
+        THIS.DIE();
+    

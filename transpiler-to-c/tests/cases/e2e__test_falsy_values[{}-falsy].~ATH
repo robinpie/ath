@@ -1,0 +1,7 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            SHOULD {} { UTTER("truthy"); } LEST { UTTER("falsy"); }
+        );
+        THIS.DIE();
+    

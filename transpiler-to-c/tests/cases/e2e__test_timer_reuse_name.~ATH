@@ -1,0 +1,11 @@
+
+        RITE count(n) {
+            SHOULD n > 0 {
+                UTTER(n);
+                import timer T(1ms);
+                ~ATH(T) { } EXECUTE(count(n - 1));
+            }
+        }
+        count(3);
+        THIS.DIE();
+    

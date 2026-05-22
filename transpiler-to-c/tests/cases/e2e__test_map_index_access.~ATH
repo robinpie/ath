@@ -1,0 +1,8 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH m WITH {name: "Karkat"};
+            UTTER(m["name"]);
+        );
+        THIS.DIE();
+    

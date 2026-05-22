@@ -1,0 +1,7 @@
+
+            import watcher W("module_import_e2e__test_reimport_module.mod0.~ATH");
+            UTTER(W.val);
+            import watcher W("module_import_e2e__test_reimport_module.mod0.~ATH");
+            UTTER(W.val);
+            THIS.DIE();
+        

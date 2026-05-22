@@ -1,0 +1,7 @@
+
+            BIRTH prefix WITH "Hello, ";
+            RITE greet(name) {
+                BEQUEATH prefix + name;
+            }
+            THIS.DIE();
+        

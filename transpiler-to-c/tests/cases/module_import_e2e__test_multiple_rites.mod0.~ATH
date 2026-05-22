@@ -1,0 +1,6 @@
+
+            RITE double(x) { BEQUEATH x * 2; }
+            RITE triple(x) { BEQUEATH x * 3; }
+            RITE negate(x) { BEQUEATH 0 - x; }
+            THIS.DIE();
+        

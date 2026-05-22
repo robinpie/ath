@@ -1,0 +1,11 @@
+
+            BIRTH truthy_count WITH 0;
+            SHOULD [0] { truthy_count = truthy_count + 1; }
+            SHOULD {a:0} { truthy_count = truthy_count + 1; }
+            SHOULD "x" { truthy_count = truthy_count + 1; }
+            SHOULD ALIVE { truthy_count = truthy_count + 1; }
+            SHOULD 1 { truthy_count = truthy_count + 1; }
+            SHOULD 0.5 { truthy_count = truthy_count + 1; }
+            UTTER(truthy_count);
+            THIS.DIE();
+        

@@ -1,0 +1,4 @@
+
+            UTTER("a\nb");
+            THIS.DIE();
+        

@@ -1,0 +1,5 @@
+
+            import watcher W("module_import_e2e__test_module_with_timer.mod0.~ATH");
+            UTTER(W.result);
+            THIS.DIE();
+        

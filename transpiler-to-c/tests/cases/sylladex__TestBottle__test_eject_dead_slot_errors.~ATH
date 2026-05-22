@@ -1,0 +1,12 @@
+
+BIRTH B WITH BOTTLE(3);
+CAPTCHALOGUE "x" INTO B;
+BIRTH _ WITH EJECT FROM B;
+ATTEMPT {
+    BIRTH dead WITH EJECT SLOT 0 FROM B;
+    UTTER("got:");
+    UTTER(dead);
+} SALVAGE err {
+    UTTER("err");
+}
+THIS.DIE();

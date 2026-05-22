@@ -1,0 +1,5 @@
+
+        import timer T(1ms); // This is a comment
+        ~ATH(T) { } EXECUTE(UTTER("hello")); // Another comment
+        THIS.DIE(); // Final comment
+    

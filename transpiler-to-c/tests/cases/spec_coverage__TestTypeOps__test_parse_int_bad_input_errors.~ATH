@@ -1,0 +1,1 @@
+ATTEMPT { UTTER(PARSE_INT("abc")); } SALVAGE e { UTTER("err"); } THIS.DIE();

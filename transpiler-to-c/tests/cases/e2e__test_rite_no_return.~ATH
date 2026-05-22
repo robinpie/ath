@@ -1,0 +1,11 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            RITE noReturn() {
+                BIRTH x WITH 5;
+            }
+            BIRTH result WITH noReturn();
+            UTTER(TYPEOF(result));
+        );
+        THIS.DIE();
+    

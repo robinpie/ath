@@ -1,0 +1,7 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            SHOULD 3 < 5 { UTTER("yes"); }
+        );
+        THIS.DIE();
+    

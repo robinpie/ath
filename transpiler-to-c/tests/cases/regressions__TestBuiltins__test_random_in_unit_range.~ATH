@@ -1,0 +1,6 @@
+
+            BIRTH r WITH RANDOM();
+            UTTER(r >= 0.0 AND r < 1.0);
+            UTTER(TYPEOF(r));
+            THIS.DIE();
+        

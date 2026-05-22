@@ -1,0 +1,22 @@
+
+RITE byType(v, g) {
+    SHOULD g == 0 { BEQUEATH TYPEOF(v) == "STRING"; }
+    SHOULD g == 1 { BEQUEATH TYPEOF(v) == "INTEGER"; }
+    BEQUEATH DEAD;
+}
+RITE bySize(v, s) {
+    BIRTH metric WITH 0;
+    SHOULD TYPEOF(v) == "STRING" { metric = LENGTH(v); }
+    LEST { metric = v; }
+    SHOULD s == 0 { BEQUEATH metric < 4; }
+    BEQUEATH metric >= 4;
+}
+BIRTH TH WITH TECHHOP(2, 2, byType, bySize);
+CAPTCHALOGUE "hi" INTO TH;
+CAPTCHALOGUE 42 INTO TH;
+CAPTCHALOGUE "hello" INTO TH;
+CAPTCHALOGUE 3 INTO TH;
+UTTER(STRING(TH));
+BIRTH s WITH EJECT GROOVE 0 SHADE 1 FROM TH;
+UTTER(s);
+THIS.DIE();

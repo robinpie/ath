@@ -1,0 +1,9 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            SHOULD ALIVE {
+                UTTER("true branch");
+            }
+        );
+        THIS.DIE();
+    

@@ -1,0 +1,1 @@
+UTTER(CHAR(65)); UTTER(CODE("A")); THIS.DIE();

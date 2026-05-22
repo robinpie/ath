@@ -1,0 +1,10 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            SHOULD DEAD {
+                UTTER("true branch");
+            }
+            UTTER("after");
+        );
+        THIS.DIE();
+    

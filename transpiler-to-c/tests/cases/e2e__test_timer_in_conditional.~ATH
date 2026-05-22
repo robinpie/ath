@@ -1,0 +1,11 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH flag WITH ALIVE;
+            SHOULD flag {
+                import timer T2(1ms);
+                ~ATH(T2) { } EXECUTE(UTTER("conditional timer"));
+            }
+        );
+        THIS.DIE();
+    

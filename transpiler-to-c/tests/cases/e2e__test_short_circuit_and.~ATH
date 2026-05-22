@@ -1,0 +1,17 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH called WITH DEAD;
+            RITE setTrue() {
+                called = ALIVE;
+                BEQUEATH ALIVE;
+            }
+            BIRTH x WITH DEAD AND setTrue();
+            SHOULD called {
+                UTTER("called");
+            } LEST {
+                UTTER("not called");
+            }
+        );
+        THIS.DIE();
+    

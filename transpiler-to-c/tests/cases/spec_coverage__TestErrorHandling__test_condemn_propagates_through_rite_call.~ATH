@@ -1,0 +1,1 @@
+RITE bad() { CONDEMN "from-rite"; } ATTEMPT { bad(); UTTER("nope"); } SALVAGE e { UTTER("caught"); } THIS.DIE();

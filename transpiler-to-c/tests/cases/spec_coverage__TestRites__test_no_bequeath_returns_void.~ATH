@@ -1,0 +1,1 @@
+RITE bare() { BIRTH x WITH 1; } UTTER(TYPEOF(bare())); THIS.DIE();

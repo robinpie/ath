@@ -1,0 +1,5 @@
+
+            UTTER(CHAR(CODE("Z")));
+            UTTER(CODE(CHAR(48)));
+            THIS.DIE();
+        

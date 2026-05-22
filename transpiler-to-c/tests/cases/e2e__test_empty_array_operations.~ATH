@@ -1,0 +1,10 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH arr WITH [];
+            UTTER(LENGTH(arr));
+            arr = APPEND(arr, 1);
+            UTTER(LENGTH(arr));
+        );
+        THIS.DIE();
+    

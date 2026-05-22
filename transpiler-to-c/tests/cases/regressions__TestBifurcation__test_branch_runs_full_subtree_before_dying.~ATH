@@ -1,0 +1,14 @@
+
+            bifurcate THIS[A, B];
+
+            ~ATH(A) {
+                import timer T(20ms);
+                ~ATH(T) {} EXECUTE(UTTER("A inner done"));
+            } EXECUTE(UTTER("A branch done"));
+
+            ~ATH(B) {
+                UTTER("B ran");
+            } EXECUTE(VOID);
+
+            [A, B].DIE();
+        

@@ -1,0 +1,1 @@
+ATTEMPT { CONDEMN "x=" + 42; } SALVAGE e { UTTER(e); } THIS.DIE();

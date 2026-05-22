@@ -1,0 +1,14 @@
+
+            bifurcate THIS[A, B];
+
+            ~ATH(A) {
+                RITE add(x, y) { BEQUEATH x + y; }
+                UTTER(add(3, 4));
+            } EXECUTE(VOID);
+
+            ~ATH(B) {
+                UTTER("b");
+            } EXECUTE(VOID);
+
+            [A, B].DIE();
+        

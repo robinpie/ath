@@ -1,0 +1,1 @@
+bifurcate THIS[A, B]; bifurcate B[B1, B2]; ~ATH(A)  { } EXECUTE(UTTER("A")); ~ATH(B1) { } EXECUTE(UTTER("B1")); ~ATH(B2) { } EXECUTE(UTTER("B2")); [A, [B1, B2]].DIE();

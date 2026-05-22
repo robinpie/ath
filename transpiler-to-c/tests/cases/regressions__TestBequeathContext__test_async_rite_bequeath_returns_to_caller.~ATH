@@ -1,0 +1,13 @@
+
+            BIRTH total WITH 0;
+            RITE add_all(n) {
+                SHOULD n <= 0 { BEQUEATH VOID; }
+                total = total + n;
+                import timer t(1ms);
+                ~ATH(t) {} EXECUTE(add_all(n - 1));
+            }
+            add_all(5);
+            import timer wait(50ms);
+            ~ATH(wait) {} EXECUTE(UTTER(total));
+            THIS.DIE();
+        

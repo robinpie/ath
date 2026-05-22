@@ -1,0 +1,16 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            RITE isEven(n) {
+                SHOULD n == 0 { BEQUEATH ALIVE; }
+                BEQUEATH isOdd(n - 1);
+            }
+            RITE isOdd(n) {
+                SHOULD n == 0 { BEQUEATH DEAD; }
+                BEQUEATH isEven(n - 1);
+            }
+            SHOULD isEven(4) { UTTER("4 is even"); }
+            SHOULD isOdd(5) { UTTER("5 is odd"); }
+        );
+        THIS.DIE();
+    

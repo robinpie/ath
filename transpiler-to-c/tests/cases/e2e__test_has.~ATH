@@ -1,0 +1,9 @@
+
+        import timer T(1ms);
+        ~ATH(T) { } EXECUTE(
+            BIRTH m WITH {a: 1};
+            SHOULD HAS(m, "a") { UTTER("yes"); }
+            SHOULD NOT HAS(m, "b") { UTTER("no b"); }
+        );
+        THIS.DIE();
+    

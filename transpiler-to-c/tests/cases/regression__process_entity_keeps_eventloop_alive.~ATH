@@ -1,0 +1,8 @@
+// Regression: a pending process entity must keep the event loop alive even
+// with no timer pending, so ~ATH on the process resolves and EXECUTE runs.
+import process P("sh", "-c", "true");
+
+~ATH(P) {
+} EXECUTE(UTTER("process completed"));
+
+THIS.DIE();

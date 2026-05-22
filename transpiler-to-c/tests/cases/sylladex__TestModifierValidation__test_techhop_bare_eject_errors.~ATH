@@ -1,0 +1,9 @@
+
+RITE pg(v, g) { BEQUEATH ALIVE; }
+RITE ps(v, s) { BEQUEATH ALIVE; }
+ATTEMPT {
+    BIRTH TH WITH TECHHOP(2, 2, pg, ps);
+    BIRTH x WITH EJECT FROM TH;
+    UTTER(x);
+} SALVAGE err { UTTER("caught"); }
+THIS.DIE();

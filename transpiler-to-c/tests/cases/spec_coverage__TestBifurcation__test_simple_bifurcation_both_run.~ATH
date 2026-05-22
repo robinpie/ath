@@ -1,0 +1,1 @@
+bifurcate THIS[LEFT, RIGHT]; ~ATH(LEFT) { } EXECUTE(UTTER("L")); ~ATH(RIGHT) { } EXECUTE(UTTER("R")); [LEFT, RIGHT].DIE();

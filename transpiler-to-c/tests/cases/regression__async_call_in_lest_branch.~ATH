@@ -1,0 +1,22 @@
+// Regression: an async rite call made from inside a LEST branch must keep its
+// continuation, so the recursion runs to completion through both branches.
+RITE step(i) {
+    SHOULD i >= 3 {
+        UTTER("done");
+        BEQUEATH VOID;
+    }
+    import timer T(1ms);
+    ~ATH(T) {
+    } EXECUTE(
+        SHOULD i % 2 == 0 {
+            UTTER("even " + STRING(i));
+            step(i + 1);
+        } LEST {
+            UTTER("odd " + STRING(i));
+            step(i + 1);
+        }
+    );
+}
+
+step(0);
+THIS.DIE();

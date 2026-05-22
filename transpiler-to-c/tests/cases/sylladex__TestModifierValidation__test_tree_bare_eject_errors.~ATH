@@ -1,0 +1,8 @@
+
+ATTEMPT {
+    BIRTH T WITH TREE();
+    CAPTCHALOGUE "a" INTO T;
+    BIRTH x WITH EJECT FROM T;
+    UTTER(x);
+} SALVAGE err { UTTER("caught"); }
+THIS.DIE();

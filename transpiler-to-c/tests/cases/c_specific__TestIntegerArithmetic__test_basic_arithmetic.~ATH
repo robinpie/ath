@@ -1,0 +1,6 @@
+
+            BIRTH a WITH 100;
+            BIRTH b WITH 200;
+            UTTER(a + b);
+            THIS.DIE();
+        

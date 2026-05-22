@@ -1,0 +1,1 @@
+UTTER(TYPEOF("hi")); THIS.DIE();
