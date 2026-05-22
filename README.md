@@ -44,7 +44,7 @@ Current limitations of the implementation (may be worked around in the future):
 - `ProcessEntity`, `ConnectionEntity`, `WatcherEntity` require POSIX (Linux/macOS)
 - Sync rites recurse on the C call stack; deep recursion will stack-overflow
 
-**Test suite:**
+### Test suite
 
 ```bash
 cd transpiler-to-c
@@ -149,7 +149,7 @@ JUJU(n)                   // cross-branch sylladex
 
 Sylladices are mutable structured collections where reads consume values. Write with `CAPTCHALOGUE`, read with `EJECT`. No random access or iteration — to traverse, eject repeatedly.
 
-**Write:**
+#### Write
 
 ```ath
 CAPTCHALOGUE value INTO S;               // STACK, QUEUE, TREE, OUIJA, BOTTLE, TECHHOP
@@ -157,7 +157,7 @@ CAPTCHALOGUE value WITH key INTO H;      // HASHMAP (WITH key required)
 CAPTCHALOGUE value INTO J SLOT n;        // JUJU (SLOT required)
 ```
 
-**Read:**
+#### Read
 
 ```ath
 EJECT FROM S                             // STACK, QUEUE, OUIJA
@@ -171,7 +171,7 @@ EJECT GROOVE g SHADE s FROM TH           // TECHHOP: specific cell (required)
 EJECT SLOT n FROM J                      // JUJU: must be different branch from writer
 ```
 
-**Per-type summary:**
+#### Per-type summary
 
 | Type | Size | Write inserts at | Read returns from | Overflow |
 |---|---|---|---|---|
@@ -184,7 +184,7 @@ EJECT SLOT n FROM J                      // JUJU: must be different branch from 
 | TECHHOP | fixed 2D | lowest valid cell per predicate rites | explicit (groove, shade) required | discarded if no valid empty cell |
 | JUJU | fixed | explicit SLOT n; records writer branch | explicit SLOT n; different branch required | error if slot occupied |
 
-**Example (STACK):**
+#### Example (STACK)
 
 ```ath
 BIRTH S WITH STACK(3);
@@ -199,7 +199,7 @@ UTTER(STRING(S));         // STACK[3, 1, VOID]
 THIS.DIE();
 ```
 
-**Example (JUJU — cross-branch communication):**
+#### Example (JUJU — cross-branch communication)
 
 ```ath
 BIRTH J WITH JUJU(2);
@@ -222,7 +222,7 @@ bifurcate THIS[CALIBORN, CALLIOPE];
 [CALIBORN, CALLIOPE].DIE();
 ```
 
-**Truthiness and COUNT:**
+#### Truthiness and COUNT
 
 A sylladex is truthy if it contains any non-`VOID` value. A dead JUJU is always falsy. `COUNT(s)` returns the number of non-`VOID` occupied slots/nodes. `TYPEOF(s)` returns the uppercase type name (`"STACK"`, `"TREE"`, etc.).
 
@@ -246,7 +246,7 @@ SHOULD condition {
 }
 ```
 
-**No loops in the expression language.** Use `~ATH` for iteration:
+No loops in the expression language. Use `~ATH` for iteration:
 
 ```ath
 RITE countdown(n) {
@@ -283,7 +283,7 @@ CONDEMN "Something went wrong";  // throw error
 
 #### BUILT-IN RITES
 
-**I/O:**
+##### I/O
 
 ```ath
 UTTER("Hello", x);        // print (space-separated, newline appended)
@@ -293,7 +293,7 @@ BIRTH f WITH SCRY("filename"); // read file
 INSCRIBE("file.txt", s);  // write file
 ```
 
-**Type operations:**
+##### Type operations
 
 ```ath
 TYPEOF(x)                 // "INTEGER", "FLOAT", "STRING", etc.
@@ -307,7 +307,7 @@ CHAR(65), CODE("A")       // int to char / char to int code
 BIN(10), HEX(255)         // int to binary/hex string
 ```
 
-**Array operations:**
+##### Array operations
 
 ```ath
 APPEND(arr, val)          // add to end (returns new array)
@@ -317,7 +317,7 @@ FIRST(arr), LAST(arr)     // first/last element
 CONCAT(arr1, arr2)        // concatenate arrays
 ```
 
-**Map operations:**
+##### Map operations
 
 ```ath
 KEYS(map), VALUES(map)    // get keys/values as arrays
@@ -326,7 +326,7 @@ SET(map, key, val)        // set key (returns new map)
 DELETE(map, key)          // remove key
 ```
 
-**String operations:**
+##### String operations
 
 ```ath
 SPLIT("a,b,c", ",")       // split to array
@@ -336,7 +336,7 @@ UPPERCASE(s), LOWERCASE(s), TRIM(s)
 REPLACE(s, old, new)      // replace all occurrences
 ```
 
-**Utility:**
+##### Utility
 
 ```ath
 RANDOM()                  // random float 0 to 1
