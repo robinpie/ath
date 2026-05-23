@@ -2143,3 +2143,7 @@ Runtime errors should:
 1. Include source location (line, column)
 2. Propagate to nearest SALVAGE block
 3. Terminate program if uncaught
+
+---
+
+This project is licensed under the GNU General Public License v2.0. See the LICENSE file for details.
