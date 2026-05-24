@@ -28,7 +28,7 @@ make test     delegates to tests/Makefile, which builds libruncase.so and
 - `../athtoc-bin`, the thing under test. `libruncase.so` transpiles
   every test case with this one.
 
-### FFI-based runner (no shell per case)
+### FFI-based runner
 
 `libruncase.c` is a small C shared library that does the
 transpile → compile → run pipeline for each case using `fork`/`exec`/`waitpid`
