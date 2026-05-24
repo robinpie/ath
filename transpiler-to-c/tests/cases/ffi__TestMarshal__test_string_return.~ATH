@@ -1,0 +1,11 @@
+import session L("libc.so.6") {
+    TRANSCRIBE strerror(INTEGER) -> STRING;
+}
+BIRTH msg WITH L.strerror(1);
+UTTER(TYPEOF(msg));
+SHOULD LENGTH(msg) > 0 {
+    UTTER("nonempty");
+} LEST {
+    UTTER("empty");
+}
+THIS.DIE();

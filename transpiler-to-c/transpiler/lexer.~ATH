@@ -93,6 +93,7 @@ ENTOMB KW WITH {
     "import": "import", "bifurcate": "bifurcate", "EXECUTE": "EXECUTE",
     "DIE": "DIE", "THIS": "THIS",
     "timer": "timer", "process": "process", "connection": "connection", "watcher": "watcher",
+    "session": "session",
     "BIRTH": "BIRTH", "ENTOMB": "ENTOMB", "WITH": "WITH",
     "ALIVE": "ALIVE", "DEAD": "DEAD", "VOID": "VOID",
     "SHOULD": "SHOULD", "LEST": "LEST", "RITE": "RITE",
@@ -101,7 +102,8 @@ ENTOMB KW WITH {
     "CAPTCHALOGUE": "CAPTCHALOGUE", "INTO": "INTO", "EJECT": "EJECT", "FROM": "FROM",
     "SLOT": "SLOT", "GROOVE": "GROOVE", "SHADE": "SHADE", "ROOT": "ROOT", "LEAF": "LEAF",
     "STACK": "STACK", "QUEUE": "QUEUE", "TREE": "TREE", "HASHMAP": "HASHMAP",
-    "OUIJA": "OUIJA", "BOTTLE": "BOTTLE", "TECHHOP": "TECHHOP", "JUJU": "JUJU"
+    "OUIJA": "OUIJA", "BOTTLE": "BOTTLE", "TECHHOP": "TECHHOP", "JUJU": "JUJU",
+    "TRANSCRIBE": "TRANSCRIBE", "BANISH": "BANISH", "UNSAFE": "UNSAFE", "DROPS": "DROPS"
 };
 
 RITE scanIdent(src, pos, line, col, acc) {

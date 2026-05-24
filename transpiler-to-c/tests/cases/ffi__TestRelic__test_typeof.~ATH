@@ -1,0 +1,7 @@
+import session L("libc.so.6") {
+    TRANSCRIBE fopen(STRING, STRING) -> RELIC DROPS fclose;
+    TRANSCRIBE fclose(RELIC) -> INTEGER;
+}
+BIRTH f WITH L.fopen("/tmp/_ath_relic_typeof_test.txt", "w");
+UTTER(TYPEOF(f));
+THIS.DIE();

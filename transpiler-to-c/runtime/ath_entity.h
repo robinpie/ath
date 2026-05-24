@@ -29,7 +29,8 @@ typedef enum {
     ATH_ENTITY_WATCHER    = 5,
     ATH_ENTITY_AND        = 6,
     ATH_ENTITY_OR         = 7,
-    ATH_ENTITY_NOT        = 8
+    ATH_ENTITY_NOT        = 8,
+    ATH_ENTITY_SESSION    = 9
 } AthEntityKind;
 
 typedef struct AthWaiter {
@@ -57,6 +58,8 @@ typedef struct AthEntity {
     struct AthEntity *right;
     int             and_left_dead;  /* for AND: track which side died */
     int             and_right_dead;
+    /* session (weak back-ref; session owns the entity strongly) */
+    struct AthSession *session;
 } AthEntity;
 
 AthEntity *ath_entity_this_new(void);
@@ -68,11 +71,25 @@ AthEntity *ath_entity_watcher_new(const char *name, const char *filepath);
 AthEntity *ath_entity_and_new(AthEntity *a, AthEntity *b);
 AthEntity *ath_entity_or_new(AthEntity *a, AthEntity *b);
 AthEntity *ath_entity_not_new(AthEntity *inner);
+AthEntity *ath_entity_session_new(const char *name);
 
 void ath_entity_die(AthEntity *e);
 void ath_entity_on_death(AthEntity *e, struct AthCont *k);
 void ath_entity_incref(AthEntity *e);
 void ath_entity_decref(AthEntity *e);
+
+/* Universal DIE on an AthValue. Accepts ATH_ENTITY or ATH_SESSION (which
+   forwards to its underlying entity). Any other type is a runtime error. */
+void ath_die_value(AthValue v);
+
+/* Pull the underlying AthEntity from an AthValue. Used by entity-expression
+   codegen so identifiers bound to either ATH_ENTITY or ATH_SESSION resolve
+   to the same entity object. Raises a runtime error for other types. */
+struct AthEntity *ath_extract_entity(AthValue v);
+
+/* BANISH on a value. Handles ATH_RELIC (run destructor, clear pointer) and
+   ATH_BUFFER (release bytes). Any other type is a runtime error. */
+void ath_banish_value(AthValue v);
 
 /* called by the event loop each tick to check process/connection/watcher */
 void ath_entity_poll(AthEntity *e, unsigned long now_ms);

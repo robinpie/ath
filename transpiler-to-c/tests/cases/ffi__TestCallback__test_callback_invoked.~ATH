@@ -1,0 +1,20 @@
+// Spec: rite values can be passed where a CALLBACK(...)->... signature is
+// declared. The runtime wraps the rite in a libffi closure and the foreign
+// side calls it. Verify the closure plumbing by passing a comparator to
+// qsort and confirming our rite ran.
+BIRTH count WITH 0;
+RITE cmp(a, b) {
+    count = count + 1;
+    BEQUEATH 0;
+}
+import session L("libc.so.6") {
+    TRANSCRIBE qsort(BUFFER, INTEGER, INTEGER, CALLBACK(RELIC, RELIC) -> INTEGER) -> VOID;
+}
+BIRTH b WITH BUFFER(16);
+L.qsort(b, 2, 8, cmp);
+SHOULD count > 0 {
+    UTTER("invoked");
+} LEST {
+    UTTER("not invoked");
+}
+THIS.DIE();

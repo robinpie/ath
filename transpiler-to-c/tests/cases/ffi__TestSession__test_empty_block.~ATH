@@ -1,0 +1,4 @@
+import session L("libc.so.6") {
+}
+UTTER("ok");
+THIS.DIE();

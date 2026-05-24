@@ -1,0 +1,18 @@
+import session L("libc.so.6") {
+    TRANSCRIBE strlen(STRING) -> INTEGER;
+}
+
+bifurcate THIS[A, B];
+
+~ATH(A) {
+    import timer T(5ms);
+    ~ATH(T) {
+    } EXECUTE(L.DIE());
+} EXECUTE(VOID);
+
+~ATH(B) {
+    ~ATH(L) {
+    } EXECUTE(UTTER("session died"));
+} EXECUTE(VOID);
+
+[A, B].DIE();

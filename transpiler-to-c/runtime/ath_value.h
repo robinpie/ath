@@ -26,6 +26,9 @@ struct AthRite;
 struct AthScope;
 struct AthCont;
 struct AthSylladex;
+struct AthRelic;
+struct AthBuffer;
+struct AthSession;
 
 typedef enum {
     ATH_VOID     = 0,
@@ -37,8 +40,11 @@ typedef enum {
     ATH_MAP      = 6,
     ATH_ENTITY   = 7,
     ATH_RITE     = 8,
-    ATH_MODULE   = 9, /* like MAP but TYPEOF returns "MODULE" */
-    ATH_SYLLADEX = 10 /* sylladex (kind tag carried internally) */
+    ATH_MODULE   = 9,  /* like MAP but TYPEOF returns "MODULE" */
+    ATH_SYLLADEX = 10, /* sylladex (kind tag carried internally) */
+    ATH_RELIC    = 11, /* opaque void* from a foreign session */
+    ATH_BUFFER   = 12, /* mutable byte buffer for C out-params */
+    ATH_SESSION  = 13  /* loaded shared library + transcribed rites */
 } AthType;
 
 typedef struct AthValue {
@@ -52,6 +58,9 @@ typedef struct AthValue {
         struct AthEntity *entity;
         struct AthRite   *rite;
         struct AthSylladex *sylladex;
+        struct AthRelic  *relic;
+        struct AthBuffer *buffer;
+        struct AthSession *session;
     } as;
 } AthValue;
 
@@ -118,6 +127,8 @@ typedef AthValue (*AthRiteSyncFn)(struct AthScope *scope, int argc, AthValue *ar
 typedef void     (*AthRiteAsyncFn)(struct AthScope *scope, struct AthCont *k,
                                    int argc, AthValue *argv);
 
+typedef void (*AthRiteDataFree)(void *data);
+
 typedef struct AthRite {
     int           refcount;
     struct AthScope *closure;
@@ -127,12 +138,21 @@ typedef struct AthRite {
         AthRiteSyncFn  sync;
         AthRiteAsyncFn async;
     } fn;
+    void              *data;       /* opaque rite-specific data; usually NULL */
+    AthRiteDataFree    data_free;  /* called on free if data != NULL */
 } AthRite;
 
 AthRite *ath_rite_new_sync(struct AthScope *closure, AthRiteSyncFn fn, int arity);
 AthRite *ath_rite_new_async(struct AthScope *closure, AthRiteAsyncFn fn, int arity);
+AthRite *ath_rite_new_ffi(struct AthScope *closure, AthRiteSyncFn fn, int arity,
+                          void *data, AthRiteDataFree data_free);
 void     ath_rite_incref(AthRite *r);
 void     ath_rite_decref(AthRite *r);
+
+/* Set during ath_call_sync so the called rite can find its own AthRite (and
+   thus its `data` slot) without an explicit argument. Single-threaded
+   runtime, so a plain global is safe. */
+AthRite *ath_current_rite(void);
 
 /* ---- Value constructors ---- */
 #define ATH_VOID_VAL    (ath_void())
@@ -152,6 +172,9 @@ AthValue ath_module_val(AthMap *m);
 AthValue ath_entity_val(struct AthEntity *e);
 AthValue ath_rite_val(AthRite *r);
 AthValue ath_sylladex_val(struct AthSylladex *s);
+AthValue ath_relic_val(struct AthRelic *r);
+AthValue ath_buffer_val(struct AthBuffer *b);
+AthValue ath_session_val(struct AthSession *s);
 
 /* ---- Refcount management ---- */
 void ath_value_incref(AthValue v);

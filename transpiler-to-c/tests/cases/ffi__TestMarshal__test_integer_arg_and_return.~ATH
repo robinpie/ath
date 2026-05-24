@@ -1,0 +1,7 @@
+import session L("libc.so.6") {
+    TRANSCRIBE abs(INTEGER) -> INTEGER;
+}
+UTTER(L.abs(-7));
+UTTER(L.abs(0));
+UTTER(L.abs(42));
+THIS.DIE();

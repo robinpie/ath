@@ -42,7 +42,7 @@ mkdir -p work
 echo "Building harness with athtoc-stable..."
 ./athtoc-stable < harness.~ATH > work/harness.c
 gcc -std=c89 -pedantic -Wno-unused-variable -Wno-declaration-after-statement \
-    work/harness.c -I"$RUNTIME" -L.. -lath_runtime -o work/harness
+    work/harness.c -I"$RUNTIME" -L.. -lath_runtime -ldl -lffi -o work/harness
 
 # Hand off to the harness. Its exit status (non-zero on any test failure)
 # becomes this script's exit status.

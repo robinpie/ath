@@ -1,0 +1,19 @@
+// Spec: A relic is cursed when its session dies; further FFI use is a
+// catchable runtime error.
+import session L("libc.so.6") {
+    TRANSCRIBE fopen(STRING, STRING) -> RELIC DROPS fclose;
+    TRANSCRIBE fclose(RELIC) -> INTEGER;
+    TRANSCRIBE fputs(STRING, RELIC) -> INTEGER;
+}
+BIRTH f WITH L.fopen("/tmp/_ath_test_curse.txt", "w");
+L.DIE();
+~ATH(L) {
+} EXECUTE(
+    ATTEMPT {
+        L.fputs("nope", f);
+        UTTER("unexpectedly succeeded");
+    } SALVAGE err {
+        UTTER("caught");
+    }
+);
+THIS.DIE();

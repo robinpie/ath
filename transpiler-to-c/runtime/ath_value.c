@@ -17,6 +17,9 @@
 #include "ath_scope.h"
 #include "ath_error.h"
 #include "ath_sylladex.h"
+#include "ath_relic.h"
+#include "ath_buffer.h"
+#include "ath_session.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -322,6 +325,8 @@ static AthRite *ath_rite_alloc(struct AthScope *closure, int is_async, int arity
     if (closure) ath_scope_incref(closure);
     r->is_async = is_async;
     r->arity = arity;
+    r->data = NULL;
+    r->data_free = NULL;
     return r;
 }
 
@@ -337,11 +342,21 @@ AthRite *ath_rite_new_async(struct AthScope *closure, AthRiteAsyncFn fn, int ari
     return r;
 }
 
+AthRite *ath_rite_new_ffi(struct AthScope *closure, AthRiteSyncFn fn, int arity,
+                          void *data, AthRiteDataFree data_free) {
+    AthRite *r = ath_rite_alloc(closure, 0, arity);
+    r->fn.sync = fn;
+    r->data = data;
+    r->data_free = data_free;
+    return r;
+}
+
 void ath_rite_incref(AthRite *r) { if (r) r->refcount++; }
 void ath_rite_decref(AthRite *r) {
     if (!r) return;
     if (--r->refcount <= 0) {
         if (r->closure) ath_scope_decref(r->closure);
+        if (r->data && r->data_free) r->data_free(r->data);
         free(r);
     }
 }
@@ -432,6 +447,27 @@ AthValue ath_sylladex_val(struct AthSylladex *s) {
     return v;
 }
 
+AthValue ath_relic_val(struct AthRelic *r) {
+    AthValue v;
+    v.type = ATH_RELIC;
+    v.as.relic = r;
+    return v;
+}
+
+AthValue ath_buffer_val(struct AthBuffer *b) {
+    AthValue v;
+    v.type = ATH_BUFFER;
+    v.as.buffer = b;
+    return v;
+}
+
+AthValue ath_session_val(struct AthSession *s) {
+    AthValue v;
+    v.type = ATH_SESSION;
+    v.as.session = s;
+    return v;
+}
+
 /* ===== Refcount ===== */
 
 void ath_value_incref(AthValue v) {
@@ -442,6 +478,9 @@ void ath_value_incref(AthValue v) {
     case ATH_MODULE:   ath_map_incref(v.as.map);        break;
     case ATH_RITE:     ath_rite_incref(v.as.rite);      break;
     case ATH_SYLLADEX: ath_syl_incref(v.as.sylladex);   break;
+    case ATH_RELIC:    ath_relic_incref(v.as.relic);    break;
+    case ATH_BUFFER:   ath_buffer_incref(v.as.buffer);  break;
+    case ATH_SESSION:  ath_session_incref(v.as.session); break;
     default: break;
     }
 }
@@ -454,6 +493,9 @@ void ath_value_decref(AthValue v) {
     case ATH_MODULE:   ath_map_decref(v.as.map);        break;
     case ATH_RITE:     ath_rite_decref(v.as.rite);      break;
     case ATH_SYLLADEX: ath_syl_decref(v.as.sylladex);   break;
+    case ATH_RELIC:    ath_relic_decref(v.as.relic);    break;
+    case ATH_BUFFER:   ath_buffer_decref(v.as.buffer);  break;
+    case ATH_SESSION:  ath_session_decref(v.as.session); break;
     default: break;
     }
 }
@@ -476,6 +518,9 @@ AthValue ath_value_copy(AthValue v) {
     }
     case ATH_RITE: ath_rite_incref(v.as.rite); return v;
     case ATH_SYLLADEX: ath_syl_incref(v.as.sylladex); return v;
+    case ATH_RELIC: ath_relic_incref(v.as.relic); return v;
+    case ATH_BUFFER: ath_buffer_incref(v.as.buffer); return v;
+    case ATH_SESSION: ath_session_incref(v.as.session); return v;
     default: return v;
     }
 }
@@ -493,6 +538,16 @@ int ath_is_truthy(AthValue v) {
     case ATH_MAP:     return v.as.map    && v.as.map->count > 0;
     case ATH_MODULE:  return 1;
     case ATH_SYLLADEX: return ath_syl_is_truthy(v.as.sylladex);
+    case ATH_RELIC:   return v.as.relic && !v.as.relic->cursed && v.as.relic->ptr != NULL;
+    case ATH_BUFFER: {
+        int i;
+        if (!v.as.buffer || !v.as.buffer->bytes) return 0;
+        for (i = 0; i < v.as.buffer->length; i++)
+            if (v.as.buffer->bytes[i] != 0) return 1;
+        return 0;
+    }
+    case ATH_SESSION: return v.as.session && v.as.session->entity &&
+                             !v.as.session->entity->is_dead;
     default:          return 1;
     }
 }
@@ -510,6 +565,9 @@ const char *ath_typeof_str(AthValue v) {
     case ATH_RITE:    return "RITE";
     case ATH_MODULE:  return "MODULE";
     case ATH_SYLLADEX: return ath_syl_typeof_str(v.as.sylladex);
+    case ATH_RELIC:   return "RELIC";
+    case ATH_BUFFER:  return "BUFFER";
+    case ATH_SESSION: return "SESSION";
     default:          return "UNKNOWN";
     }
 }
@@ -553,6 +611,23 @@ char *ath_stringify(AthValue v) {
         buf = (char*)malloc(8); strcpy(buf,"<rite>"); return buf;
     case ATH_SYLLADEX:
         return ath_syl_stringify(v.as.sylladex);
+    case ATH_RELIC:
+        if (!v.as.relic || v.as.relic->cursed) {
+            buf = (char*)malloc(16); strcpy(buf,"<cursed relic>"); return buf;
+        }
+        buf = (char*)malloc(8); strcpy(buf,"<relic>"); return buf;
+    case ATH_BUFFER: {
+        char tmp[32];
+        sprintf(tmp, "<buffer:%d>", v.as.buffer ? v.as.buffer->length : 0);
+        buf = (char*)malloc(strlen(tmp)+1); strcpy(buf,tmp); return buf;
+    }
+    case ATH_SESSION: {
+        const char *name = (v.as.session && v.as.session->entity)
+                           ? v.as.session->entity->name : "?";
+        buf = (char*)malloc(strlen(name) + 12);
+        sprintf(buf, "<session:%s>", name);
+        return buf;
+    }
     default:
         buf = (char*)malloc(8); strcpy(buf,"<?>"); return buf;
     }
@@ -754,6 +829,15 @@ static int ath_values_equal(AthValue a, AthValue b) {
                memcmp(a.as.string->data, b.as.string->data, a.as.string->length) == 0;
     case ATH_ENTITY:  return a.as.entity == b.as.entity;
     case ATH_SYLLADEX: return ath_syl_eq(a.as.sylladex, b.as.sylladex);
+    case ATH_RELIC:   return a.as.relic == b.as.relic;
+    case ATH_SESSION: return a.as.session == b.as.session;
+    case ATH_BUFFER:
+        if (a.as.buffer == b.as.buffer) return 1;
+        if (!a.as.buffer || !b.as.buffer) return 0;
+        if (a.as.buffer->length != b.as.buffer->length) return 0;
+        if (a.as.buffer->length == 0) return 1;
+        return memcmp(a.as.buffer->bytes, b.as.buffer->bytes,
+                      a.as.buffer->length) == 0;
     default: return 0;
     }
 }
@@ -816,6 +900,12 @@ AthValue ath_member(AthValue obj, const char *member) {
     case ATH_MAP:
     case ATH_MODULE:
         return ath_map_get(obj.as.map, member);
+    case ATH_SESSION:
+        if (!obj.as.session) {
+            ath_runtime_error_fmt("session has no member '%s'", member);
+            return ath_void();
+        }
+        return ath_map_get(obj.as.session->rites, member);
     case ATH_SYLLADEX:
         ath_runtime_error_fmt("sylladex has no member '%s'", member);
         return ath_void();

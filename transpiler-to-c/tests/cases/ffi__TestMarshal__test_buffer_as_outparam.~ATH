@@ -1,0 +1,7 @@
+import session L("libc.so.6") {
+    TRANSCRIBE memset(BUFFER, INTEGER, INTEGER) -> RELIC;
+}
+BIRTH b WITH BUFFER(5);
+L.memset(b, 65, 5);
+UTTER(BUFFER_TO_STRING(b));
+THIS.DIE();

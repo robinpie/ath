@@ -1,0 +1,7 @@
+import session L("libc.so.6") {
+    TRANSCRIBE strlen(STRING) -> INTEGER;
+}
+UTTER(L.strlen("hello"));
+UTTER(L.strlen(""));
+UTTER(L.strlen("a longer string"));
+THIS.DIE();

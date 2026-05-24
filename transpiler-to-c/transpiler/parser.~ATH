@@ -60,6 +60,7 @@ RITE parseStmt(toks, pos) {
     SHOULD ty == "CONDEMN" { BEQUEATH parseCondemnStmt(toks, pos); }
     SHOULD ty == "BEQUEATH" { BEQUEATH parseBequeathStmt(toks, pos); }
     SHOULD ty == "CAPTCHALOGUE" { BEQUEATH parseCaptchalogue(toks, pos); }
+    SHOULD ty == "BANISH" { BEQUEATH parseBanish(toks, pos); }
     SHOULD ty == "ID" OR ty == "THIS" OR ty == "[" { BEQUEATH parseDieOrAssignOrExpr(toks, pos); }
     CONDEMN "Unexpected token: " + ty + " at line " + STRING(toks[pos].l);
 }
@@ -77,6 +78,7 @@ RITE parseExprStmt(toks, pos) {
     SHOULD ty == "CONDEMN" { BEQUEATH parseCondemnStmt(toks, pos); }
     SHOULD ty == "BEQUEATH" { BEQUEATH parseBequeathStmt(toks, pos); }
     SHOULD ty == "CAPTCHALOGUE" { BEQUEATH parseCaptchalogue(toks, pos); }
+    SHOULD ty == "BANISH" { BEQUEATH parseBanish(toks, pos); }
     SHOULD ty == "VOID" {
         BIRTH p WITH pos + 1;
         BIRTH mr WITH matchTok(toks, p, ";");
@@ -94,6 +96,16 @@ RITE parseExprStmt(toks, pos) {
         SHOULD toks[rv.pos].t == ";" { p = rv.pos + 1; } LEST { p = rv.pos; }
         BEQUEATH {node:{t:"Assign",target:expr,val:rv.node,l:expr.l}, pos: p};
     }
+    // x.DIE() — convert to a Die statement instead of a regular call,
+    // matching the top-level parseStmt behaviour. Without this, inside an
+    // EXECUTE clause `Lc.DIE()` would degenerate into ath_call_sync on the
+    // session's "DIE" rite (which doesn't exist) and CONDEMN.
+    SHOULD expr.t == "Call" AND HAS(expr, "callee") AND expr.callee.t == "Member" AND expr.callee.mem == "DIE" {
+        BIRTH obj WITH expr.callee.obj;
+        BIRTH nm WITH obj.name;
+        BIRTH mr WITH matchTok(toks, p, ";");
+        BEQUEATH {node:{t:"Die",target:{t:"DieIdent",name:nm,l:obj.l},l:expr.l}, pos: mr.pos};
+    }
     // Optional semicolon
     BIRTH mr WITH matchTok(toks, p, ";");
     BEQUEATH {node: {t:"ExprStmt",expr:expr,l:expr.l}, pos: mr.pos};
@@ -104,10 +116,16 @@ RITE parseImport(toks, pos) {
     BIRTH l WITH toks[pos].l;
     pos = pos + 1; // consume 'import'
     BIRTH ety WITH toks[pos].t;
-    SHOULD ety != "timer" AND ety != "process" AND ety != "connection" AND ety != "watcher" {
+    SHOULD ety != "timer" AND ety != "process" AND ety != "connection"
+       AND ety != "watcher" AND ety != "session" {
         CONDEMN "Expected entity type at line " + STRING(toks[pos].l);
     }
     pos = pos + 1;
+    BIRTH unsafeFlag WITH DEAD;
+    SHOULD ety == "session" AND toks[pos].t == "UNSAFE" {
+        unsafeFlag = ALIVE;
+        pos = pos + 1;
+    }
     SHOULD toks[pos].t != "ID" { CONDEMN "Expected entity name at line " + STRING(toks[pos].l); }
     BIRTH nm WITH toks[pos].v;
     pos = pos + 1;
@@ -144,8 +162,122 @@ RITE parseImport(toks, pos) {
         }
     }
     pos = expect(toks, pos, ")");
+    BIRTH transcriptions WITH [];
+    BIRTH hadBlock WITH DEAD;
+    SHOULD ety == "session" AND toks[pos].t == "{" {
+        pos = pos + 1; // consume '{'
+        BIRTH tr WITH parseTranscriptions(toks, pos, []);
+        transcriptions = tr.list;
+        pos = tr.pos;
+        pos = expect(toks, pos, "}");
+        hadBlock = ALIVE;
+    }
+    // Blocks self-terminate (no ; required); plain imports need ;.
+    SHOULD hadBlock {
+        BIRTH mr WITH matchTok(toks, pos, ";");
+        SHOULD mr.matched { pos = mr.pos; }
+    } LEST {
+        pos = expect(toks, pos, ";");
+    }
+    BEQUEATH {node: {t:"Import",etype:ety,name:nm,args:args,
+                     unsafe:unsafeFlag,transcriptions:transcriptions,l:l}, pos: pos};
+}
+
+// --- Transcription block (session only) ---
+// Grammar: '{' TRANSCRIBE name '(' typespec (',' typespec)* ')' '->' typespec
+//                          [ 'DROPS' name ] ';'  ... '}'
+RITE parseTranscriptions(toks, pos, acc) {
+    SHOULD toks[pos].t == "}" OR toks[pos].t == "EOF" {
+        BEQUEATH {list: acc, pos: pos};
+    }
+    BIRTH r WITH parseTranscription(toks, pos);
+    BEQUEATH parseTranscriptions(toks, r.pos, APPEND(acc, r.node));
+}
+
+RITE parseTranscription(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = expect(toks, pos, "TRANSCRIBE");
+    SHOULD toks[pos].t != "ID" {
+        CONDEMN "Expected transcribed name at line " + STRING(toks[pos].l);
+    }
+    BIRTH nm WITH toks[pos].v;
+    pos = pos + 1;
+    pos = expect(toks, pos, "(");
+    BIRTH pl WITH parseTransParams(toks, pos, []);
+    pos = pl.pos;
+    pos = expect(toks, pos, ")");
+    pos = expectArrow(toks, pos);
+    BIRTH rt WITH parseTypeSpec(toks, pos);
+    pos = rt.pos;
+    BIRTH drops WITH "";
+    SHOULD toks[pos].t == "DROPS" {
+        pos = pos + 1;
+        SHOULD toks[pos].t != "ID" {
+            CONDEMN "Expected destructor name after DROPS at line " + STRING(toks[pos].l);
+        }
+        drops = toks[pos].v;
+        pos = pos + 1;
+    }
     pos = expect(toks, pos, ";");
-    BEQUEATH {node: {t:"Import",etype:ety,name:nm,args:args,l:l}, pos: pos};
+    BEQUEATH {node: {t:"Transcribe",name:nm,params:pl.list,ret:rt.node,
+                     drops:drops,l:l}, pos: pos};
+}
+
+RITE parseTransParams(toks, pos, acc) {
+    SHOULD toks[pos].t == ")" {
+        BEQUEATH {list: acc, pos: pos};
+    }
+    BIRTH pr WITH parseTypeSpec(toks, pos);
+    BIRTH newAcc WITH APPEND(acc, pr.node);
+    SHOULD toks[pr.pos].t == "," {
+        BEQUEATH parseTransParams(toks, pr.pos + 1, newAcc);
+    }
+    BEQUEATH {list: newAcc, pos: pr.pos};
+}
+
+// '->' is two adjacent tokens '-' then '>' in the lexer
+RITE expectArrow(toks, pos) {
+    pos = expect(toks, pos, "-");
+    pos = expect(toks, pos, ">");
+    BEQUEATH pos;
+}
+
+// Type names are bare identifiers (INTEGER, FLOAT, STRING, BOOLEAN, VOID,
+// RELIC, BUFFER), or 'CALLBACK' '(' types ')' '->' type. VOID is a real
+// keyword in the lexer; the rest tokenize as IDs.
+RITE parseTypeSpec(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    BIRTH name WITH "";
+    SHOULD toks[pos].t == "VOID" {
+        name = "VOID";
+        pos = pos + 1;
+    } LEST SHOULD toks[pos].t == "ID" {
+        name = toks[pos].v;
+        pos = pos + 1;
+    } LEST {
+        CONDEMN "Expected type name at line " + STRING(toks[pos].l);
+    }
+    SHOULD name == "CALLBACK" {
+        pos = expect(toks, pos, "(");
+        BIRTH pl WITH parseTransParams(toks, pos, []);
+        pos = pl.pos;
+        pos = expect(toks, pos, ")");
+        pos = expectArrow(toks, pos);
+        BIRTH rt WITH parseTypeSpec(toks, pos);
+        BEQUEATH {node: {t:"Type",n:"CALLBACK",params:pl.list,ret:rt.node,l:l},
+                  pos: rt.pos};
+    }
+    BEQUEATH {node: {t:"Type",n:name,l:l}, pos: pos};
+}
+
+// --- BANISH ---
+RITE parseBanish(toks, pos) {
+    BIRTH l WITH toks[pos].l;
+    pos = pos + 1; // consume BANISH
+    BIRTH re WITH parseExpr(toks, pos);
+    pos = re.pos;
+    pos = expect(toks, pos, ";");
+    BEQUEATH {node: {t:"Banish",expr:re.node,l:l}, pos: pos};
 }
 
 // --- Bifurcate ---

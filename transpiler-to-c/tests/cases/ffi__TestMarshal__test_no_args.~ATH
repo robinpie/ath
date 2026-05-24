@@ -1,0 +1,9 @@
+import session L("libc.so.6") {
+    TRANSCRIBE getpid() -> INTEGER;
+}
+SHOULD L.getpid() > 0 {
+    UTTER("positive");
+} LEST {
+    UTTER("non-positive");
+}
+THIS.DIE();

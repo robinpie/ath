@@ -29,7 +29,7 @@ $(BIN): $(TRANSPILER_SRCS) $(SRCS)
 	  exit 1; \
 	fi
 	cd transpiler && ../$(BIN) < main.~ATH > $(BOOTSTRAP_C)
-	$(CC) $(CFLAGS) -O2 $(BOOTSTRAP_C) $(SRCS) -I$(RUNTIME_DIR) -o $(BIN)
+	$(CC) $(CFLAGS) -O2 $(BOOTSTRAP_C) $(SRCS) -I$(RUNTIME_DIR) -ldl -lffi -o $(BIN)
 
 # Build the runtime as a static library (for users who want to link against it).
 lib: $(LIB)
@@ -51,7 +51,7 @@ test: $(LIB) $(BIN)
 smoke: $(BIN)
 	echo 'import timer T(1ms); ~ATH(T){} EXECUTE(UTTER("Hello")); THIS.DIE();' \
 	    | ./$(BIN) > /tmp/_ath_smoke.c
-	$(CC) $(CFLAGS) /tmp/_ath_smoke.c $(SRCS) -I$(RUNTIME_DIR) -o /tmp/_ath_smoke
+	$(CC) $(CFLAGS) /tmp/_ath_smoke.c $(SRCS) -I$(RUNTIME_DIR) -ldl -lffi -o /tmp/_ath_smoke
 	/tmp/_ath_smoke
 
 # Note: clean does NOT remove athtoc-bin (the bootstrap seed). Remove it manually

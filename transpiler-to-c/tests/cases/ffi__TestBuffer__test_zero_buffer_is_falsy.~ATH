@@ -1,0 +1,8 @@
+// Spec: BUFFER is truthy iff any byte is non-zero.
+BIRTH b WITH BUFFER(4);
+SHOULD b {
+    UTTER("truthy");
+} LEST {
+    UTTER("falsy");
+}
+THIS.DIE();

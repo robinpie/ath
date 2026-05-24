@@ -1,0 +1,11 @@
+// Spec: BUFFER is the only mutable value type; mutations are visible across
+// all aliases.
+RITE write(b) {
+    SET_BYTE(b, 0, 88);
+}
+BIRTH a WITH BUFFER(3);
+SET_BYTE(a, 0, 65);
+UTTER(BYTE_AT(a, 0));
+write(a);
+UTTER(BYTE_AT(a, 0));
+THIS.DIE();
