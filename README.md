@@ -148,7 +148,7 @@ JUJU(n)                   // cross-branch sylladex
 
 #### SYLLADICES
 
-Sylladices are mutable structured collections where reads consume values. Write with `CAPTCHALOGUE`, read with `EJECT`. No random access or iteration — to traverse, eject repeatedly.
+Sylladices are mutable structured collections where reads consume values. Write with `CAPTCHALOGUE`, read with `EJECT`. No random access or iteration. To traverse, eject repeatedly.
 
 #### Write
 
