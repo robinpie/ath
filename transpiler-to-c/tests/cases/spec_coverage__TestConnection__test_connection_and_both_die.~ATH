@@ -1,0 +1,7 @@
+import connection C1("localhost", 54323);
+import connection C2("localhost", 54324);
+
+~ATH(C1 && C2) {
+} EXECUTE(UTTER("both connections died"));
+
+THIS.DIE();
