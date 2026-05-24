@@ -1,0 +1,15 @@
+import session L("libc.so.6") {
+    TRANSCRIBE strlen(STRING) -> INTEGER;
+}
+L.DIE();
+import timer T(5ms);
+~ATH(T) {
+} EXECUTE(
+    ATTEMPT {
+        BIRTH n WITH L.strlen("hello");
+        UTTER("unexpectedly succeeded");
+    } SALVAGE err {
+        UTTER("caught");
+    }
+);
+THIS.DIE();

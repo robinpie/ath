@@ -16,6 +16,7 @@
 #include "ath_error.h"
 #include "ath_eventloop.h"
 #include "ath_sylladex.h"
+#include "ath_buffer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,6 +94,11 @@ static struct { const char *name; AthBuiltinFn fn; } _builtins[] = {
     {"RANDOM",      ath_builtin_RANDOM},
     {"RANDOM_INT",  ath_builtin_RANDOM_INT},
     {"TIME",        ath_builtin_TIME},
+    {"BUFFER",            ath_builtin_BUFFER},
+    {"BYTE_AT",           ath_builtin_BYTE_AT},
+    {"SET_BYTE",          ath_builtin_SET_BYTE},
+    {"BUFFER_TO_STRING",  ath_builtin_BUFFER_TO_STRING},
+    {"STRING_TO_BUFFER",  ath_builtin_STRING_TO_BUFFER},
     {NULL, NULL}
 };
 
@@ -113,12 +119,25 @@ void ath_scope_define_builtins(AthScope *s) {
     }
 }
 
+/* Stack of currently-calling rites. ath_current_rite() returns the top; the
+   stack lets FFI rites that re-enter !~ATH (e.g., via destructors) recover
+   the correct caller on each frame. Single-threaded runtime. */
+static AthRite *_ath_calling_rite = NULL;
+
+AthRite *ath_current_rite(void) { return _ath_calling_rite; }
+
 AthValue ath_call_sync(AthScope *scope, AthValue callee, int argc, AthValue *argv) {
     if (callee.type == ATH_RITE) {
         AthRite *r = callee.as.rite;
+        AthRite *prev;
+        AthValue result;
         if (r->is_async)
             ath_runtime_error("cannot call async rite synchronously", 0, 0);
-        return r->fn.sync(r->closure ? r->closure : scope, argc, argv);
+        prev = _ath_calling_rite;
+        _ath_calling_rite = r;
+        result = r->fn.sync(r->closure ? r->closure : scope, argc, argv);
+        _ath_calling_rite = prev;
+        return result;
     }
     ath_runtime_error("value is not callable", 0, 0);
     return ath_void();
@@ -231,7 +250,9 @@ AthValue ath_builtin_LENGTH(AthScope *s, int argc, AthValue *argv) {
         return ath_int(argv[0].as.string->length);
     if (argv[0].type == ATH_ARRAY)
         return ath_int(argv[0].as.array->length);
-    ath_runtime_error_fmt("LENGTH: expected STRING or ARRAY, got %s",
+    if (argv[0].type == ATH_BUFFER)
+        return ath_int(argv[0].as.buffer ? argv[0].as.buffer->length : 0);
+    ath_runtime_error_fmt("LENGTH: expected STRING, ARRAY, or BUFFER, got %s",
                            ath_typeof_str(argv[0]));
     return ath_void();
 }
@@ -735,4 +756,91 @@ AthValue ath_builtin_RANDOM_INT(AthScope *s, int argc, AthValue *argv) {
 AthValue ath_builtin_TIME(AthScope *s, int argc, AthValue *argv) {
     (void)s; (void)argc; (void)argv;
     return ath_int((long)ath_eventloop_now_ms());
+}
+
+/* ===== BUFFER (FFI) ===== */
+
+AthValue ath_builtin_BUFFER(AthScope *s, int argc, AthValue *argv) {
+    long n;
+    AthBuffer *b;
+    (void)s; REQUIRE_ARGC(1, "BUFFER");
+    REQUIRE_INT(argv[0], "BUFFER", "size");
+    n = argv[0].as.integer;
+    if (n < 0) ath_runtime_error("BUFFER: size must be non-negative", 0, 0);
+    b = ath_buffer_new((int)n);
+    return ath_buffer_val(b);
+}
+
+AthValue ath_builtin_BYTE_AT(AthScope *s, int argc, AthValue *argv) {
+    long idx;
+    AthBuffer *b;
+    (void)s; REQUIRE_ARGC(2, "BYTE_AT");
+    if (argv[0].type != ATH_BUFFER)
+        ath_runtime_error_fmt("BYTE_AT: first argument must be BUFFER, got %s",
+                              ath_typeof_str(argv[0]));
+    REQUIRE_INT(argv[1], "BYTE_AT", "index");
+    b = argv[0].as.buffer;
+    idx = argv[1].as.integer;
+    if (!b || !b->bytes || idx < 0 || idx >= b->length)
+        ath_runtime_error_fmt("BYTE_AT: index %ld out of range [0, %d)",
+                              idx, b ? b->length : 0);
+    return ath_int((long)b->bytes[idx]);
+}
+
+AthValue ath_builtin_SET_BYTE(AthScope *s, int argc, AthValue *argv) {
+    long idx, val;
+    AthBuffer *b;
+    (void)s; REQUIRE_ARGC(3, "SET_BYTE");
+    if (argv[0].type != ATH_BUFFER)
+        ath_runtime_error_fmt("SET_BYTE: first argument must be BUFFER, got %s",
+                              ath_typeof_str(argv[0]));
+    REQUIRE_INT(argv[1], "SET_BYTE", "index");
+    REQUIRE_INT(argv[2], "SET_BYTE", "value");
+    b = argv[0].as.buffer;
+    idx = argv[1].as.integer;
+    val = argv[2].as.integer;
+    if (!b || !b->bytes || idx < 0 || idx >= b->length)
+        ath_runtime_error_fmt("SET_BYTE: index %ld out of range [0, %d)",
+                              idx, b ? b->length : 0);
+    if (val < 0 || val > 255)
+        ath_runtime_error_fmt("SET_BYTE: value %ld out of byte range [0, 255]",
+                              val);
+    b->bytes[idx] = (unsigned char)val;
+    return ath_void();
+}
+
+AthValue ath_builtin_BUFFER_TO_STRING(AthScope *s, int argc, AthValue *argv) {
+    long n;
+    AthBuffer *b;
+    AthString *str;
+    (void)s;
+    if (argc < 1 || argc > 2)
+        ath_runtime_error_fmt("BUFFER_TO_STRING: expected 1 or 2 args, got %d", argc);
+    if (argv[0].type != ATH_BUFFER)
+        ath_runtime_error_fmt("BUFFER_TO_STRING: first argument must be BUFFER, got %s",
+                              ath_typeof_str(argv[0]));
+    b = argv[0].as.buffer;
+    if (argc == 2) {
+        REQUIRE_INT(argv[1], "BUFFER_TO_STRING", "length");
+        n = argv[1].as.integer;
+    } else {
+        n = b ? b->length : 0;
+    }
+    if (n < 0 || (b && n > b->length))
+        ath_runtime_error_fmt("BUFFER_TO_STRING: length %ld out of range", n);
+    if (n == 0 || !b || !b->bytes) return ath_str_cstr("");
+    str = ath_string_new((const char *)b->bytes, (int)n);
+    return ath_str_val(str);
+}
+
+AthValue ath_builtin_STRING_TO_BUFFER(AthScope *s, int argc, AthValue *argv) {
+    AthBuffer *b;
+    AthString *str;
+    (void)s; REQUIRE_ARGC(1, "STRING_TO_BUFFER");
+    REQUIRE_STRING(argv[0], "STRING_TO_BUFFER", "value");
+    str = argv[0].as.string;
+    b = ath_buffer_new(str ? str->length : 0);
+    if (str && str->length > 0)
+        memcpy(b->bytes, str->data, (size_t)str->length);
+    return ath_buffer_val(b);
 }

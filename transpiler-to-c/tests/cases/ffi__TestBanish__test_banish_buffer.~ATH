@@ -1,0 +1,5 @@
+BIRTH b WITH BUFFER(4);
+SET_BYTE(b, 0, 42);
+BANISH b;
+UTTER("ok");
+THIS.DIE();

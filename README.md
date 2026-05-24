@@ -28,7 +28,7 @@ make lib
 gcc -std=c89 program.c -L. -lath_runtime -Iruntime -o program && ./program
 ```
 
-Works with any C89-compatible compiler (gcc, clang, etc.). The repo ships a pre-built x86_64 Linux `athtoc-bin` as the bootstrap seed.
+Works with any C89-compatible compiler (gcc, clang, etc.). Linking the runtime requires libffi and libdl (Arch: `libffi`; Debian/Ubuntu: `libffi-dev`). The repo ships a pre-built x86_64 Linux `athtoc-bin` as the bootstrap seed.
 
 ```bash
 # Rebuild athtoc-bin from source
@@ -41,8 +41,9 @@ Current limitations of the implementation (may be worked around in the future):
 
 - Integers are C `long` (64-bit on LP64 systems), not unbounded
 - Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
-- `ProcessEntity`, `ConnectionEntity`, `WatcherEntity` require a POSIX-ish environment
+- `ProcessEntity`, `ConnectionEntity`, `WatcherEntity`, and `session` require a POSIX-ish environment
 - Sync rites recurse on the C call stack; deep recursion will stack-overflow
+- The FFI supports at most 16 parameters per transcription; `BUFFER` and `CALLBACK` as return types are not supported
 
 ### Test suite
 
@@ -260,7 +261,7 @@ countdown(5);
 THIS.DIE();
 ```
 
-#### FUNCTIONS (RITES)
+#### RITES (FUNCTIONS)
 
 ```ath
 RITE add(a, b) {
@@ -280,6 +281,29 @@ ATTEMPT {
 
 CONDEMN "Something went wrong";  // throw error
 ```
+
+#### FOREIGN SESSIONS (FFI)
+
+Sessions are the !~ATH foreign-function interface. A shared library is another universe in paradox space. `import session M(libpath) { ... }` opens a shared library via `dlopen` and exposes transcribed C functions as `M.foo(...)`. The session is itself an entity whose death can be awaited, like everything in !~ATH dies; `~ATH(M)` waits for it to die, and `M.DIE()` triggers orderly cleanup.
+
+```ath
+import session Lc("libc.so.6") {
+    TRANSCRIBE getpid() -> INTEGER;
+    TRANSCRIBE strlen(STRING) -> INTEGER;
+    TRANSCRIBE fopen(STRING, STRING) -> RELIC DROPS fclose;
+    TRANSCRIBE fclose(RELIC) -> INTEGER;
+}
+
+UTTER("pid =", Lc.getpid());
+BIRTH f WITH Lc.fopen("/tmp/out", "w");
+// fclose runs automatically when Lc.DIE() tears down the session.
+
+Lc.DIE();
+~ATH(Lc) { } EXECUTE(UTTER("session collapsed"));
+THIS.DIE();
+```
+
+Type tags: `INTEGER`, `FLOAT`, `BOOLEAN`, `STRING`, `VOID`, `RELIC` (opaque `void*`), `BUFFER` (mutable byte array), and `CALLBACK(types) -> type` for C-calls-into-!~ATH closures. `DROPS` attaches a destructor that runs in LIFO order at orderly death. A foreign fault (`SIGSEGV` / `SIGBUS` / `SIGFPE` / `SIGILL`) becomes a catchable runtime error and triggers session death (best-effort, not isolation; add `UNSAFE` after `session` to disable for debugging). See `athSpec.md` for the full semantics.
 
 #### BUILT-IN RITES
 
@@ -343,6 +367,12 @@ RANDOM()                  // random float 0 to 1
 RANDOM_INT(min, max)      // random integer in range
 TIME()                    // Unix timestamp in ms
 COUNT(sylladex)           // number of non-VOID values held by a sylladex
+BUFFER(n)                 // FFI: allocate a mutable n-byte buffer
+BYTE_AT(b, i)             // FFI: read byte at index (0–255)
+SET_BYTE(b, i, v)         // FFI: write byte at index
+BUFFER_TO_STRING(b[, n])  // FFI: copy buffer bytes to string
+STRING_TO_BUFFER(s)       // FFI: copy string bytes to fresh buffer
+BANISH x;                 // FFI: free a RELIC (run destructor) or BUFFER
 ```
 
 ---

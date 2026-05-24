@@ -1,0 +1,16 @@
+// Spec: A relic from session A cannot be passed to a call on session B.
+import session A("libc.so.6") {
+    TRANSCRIBE fopen(STRING, STRING) -> RELIC DROPS fclose;
+    TRANSCRIBE fclose(RELIC) -> INTEGER;
+}
+import session B("libc.so.6") {
+    TRANSCRIBE fclose(RELIC) -> INTEGER;
+}
+BIRTH f WITH A.fopen("/tmp/_ath_test_xsession.txt", "w");
+ATTEMPT {
+    B.fclose(f);
+    UTTER("unexpectedly succeeded");
+} SALVAGE err {
+    UTTER("caught");
+}
+THIS.DIE();

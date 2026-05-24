@@ -37,7 +37,7 @@ if [ $? -ne 0 ]; then
 fi
 
 gcc -std=c89 -pedantic -Wno-unused-variable "work/$NAME.c" \
-    -I"$RUNTIME" -L.. -lath_runtime -o "work/$NAME.bin" \
+    -I"$RUNTIME" -L.. -lath_runtime -ldl -lffi -o "work/$NAME.bin" \
     2>> "work/$NAME.err"
 if [ $? -ne 0 ]; then
     printf 'COMPILE_FAIL\n' > "work/$NAME.actual"

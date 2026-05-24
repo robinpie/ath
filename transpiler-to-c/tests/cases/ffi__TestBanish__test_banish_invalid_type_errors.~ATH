@@ -1,0 +1,8 @@
+// Spec: BANISH on anything other than a RELIC or BUFFER is a runtime error.
+ATTEMPT {
+    BANISH 5;
+    UTTER("unexpectedly passed");
+} SALVAGE err {
+    UTTER("caught");
+}
+THIS.DIE();

@@ -1,6 +1,6 @@
 # !~ATH Language Specification
 
-Version 2.0
+Version 2.1
 
 ## Overview
 
@@ -46,7 +46,7 @@ Reserved words (cannot be used as identifiers):
 import bifurcate EXECUTE DIE THIS
 
 // Entity types
-timer process connection watcher
+timer process connection watcher session
 
 // Expression language
 BIRTH ENTOMB WITH ALIVE DEAD VOID
@@ -61,6 +61,9 @@ SLOT GROOVE SHADE ROOT LEAF
 // Sylladex types
 STACK QUEUE TREE HASHMAP
 OUIJA BOTTLE TECHHOP JUJU
+
+// Foreign sessions (FFI)
+TRANSCRIBE BANISH UNSAFE DROPS
 ```
 
 ### Literals
@@ -180,7 +183,7 @@ THIS.DIE();
 
 This program imports a 1ms timer, waits for it to die, executes `VOID` (doing nothing), then terminates.
 
-**Note**: A program that tries to `~ATH(THIS)` before calling `THIS.DIE()` will deadlock—the loop waits for `THIS` to die, but `THIS.DIE()` is never reached. This is faithful to the original ~ATH's "insufferable" design.
+Note: A program that tries to `~ATH(THIS)` before calling `THIS.DIE()` will deadlock. The loop waits for `THIS` to die, but `THIS.DIE()` is never reached. This is faithful to the original ~ATH's "insufferable" design.
 
 ---
 
@@ -273,7 +276,7 @@ import connection remote("example.com", 443);
 
 A TCP connection is opened immediately upon import. When the connection closes (from either end, or due to error), the entity dies.
 
-**Error behavior**: If the connection cannot be established (host unreachable, connection refused, etc.), the entity dies immediately. The death is scheduled via the event loop, not synchronous with the import.
+Error behavior: If the connection cannot be established (host unreachable, connection refused, etc.), the entity dies immediately. The death is scheduled via the event loop, not synchronous with the import.
 
 #### watcher
 
@@ -292,11 +295,11 @@ import watcher W2("/tmp/lockfile");
 
 The watcher monitors the specified file. When the file is deleted, the entity dies.
 
-**Edge case**: If the file does not exist at import time, the entity's death is scheduled immediately via the event loop (not synchronous with the import). This allows `~ATH(!W)` to still work correctly.
+Edge case: If the file does not exist at import time, the entity's death is scheduled immediately via the event loop (not synchronous with the import). This allows `~ATH(!W)` to still work correctly.
 
 #### Module Imports
 
-When the watcher's filepath ends in `.~ATH`, the file is automatically loaded as a **module**. The file is parsed and executed at import time, and its top-level rites and variables become accessible via dot notation on the watcher entity.
+When the watcher's filepath ends in `.~ATH`, the file is automatically loaded as a *module*. The file is parsed and executed at import time, and its top-level rites and variables become accessible via dot notation on the watcher entity.
 
 ```
 // library.~ATH
@@ -329,7 +332,7 @@ THIS.DIE();
 
 **Re-importing**: Importing the same file again re-executes it and refreshes exports (the old watcher entity is killed and replaced, as with all entity re-imports).
 
-**Non-`.~ATH` files**: Watcher entities for non-`.~ATH` files behave as before—no module loading, no exports, not accessible as values in expressions.
+**Non-`.~ATH` files**: Watcher entities for non-`.~ATH` files behave as before. No module loading, not accessible as values in expressions.
 
 ### Entity Operations
 
@@ -346,13 +349,13 @@ Calling `.DIE()` on an already-dead entity has no effect.
 
 ### Entity Combinations
 
-Entities can be combined using operators to create compound death conditions. These operators are **only valid within entity expressions** (inside `~ATH(...)` parentheses).
+Entities can be combined using operators to create compound death conditions. These operators are only valid within entity expressions (inside `~ATH(...)` parentheses).
 
-**Important**: Entities are **not** booleans. An entity's alive/dead state does not coerce to `ALIVE`/`DEAD`. You cannot use an entity in a `SHOULD` condition or assign it to a variable. Entities exist solely to be waited upon.
+Entities are **not** booleans. An entity's alive/dead state does not coerce to `ALIVE`/`DEAD`. You cannot use an entity in a `SHOULD` condition or assign it to a variable. Entities exist solely to be waited upon.
 
 #### AND (&&)
 
-Dies when **both** entities have died.
+Dies when both entities have died.
 
 ```
 ~ATH(T1 && T2) {
@@ -361,7 +364,7 @@ Dies when **both** entities have died.
 
 #### OR (||)
 
-Dies when **either** entity has died.
+Dies when either entity has died.
 
 ```
 ~ATH(T1 || T2) {
@@ -370,7 +373,7 @@ Dies when **either** entity has died.
 
 #### NOT (!)
 
-The inverse of an entity. Dies when the entity **begins to exist** (is imported). Useful for triggering on creation rather than destruction.
+The inverse of an entity. Dies when the entity begins to exist (is imported). Useful for triggering on creation rather than destruction.
 
 ```
 import timer T(1s);
@@ -379,7 +382,7 @@ import timer T(1s);
 } EXECUTE(UTTER("Timer was created"));  // Executes immediately
 ```
 
-**Lexical note**: The `!` operator is **only valid inside entity expressions**. Using `!` anywhere else (e.g., in a regular expression like `!x`) is a **syntax error**. Use `NOT` for boolean negation in expressions.
+Lexical note: The `!` operator is only valid inside entity expressions. Using `!` anywhere else (e.g., in a regular expression like `!x`) is a syntax error. Use `NOT` for boolean negation in expressions.
 
 Combinations can be nested:
 
@@ -392,10 +395,10 @@ Combinations can be nested:
 
 ## ~ATH Loop Construct
 
-The fundamental control structure. ~ATH has **two distinct modes** depending on the type of entity:
+The fundamental control structure. ~ATH has two distinct modes depending on the type of entity:
 
-1. **Wait mode** (regular entities): Waits for the entity to die, then executes code
-2. **Branch mode** (branch entities): Defines code that runs as the branch
+1. Wait mode (regular entities): Waits for the entity to die, then executes code
+2. Branch mode (branch entities): Defines code that runs as the branch
 
 ### Syntax
 
@@ -410,12 +413,12 @@ The fundamental control structure. ~ATH has **two distinct modes** depending on 
 When the entity is a regular entity (timer, process, connection, watcher, THIS, or combinations thereof):
 
 1. The loop binds to the specified entity (or entity combination)
-2. If the entity is already dead, the EXECUTE is **scheduled** (proceeds via event loop)
-3. If the entity is alive, **yield** to the event loop until it dies
+2. If the entity is already dead, the EXECUTE is scheduled (proceeds via event loop)
+3. If the entity is alive, yield to the event loop until it dies
 4. When the entity dies, execute the EXECUTE clause
 5. Continue to the next statement
 
-**Body restriction**: In wait mode, the body may only contain nested ~ATH loops. Any other statements (imports, variable declarations, expressions) are a **semantic error**. All computation must go in EXECUTE clauses.
+Body restriction: In wait mode, the body may only contain nested ~ATH loops. Any other statements (imports, variable declarations, expressions) are a semantic error. All computation must go in EXECUTE clauses.
 
 ```
 ~ATH(T) {
@@ -431,9 +434,9 @@ When the entity is a branch entity (created by `bifurcate`):
 
 1. The body and EXECUTE clause together define the branch's code
 2. The branch executes this code concurrently with sibling branches
-3. The branch entity dies when its code **fully completes**
+3. The branch entity dies when its code fully completes
 
-**Branch completion** means:
+Branch completion means:
 - All statements in the body have executed
 - All nested ~ATH waits have resolved (their entities have died)
 - All EXECUTE clauses (including nested ones) have finished
@@ -441,9 +444,9 @@ When the entity is a branch entity (created by `bifurcate`):
 
 In other words, a branch doesn't die until its entire subtree of execution is done.
 
-**Body freedom**: In branch mode, the body may contain any statements, including imports, variable declarations, and nested ~ATH loops.
+Body freedom: In branch mode, the body may contain any statements, including imports, variable declarations, and nested ~ATH loops.
 
-See the **Bifurcation** section for details.
+See the Bifurcation section for details.
 
 ### EXECUTE Clause
 
@@ -558,7 +561,7 @@ Bifurcated branches must be recombined to be killed together:
 [BRANCH1, BRANCH2].DIE();
 ```
 
-**Note**: The `[A, B]` syntax in DIE targets is syntactic sugar for "both A and B". It is equivalent to killing both entities. Order does not matter. This syntax is **only valid in DIE targets**—it is not an entity combination like `&&`.
+Note: The `[A, B]` syntax in DIE targets is syntactic sugar for "both A and B". It is equivalent to killing both entities. Order does not matter. This syntax is only valid in DIE targets—it is not an entity combination like `&&`.
 
 Nested bifurcation requires nested recombination:
 
@@ -585,16 +588,16 @@ Each branch has its own execution context:
 
 - Only one branch executes at a time
 - Branches yield at ~ATH wait points (when waiting for an entity to die)
-- Variable access is **not** subject to data races in the traditional sense
+- Variable access is not subject to data races in the traditional sense
 - However, the order of execution between branches at yield points is **nondeterministic**
 
 If two branches both modify a shared variable between yield points, the final value depends on scheduling order. This is intentional—!~ATH does not provide synchronization primitives.
 
 ### Branch Semantics
 
-After `bifurcate THIS[LEFT, RIGHT]`, `LEFT` and `RIGHT` become **branch entities**. The interpreter tracks which identifiers are branch entities.
+After `bifurcate THIS[LEFT, RIGHT]`, `LEFT` and `RIGHT` become branch entities. The interpreter tracks which identifiers are branch entities.
 
-Using a branch entity in `~ATH` triggers **branch mode** (see ~ATH Loop Construct):
+Using a branch entity in `~ATH` triggers branch mode (see ~ATH Loop Construct):
 
 ```
 ~ATH(LEFT) {
@@ -630,12 +633,12 @@ The expression language (!~ATH/EXPR) handles computation within EXECUTE clauses 
 | TECHHOP | 2D predicate-filtered       | `TECHHOP(3, 4, g, s)` |
 | JUJU    | Cross-branch sylladex       | `JUJU(4)`             |
 
-See the **Sylladices** section for details on the sylladex types.
+See the *Sylladices* section for details on the sylladex types.
 
 ### Type Coercion
 
 Minimal implicit coercion:
-- In boolean contexts (SHOULD, AND, OR, NOT): `DEAD`, `VOID`, `0`, `""`, `[]`, `{}`, empty/all-`VOID` sylladices, and dead JUJUs are falsy; all else truthy (see the **Sylladices** section for per-type truthiness rules)
+- In boolean contexts (SHOULD, AND, OR, NOT): `DEAD`, `VOID`, `0`, `""`, `[]`, `{}`, empty/all-`VOID` sylladices, and dead JUJUs are falsy; all else truthy (see the *Sylladices* section for per-type truthiness rules)
 - String concatenation with `+`: non-strings are converted via `STRING()` built-in
 - No implicit numeric coercion between INTEGER and FLOAT (use explicit conversion)
 
@@ -885,7 +888,7 @@ COUNT(STACK(3))                  // 0 (empty stack)
 COUNT(myTree)                    // number of nodes
 COUNT(myHashmap)                 // number of occupied slots
 ```
-The precise definition varies by sylladex type; see the **Sylladices** section.
+The precise definition varies by sylladex type; see the *Sylladices* section.
 
 PARSE_INT(string) — Parse string to integer
 ```
@@ -1069,7 +1072,7 @@ BIRTH now WITH TIME();
 
 ## Sylladices
 
-A **sylladex** is a mutable, structured collection of values. Unlike arrays, sylladices are interacted with only through type-specific write and read operations — there is no random access, no indexing, and no iteration construct. To inspect a stored value, one must read it out, and reading consumes.
+A sylladex is a mutable, structured collection of values. Unlike arrays, sylladices are interacted with only through type-specific write and read operations — there is no random access, no indexing, and no iteration construct. To inspect a stored value, one must read it out, and reading consumes.
 
 Each sylladex type defines its own capacity model (fixed-size with overflow ejection, or unbounded), its own insertion rule, and its own read access points. Slots and nodes may hold any value (INTEGER, FLOAT, STRING, BOOLEAN, VOID, ARRAY, MAP, or another sylladex); element types need not be uniform within a single sylladex.
 
@@ -1102,7 +1105,7 @@ Two sylladices are `==` iff they have the same type and are structurally identic
 
 ### Truthiness
 
-A sylladex is **truthy** if it contains any non-`VOID` value, and **falsy** otherwise. Specific truthiness rules are clarified per type.
+A sylladex is truthy if it contains any non-`VOID` value, and falsy otherwise. Specific truthiness rules are clarified per type.
 
 ### Concurrency
 
@@ -1110,7 +1113,7 @@ A single `CAPTCHALOGUE` or `EJECT` operation is atomic with respect to branch sc
 
 ### STACK
 
-A STACK is a fixed-size, LIFO (last-in, first-out) sylladex. Both writes and reads operate at the **front** of the stack (slot 0).
+A STACK is a fixed-size, LIFO (last-in, first-out) sylladex. Both writes and reads operate at the front of the stack (slot 0).
 
 #### Initialization
 
@@ -1162,7 +1165,7 @@ Truthy if any slot holds a non-`VOID` value; falsy if all slots are `VOID` (incl
 
 ### QUEUE
 
-A QUEUE is a fixed-size, FIFO (first-in, first-out) sylladex. Writes operate at the **front** (slot 0); reads operate at the **back** (slot *n*−1).
+A QUEUE is a fixed-size, FIFO (first-in, first-out) sylladex. Writes operate at the front (slot 0); reads operate at the back (slot *n*−1).
 
 #### Initialization
 
@@ -1213,7 +1216,7 @@ Truthy if any slot holds a non-`VOID` value; falsy if all slots are `VOID` (incl
 
 ### TREE
 
-A TREE is an unbounded binary-search-tree sylladex. Unlike STACK and QUEUE, it has no declared size and grows as values are captchalogued. Internal nodes are inaccessible; only the **root** and **leaf** nodes can be read.
+A TREE is an unbounded binary-search-tree sylladex. Unlike STACK and QUEUE, it has no declared size and grows as values are captchalogued. Internal nodes are inaccessible; only the root and leaf nodes can be read.
 
 #### Initialization
 
@@ -1243,7 +1246,7 @@ Trees are unbounded and never overflow. Captchaloguing never ejects an existing 
 Trees require an explicit modifier. Bare `EJECT FROM T` on a tree is a runtime error.
 
 - `EJECT ROOT FROM T` — Removes the root and cascades: all values in the tree are ejected. Returns an ARRAY of all ejected values in in-order traversal (which, given the BST invariant, is sorted by string comparison). The tree becomes empty. If the tree was already empty, returns `[]`. A single-node tree yields a single-element array.
-- `EJECT LEAF FROM T` — Removes and returns the **leftmost leaf at maximum depth** as a bare value. If the tree has only a root (the root is itself a leaf), the root is removed and returned as a bare value, and the tree becomes empty. If the tree is empty, returns `VOID`.
+- `EJECT LEAF FROM T` — Removes and returns the leftmost leaf at maximum depth as a bare value. If the tree has only a root (the root is itself a leaf), the root is removed and returned as a bare value, and the tree becomes empty. If the tree is empty, returns `VOID`.
 
 Note that `EJECT ROOT` always returns an array (or `[]` for an empty tree), while `EJECT LEAF` returns a bare value or `VOID`. These return shapes are asymmetric by design.
 
@@ -1303,7 +1306,7 @@ The hash function is fixed at birth and cannot change.
 
 `CAPTCHALOGUE value WITH key INTO H`:
 
-The `WITH key` clause is **required** for hashmaps. `CAPTCHALOGUE value INTO H` without a key is a syntax error.
+The `WITH key` clause is required for hashmaps. `CAPTCHALOGUE value INTO H` without a key is a syntax error.
 
 - The key is coerced to a string via `STRING(key)`.
 - The string is hashed; the slot index is `abs(hash) % size`.
@@ -1486,7 +1489,7 @@ THIS.DIE();
 
 ### TECHHOP
 
-A TECHHOP is a fixed-size 2D sylladex organized into **groove rows** and **shade columns**. Membership in each row and column is determined by user-supplied predicate rites. A value can only be placed in a cell where both its row's groove-predicate and its column's shade-predicate evaluate truthy.
+A TECHHOP is a fixed-size 2D sylladex organized into groove rows and shade columns. Membership in each row and column is determined by user-supplied predicate rites. A value can only be placed in a cell where both its row's groove-predicate and its column's shade-predicate evaluate truthy.
 
 #### Initialization
 
@@ -1659,9 +1662,176 @@ If Alice tried to read slot 0 herself (the same branch that wrote it), it would 
 
 ---
 
+## Foreign Sessions (FFI)
+
+Sessions are the !~ATH foreign-function interface. The conceit is that a shared library is another universe in paradox space; calling into C means reaching across that boundary. Relics that come back are mortal, and when a foreign universe faults, it dies the way everything in !~ATH dies (as an entity whose death can be awaited).
+
+Sessions are entities. They behave like other entity types (`~ATH(M)`, `M.DIE()`) and the FFI machinery reuses the existing death plumbing.
+
+### Importing a session
+
+```
+import session <ident>(<libpath>) [ { <transcription>* } ] ;
+import session UNSAFE <ident>(<libpath>) [ { <transcription>* } ] ;
+```
+
+`<libpath>` is a string evaluated at runtime and passed to `dlopen`. The optional `UNSAFE` modifier disables the foreign-fault handler (see *Death* below). The optional `{ ... }` transcription block enumerates the foreign symbols the session exposes; a session with no transcribed functions is legal and useful only for `~ATH(M)` purposes.
+
+The block is the doorway's contract. There is no way to add transcriptions after import; what you transcribe is what crosses over.
+
+```
+import session M("./libfoo.so") {
+    TRANSCRIBE foo(INTEGER, STRING) -> INTEGER;
+    TRANSCRIBE bar() -> VOID;
+}
+```
+
+The trailing `;` after a closing `}` is optional (the block self-terminates, like a RITE).
+
+### Transcriptions
+
+Each transcription declares one foreign function:
+
+```
+TRANSCRIBE <name>(<type>, <type>, ...) -> <type> [DROPS <destructor>] ;
+```
+
+- `<name>` — the foreign symbol resolved via `dlsym`.
+- Parameters and return are typed (see *Marshalling* below).
+- `DROPS <destructor>` — optional. If `<name>` returns a `RELIC`, the destructor (also a transcribed name in the same session) is attached to the relic and runs at session-orderly-death or `BANISH`.
+
+`TYPEOF` on a session returns `"SESSION"`.
+
+### Marshalling
+
+| !~ATH     | C            | Notes                                                       |
+|-----------|--------------|-------------------------------------------------------------|
+| `INTEGER` | `long`       | Matches !~ATH integer width.                                |
+| `FLOAT`   | `double`     | `INTEGER` is auto-promoted to `double` for `FLOAT` params.  |
+| `BOOLEAN` | `int` (0/1)  |                                                             |
+| `STRING`  | `const char*`| In: borrows the AthString bytes (NUL-terminated). Out: copied. |
+| `VOID`    | `void`       | Return only; not a valid parameter type.                    |
+| `RELIC`   | `void*`      | See *Relics* below.                                         |
+| `BUFFER`  | `void*`      | See *Buffers* below.                                        |
+| `CALLBACK(types) -> type` | C function pointer | See *Callbacks*.                              |
+
+Pass-by-value structs, variadics, and pointers to non-`RELIC`/`BUFFER` arrays are not supported.
+
+### Relics
+
+A `RELIC` is the opaque-pointer value type. It is a value, not an entity: assignable, passable to other foreign calls, but not an `~ATH` target. Each relic carries:
+
+- A raw `void*`.
+- A weak reference to its owning session.
+- An optional destructor rite (set by `DROPS`).
+- A "cursed" flag.
+
+A relic is cursed when its session dies (or when explicitly `BANISH`-ed). A cursed relic's pointer is cleared; further use as an FFI argument is a runtime error (catchable via `ATTEMPT/SALVAGE`).
+
+Cross-session passing: a relic from session A cannot be passed to a call on session B. The exception is loose relics — relics returned through `CALLBACK` arguments, which have no recorded owner and may be passed anywhere; the caller is responsible for not crossing universes with them.
+
+`TYPEOF(r)` is `"RELIC"`. Truthy iff non-NULL pointer and not cursed.
+
+### Buffers
+
+`BUFFER(n)` creates a mutable byte buffer of size `n`. This is the only mutable value type in !~ATH; mutations are visible across all aliases.
+
+Built-ins:
+
+- `BUFFER(n)` — allocate.
+- `LENGTH(b)` — current size in bytes.
+- `BYTE_AT(b, i)` — read byte (0–255).
+- `SET_BYTE(b, i, v)` — write byte.
+- `BUFFER_TO_STRING(b)` / `BUFFER_TO_STRING(b, n)` — copy `n` bytes (or all of `b`) into a fresh string.
+- `STRING_TO_BUFFER(s)` — copy a string's bytes into a fresh buffer.
+
+`TYPEOF(b)` is `"BUFFER"`. Truthy iff any byte is non-zero.
+
+### BANISH
+
+```
+BANISH expr ;
+```
+
+`BANISH` is a statement, not an expression. It accepts `RELIC` or `BUFFER`:
+
+- On a relic, runs its destructor (if any) then curses it.
+- On a buffer, frees the underlying byte storage.
+- Anything else is a runtime error.
+
+`BANISH` on an already-cursed relic is a no-op.
+
+### Callbacks
+
+A parameter typed `CALLBACK(<types>) -> <type>` accepts a rite at call time. The runtime wraps the rite in a libffi closure (a real C function pointer) and passes it across the boundary. The closure is alive only for the duration of the foreign call; callbacks cannot outlive the call that received them.
+
+```
+RITE compare(a, b) { BEQUEATH a - b; }
+
+import session Lib("./libsort.so") {
+    TRANSCRIBE sort_ints(BUFFER, INTEGER,
+                         CALLBACK(INTEGER, INTEGER) -> INTEGER) -> VOID;
+}
+
+BIRTH buf WITH BUFFER(16);
+// ... fill buf with 4 ints ...
+Lib.sort_ints(buf, 4, compare);
+```
+
+Foreign callbacks are synchronous: they run on the C call stack inside `ffi_call`, so they may not block on `~ATH`. Callbacks returning a `STRING` produce a `malloc`'d C string the foreign side is responsible for freeing (often a leak in practice; document the boundary). Callback parameters of type `BUFFER` or nested `CALLBACK` are not supported.
+
+### `M.DIE()` and `~ATH(M)`
+
+Sessions behave like any other entity for control-flow purposes. `M.DIE()` triggers an orderly death; `~ATH(M)` waits for the session to die.
+
+### Two-phase death
+
+Sessions use two-phase death to avoid running cleanup on a corrupted runtime and to keep `dlclose` off the C call stack of a callback.
+
+**Phase 1** (synchronous, immediate, on `M.DIE()` or fault):
+
+- Mark the session *dying*. New FFI calls on it raise a catchable error.
+- Schedule phase 2 on the event loop.
+
+**Phase 2** (runs at the top of the event loop):
+
+- Orderly path (`M.DIE()`):
+  1. Walk relics in LIFO creation order. For each that has a destructor, run it (with the session's *dying* flag temporarily cleared so destructor can call other transcribed functions of the same session). Curse the relic.
+  2. If any destructor raises, escalate to fault path — curse remaining relics, skip `dlclose`.
+  3. `dlclose` the library.
+  4. Mark the session entity DEAD; fire `~ATH(M)` waiters.
+
+- Fault path (signal handler escalation):
+  1. Curse every relic. Do **not** run destructors (the runtime may be in an inconsistent state).
+  2. Do **not** `dlclose`. The mapping leaks.
+  3. Mark the session entity DEAD; fire `~ATH(M)` waiters.
+
+By the time waiters fire, the session is fully torn down; observers never see partial state.
+
+### Signal handling and `UNSAFE`
+
+When a foreign call faults (`SIGSEGV` / `SIGBUS` / `SIGFPE` / `SIGILL`), the runtime installs a handler that marks the session faulted, longjmps out of `ffi_call`, and raises a catchable runtime error of the form `"foreign universe collapsed: signal <n>"`. The session then enters phase-1 death and phase 2 takes the fault path described above.
+
+This is best-effort, not isolation. The foreign code may have corrupted runtime state before faulting. The "session dies, program survives" conceit is a recovery convenience for unreliable libraries; it is not a safety boundary. Memory leaks and undefined behaviour past the fault are possible.
+
+`UNSAFE` opts out: no signal handler is installed for that session, and a foreign fault crashes the process normally. Use this when debugging the foreign side, since the fault handler hides the real crash from your debugger.
+
+```
+import session UNSAFE M("./libfoo.so") { ... }
+```
+
+### Limitations (current - may be improved in the future)
+
+- POSIX-only (`dlopen`/libffi/sigaction). Windows builds compile but `import session` raises at runtime.
+- At most 16 parameters per transcription.
+- `BUFFER` and `CALLBACK` as return types are not supported.
+- Returned `STRING` is always copied; libraries that return `malloc`-owned strings will leak (no `STRING_OWNED` variant yet).
+
+---
+
 ## Scoping Rules
 
-!~ATH uses **lexical scoping**.
+!~ATH uses lexical scoping.
 
 1. Variables declared at the top level are global
 2. Variables declared inside a RITE are local to that rite
@@ -1698,7 +1868,7 @@ import timer T(1s);
 
 ### Event Loop Architecture
 
-!~ATH uses a **single-threaded event loop** for all execution. This has important implications:
+!~ATH uses a single-threaded event loop for all execution. This has important implications:
 
 1. No true parallelism: Only one piece of code runs at a time
 2. Cooperative yielding: Code yields control at ~ATH wait points
@@ -1708,19 +1878,19 @@ import timer T(1s);
 
 When an entity dies (timer expires, process exits, file deleted, `.DIE()` called):
 
-1. The death event is **queued** in the event loop
+1. The death event is queued in the event loop
 2. The currently executing code continues until it yields (hits a ~ATH wait or completes)
 3. The event loop processes the death, unblocking any ~ATH loops waiting on that entity
-4. Unblocked EXECUTE clauses are **scheduled**, not run immediately
+4. Unblocked EXECUTE clauses are scheduled, not run immediately
 
-This means deaths are **never synchronous**. Even if you call `T.DIE()` and immediately have `~ATH(T)`, the ~ATH will yield to the event loop before its EXECUTE runs.
+This means deaths are **never** synchronous. Even if you call `T.DIE()` and immediately have `~ATH(T)`, the ~ATH will yield to the event loop before its EXECUTE runs.
 
 ### Sequential Execution with Blocking
 
 1. Statements execute sequentially from top to bottom
 2. When a ~ATH loop is encountered:
-   - If the entity is already dead, the EXECUTE is **scheduled** (not run inline)
-   - If the entity is alive, **yield** to the event loop until it dies
+   - If the entity is already dead, the EXECUTE is scheduled (not run inline)
+   - If the entity is alive, yield to the event loop until it dies
 3. After EXECUTE completes, continue to the next statement
 
 ### Nested ~ATH During EXECUTE
@@ -1750,7 +1920,7 @@ Execution proceeds depth-first:
 
 Bifurcated branches run concurrently using structured concurrency:
 
-1. When `bifurcate` is executed, both branches are **scheduled** to run
+1. When `bifurcate` is executed, both branches are scheduled to run
 2. Each branch executes independently and can block on different entities
 3. Branches yield at ~ATH wait points, allowing other branches to progress
 4. The event loop interleaves branch execution at yield points
@@ -1933,7 +2103,7 @@ duration        = INTEGER [ "ms" | "s" | "m" | "h" ] ;  // no unit = millisecond
 
 ### Semantic Notes on Grammar
 
-The grammar above is **syntactically permissive**—it accepts programs that are semantically invalid. The following semantic rules must be enforced by the interpreter:
+The grammar above is syntactically permissive. It accepts programs that are semantically invalid. The following semantic rules must be enforced by the interpreter:
 
 1. **Wait-mode ~ATH bodies**: When the entity in `~ATH(entity)` is NOT a branch entity, the body may only contain nested `ath_loop` statements. Other statement types are a semantic error.
 
@@ -1945,7 +2115,7 @@ The grammar above is **syntactically permissive**—it accepts programs that are
 
 5. **Module watcher entities**: When a watcher imports a `.~ATH` file, the entity becomes a module. Member access (`W.name`) on module entities resolves to module exports. Non-module entities are not accessible as values in expressions.
 
-6. **Sylladex modifier validity**: The grammar accepts modifiers on `CAPTCHALOGUE` (`WITH`, `SLOT`) and `EJECT` (`ROOT`, `LEAF`, `SLOT`, `GROOVE`/`SHADE`) generically, but each sylladex type accepts only specific modifiers. Using a modifier inappropriate to the destination sylladex type, or omitting a required modifier, is a runtime error. See the **Sylladices** section for per-type rules.
+6. **Sylladex modifier validity**: The grammar accepts modifiers on `CAPTCHALOGUE` (`WITH`, `SLOT`) and `EJECT` (`ROOT`, `LEAF`, `SLOT`, `GROOVE`/`SHADE`) generically, but each sylladex type accepts only specific modifiers. Using a modifier inappropriate to the destination sylladex type, or omitting a required modifier, is a runtime error. See the *Sylladices* section for per-type rules.
 
 7. **Sylladex type names as reserved constructors**: `STACK`, `QUEUE`, `TREE`, `HASHMAP`, `OUIJA`, `BOTTLE`, `TECHHOP`, and `JUJU` are reserved constructor names and cannot be redefined as rites.
 

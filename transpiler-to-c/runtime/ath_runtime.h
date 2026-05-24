@@ -22,5 +22,9 @@
 #include "ath_builtins.h"
 #include "ath_error.h"
 #include "ath_sylladex.h"
+#include "ath_relic.h"
+#include "ath_buffer.h"
+#include "ath_session.h"
+#include "ath_ffi.h"
 
 #endif /* ATH_RUNTIME_H */

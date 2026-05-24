@@ -1,0 +1,22 @@
+// Spec: session orderly death runs every relic destructor before dlclose.
+// fputs buffers in the FILE; only fclose flushes. After M.DIE() and ~ATH(M),
+// reading each file back must show the buffered text.
+import session L("libc.so.6") {
+    TRANSCRIBE fopen(STRING, STRING) -> RELIC DROPS fclose;
+    TRANSCRIBE fclose(RELIC) -> INTEGER;
+    TRANSCRIBE fputs(STRING, RELIC) -> INTEGER;
+}
+BIRTH fA WITH L.fopen("/tmp/_ath_multidtor_a.txt", "w");
+BIRTH fB WITH L.fopen("/tmp/_ath_multidtor_b.txt", "w");
+BIRTH fC WITH L.fopen("/tmp/_ath_multidtor_c.txt", "w");
+L.fputs("A\n", fA);
+L.fputs("B\n", fB);
+L.fputs("C\n", fC);
+L.DIE();
+~ATH(L) {
+} EXECUTE(
+    UTTER(SCRY("/tmp/_ath_multidtor_a.txt"));
+    UTTER(SCRY("/tmp/_ath_multidtor_b.txt"));
+    UTTER(SCRY("/tmp/_ath_multidtor_c.txt"));
+);
+THIS.DIE();

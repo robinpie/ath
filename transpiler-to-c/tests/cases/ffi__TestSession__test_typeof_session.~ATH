@@ -1,0 +1,3 @@
+import session L("libc.so.6") { }
+UTTER(TYPEOF(L));
+THIS.DIE();

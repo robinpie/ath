@@ -74,4 +74,11 @@ AthValue ath_builtin_RANDOM(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_RANDOM_INT(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_TIME(AthScope *s, int argc, AthValue *argv);
 
+/* BUFFER (FFI) */
+AthValue ath_builtin_BUFFER(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_BYTE_AT(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_SET_BYTE(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_BUFFER_TO_STRING(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_STRING_TO_BUFFER(AthScope *s, int argc, AthValue *argv);
+
 #endif /* ATH_BUILTINS_H */

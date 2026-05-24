@@ -1,0 +1,5 @@
+import session UNSAFE L("libc.so.6") {
+    TRANSCRIBE strlen(STRING) -> INTEGER;
+}
+UTTER(L.strlen("ath"));
+THIS.DIE();

@@ -18,9 +18,16 @@
 #include "ath_entity.h"
 #include "ath_eventloop.h"
 #include "ath_error.h"
+#include "ath_session.h"
+#include "ath_relic.h"
+#include "ath_buffer.h"
+#include "ath_builtins.h"  /* ath_call_sync */
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
 #ifndef _WIN32
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -102,6 +109,20 @@ void ath_entity_decref(AthEntity *e) {
 void ath_entity_die(AthEntity *e) {
     AthWaiter *w;
     if (!e || e->is_dead) return;
+
+    /* Sessions defer their actual teardown to the event loop top: mark the
+       session dying (blocks new FFI calls) and schedule the teardown
+       continuation. The continuation walks destructors LIFO, dlcloses
+       (orderly only), marks is_dead, and fires waiters — see
+       ath_session_schedule_teardown. */
+    if (e->kind == ATH_ENTITY_SESSION && e->session) {
+        if (!e->session->dying) {
+            e->session->dying = 1;
+            ath_session_schedule_teardown(e->session);
+        }
+        return;
+    }
+
     e->is_dead = 1;
     /* Schedule all waiters via event loop (never call directly) */
     w = e->waiters;
@@ -240,6 +261,64 @@ AthEntity *ath_entity_or_new(AthEntity *a, AthEntity *b) {
     wr->is_right = 1;
     ath_entity_on_death(b, (AthCont*)wr);
     return e;
+}
+
+/* ===== Universal DIE / BANISH dispatch ===== */
+
+void ath_die_value(AthValue v) {
+    if (v.type == ATH_ENTITY) {
+        ath_entity_die(v.as.entity);
+        return;
+    }
+    if (v.type == ATH_SESSION) {
+        if (v.as.session && v.as.session->entity)
+            ath_entity_die(v.as.session->entity);
+        return;
+    }
+    ath_runtime_error_fmt("cannot DIE on value of type %s",
+                          ath_typeof_str(v));
+}
+
+AthEntity *ath_extract_entity(AthValue v) {
+    if (v.type == ATH_ENTITY)  return v.as.entity;
+    if (v.type == ATH_SESSION) return v.as.session ? v.as.session->entity : NULL;
+    ath_runtime_error_fmt("expected entity (or session), got %s",
+                          ath_typeof_str(v));
+    return NULL;
+}
+
+void ath_banish_value(AthValue v) {
+    if (v.type == ATH_RELIC) {
+        AthRelic *r = v.as.relic;
+        if (!r) return;
+        if (r->cursed) return;
+        if (r->destructor) {
+            AthValue dv = ath_rite_val(r->destructor);
+            AthValue arg = ath_relic_val(r);
+            ath_value_incref(dv);
+            ath_value_incref(arg);
+            ath_call_sync(NULL, dv, 1, &arg);
+            ath_value_decref(arg);
+            ath_value_decref(dv);
+        }
+        ath_relic_curse(r);
+        return;
+    }
+    if (v.type == ATH_BUFFER) {
+        ath_buffer_release(v.as.buffer);
+        return;
+    }
+    ath_runtime_error_fmt("BANISH: expected RELIC or BUFFER, got %s",
+                          ath_typeof_str(v));
+}
+
+/* ===== Session ===== */
+
+AthEntity *ath_entity_session_new(const char *name) {
+    /* The entity is just a death-target. The owning AthSession (built by
+       ath_session_create) holds the dlhandle, the rites map, and the relic
+       registry, and links itself back here via e->session. */
+    return ath_entity_alloc(ATH_ENTITY_SESSION, name);
 }
 
 AthEntity *ath_entity_not_new(AthEntity *inner) {

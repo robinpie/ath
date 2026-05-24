@@ -1,0 +1,8 @@
+BIRTH b WITH BUFFER(4);
+SET_BYTE(b, 2, 1);
+SHOULD b {
+    UTTER("truthy");
+} LEST {
+    UTTER("falsy");
+}
+THIS.DIE();

@@ -181,7 +181,8 @@ RITE findFirstAsyncDeep(stmts, i, ctx) {
 
 RITE genEntityC(ent, sv) {
     SHOULD ent.t == "EntityIdent" {
-        BEQUEATH "ath_scope_get("+sv+",\""+ent.name+"\").as.entity";
+        // ath_extract_entity handles ATH_ENTITY and ATH_SESSION uniformly.
+        BEQUEATH "ath_extract_entity(ath_scope_get("+sv+",\""+ent.name+"\"))";
     }
     SHOULD ent.t == "EntityNot" {
         BEQUEATH "ath_entity_not_new("+genEntityC(ent.operand,sv)+")";
@@ -570,6 +571,12 @@ RITE genSyncStmt(stmt, depth, ctx) {
 
     SHOULD nt == "Captchalogue" { BEQUEATH genCaptchalogueStmt(stmt, depth, ctx); }
 
+    SHOULD nt == "Banish" {
+        BIRTH re WITH genExpr(stmt.expr, ctx); ctx = re.ctx;
+        BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+
+            p+"ath_banish_value("+re.t+");\n"+p+"}\n"};
+    }
+
     BEQUEATH {ctx:ctx, s:p+"/* unhandled: "+nt+" */\n"};
 }
 
@@ -598,7 +605,8 @@ RITE genCaptchalogueStmt(stmt, depth, ctx) {
 
 RITE genDieStmt(target, p, sv) {
     SHOULD target.t == "DieIdent" {
-        BEQUEATH p+"ath_entity_die(ath_scope_get("+sv+",\""+target.name+"\").as.entity);\n";
+        // ath_die_value accepts ATH_ENTITY or ATH_SESSION
+        BEQUEATH p+"ath_die_value(ath_scope_get("+sv+",\""+target.name+"\"));\n";
     }
     SHOULD target.t == "DiePair" {
         BEQUEATH genDieStmt(target.left, p, sv) + genDieStmt(target.right, p, sv);
@@ -673,7 +681,79 @@ RITE genSyncImport(stmt, depth, ctx) {
         BEQUEATH {ctx:ctx, s:s};
     }
 
+    SHOULD et == "session" {
+        BEQUEATH genSessionImport(stmt, depth, ctx);
+    }
+
     BEQUEATH {ctx:ctx, s:p+"/* unknown entity: "+et+" */\n"};
+}
+
+// ===== Session imports =====
+
+// Serialise a Type AST node to its on-the-wire string. Simple types are
+// their name ("INTEGER", "RELIC", ...). CALLBACK is recursive:
+//   CALLBACK(INTEGER,STRING)->INTEGER
+RITE typeToString(t) {
+    SHOULD t.n == "CALLBACK" {
+        BIRTH inner WITH cbParamsToString(t.params, 0, "");
+        BEQUEATH "CALLBACK("+inner+")->"+typeToString(t.ret);
+    }
+    BEQUEATH t.n;
+}
+
+RITE cbParamsToString(params, i, acc) {
+    SHOULD i >= LENGTH(params) { BEQUEATH acc; }
+    BIRTH sep WITH "";
+    SHOULD i > 0 { sep = ","; }
+    BEQUEATH cbParamsToString(params, i+1, acc+sep+typeToString(params[i]));
+}
+
+// Build a "\"INTEGER\",\"STRING\",..." literal list from transcription params.
+RITE buildParamList(params, i, acc) {
+    SHOULD i >= LENGTH(params) { BEQUEATH acc; }
+    BIRTH sep WITH "";
+    SHOULD i > 0 { sep = ","; }
+    BIRTH ts WITH typeToString(params[i]);
+    BEQUEATH buildParamList(params, i+1, acc+sep+"\""+ts+"\"");
+}
+
+RITE genTranscription(tr, p) {
+    BIRTH np WITH LENGTH(tr.params);
+    BIRTH ret WITH typeToString(tr.ret);
+    BIRTH nm WITH tr.name;
+    BIRTH drops WITH tr.drops;
+    BIRTH dropsC WITH "NULL";
+    SHOULD drops != "" { dropsC = "\""+drops+"\""; }
+    SHOULD np > 0 {
+        BIRTH pl WITH buildParamList(tr.params, 0, "");
+        BEQUEATH p+"  { static const char *_p[]={"+pl+"};\n"+
+            p+"    ath_session_transcribe(_sess,\""+nm+"\",\""+ret+"\","+
+            STRING(np)+",_p,"+dropsC+"); }\n";
+    }
+    BEQUEATH p+"  ath_session_transcribe(_sess,\""+nm+"\",\""+ret+"\",0,NULL,"+dropsC+");\n";
+}
+
+RITE genTranscriptions(trs, i, p) {
+    SHOULD i >= LENGTH(trs) { BEQUEATH ""; }
+    BEQUEATH genTranscription(trs[i], p) + genTranscriptions(trs, i+1, p);
+}
+
+RITE genSessionImport(stmt, depth, ctx) {
+    BIRTH p WITH ind(depth);
+    BIRTH name WITH stmt.name;
+    BIRTH sv WITH ctx.sv;
+    BIRTH unsafeC WITH "0";
+    SHOULD stmt.unsafe { unsafeC = "1"; }
+    BIRTH rp WITH genExpr(stmt.args[0], ctx); ctx = rp.ctx;
+    BIRTH body WITH p+"{ "+rp.stmts+
+        p+"  char *_libpath=ath_stringify("+rp.t+");\n"+
+        p+"  AthSession *_sess=ath_session_create(\""+name+"\",_libpath,"+unsafeC+");\n"+
+        p+"  free(_libpath);\n"+
+        genTranscriptions(stmt.transcriptions, 0, p)+
+        p+"  ath_scope_define("+sv+",\""+name+"\",ath_session_val(_sess),0);\n"+
+        p+"  ath_session_decref(_sess);\n"+
+        p+"}\n";
+    BEQUEATH {ctx:ctx, s:body};
 }
 
 RITE genSyncStmtList(stmts, i, depth, ctx) {
