@@ -1,0 +1,176 @@
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// X11 window demo via !~ATH's C FFI.
+//
+// Opens an Xlib window, waits for input or a timeout, then tears the
+// session down cleanly via DROPS-attached XCloseDisplay. The poll loop
+// is the canonical !~ATH idiom for foreign event loops: a
+// self-rechaining timer that drains pending events and counts down its
+// own deadline, since XNextEvent would block the runtime.
+
+import session L("libc.so.6") {
+    TRANSCRIBE getenv(STRING) -> STRING;
+}
+
+import session X("libX11.so.6") {
+    TRANSCRIBE XCloseDisplay(RELIC) -> INTEGER;
+    TRANSCRIBE XOpenDisplay(STRING) -> RELIC DROPS XCloseDisplay;
+    TRANSCRIBE XDefaultScreen(RELIC) -> INTEGER;
+    TRANSCRIBE XDefaultRootWindow(RELIC) -> INTEGER;
+    TRANSCRIBE XCreateSimpleWindow(RELIC, INTEGER, INTEGER, INTEGER,
+                                   INTEGER, INTEGER, INTEGER,
+                                   INTEGER, INTEGER) -> INTEGER;
+    TRANSCRIBE XStoreName(RELIC, INTEGER, STRING) -> INTEGER;
+    TRANSCRIBE XSelectInput(RELIC, INTEGER, INTEGER) -> INTEGER;
+    TRANSCRIBE XMapWindow(RELIC, INTEGER) -> INTEGER;
+    TRANSCRIBE XFlush(RELIC) -> INTEGER;
+    TRANSCRIBE XPending(RELIC) -> INTEGER;
+    TRANSCRIBE XNextEvent(RELIC, BUFFER) -> INTEGER;
+    TRANSCRIBE XDefaultGC(RELIC, INTEGER) -> RELIC;
+    TRANSCRIBE XSetForeground(RELIC, RELIC, INTEGER) -> INTEGER;
+    TRANSCRIBE XDrawString(RELIC, INTEGER, RELIC, INTEGER, INTEGER,
+                           STRING, INTEGER) -> INTEGER;
+    TRANSCRIBE XProtocolVersion(RELIC) -> INTEGER;
+    TRANSCRIBE XProtocolRevision(RELIC) -> INTEGER;
+    TRANSCRIBE XVendorRelease(RELIC) -> INTEGER;
+    TRANSCRIBE XServerVendor(RELIC) -> STRING;
+}
+
+// XOpenDisplay's NULL-means-$DISPLAY shortcut isn't reachable from here
+// because the FFI marshals STRING as a (possibly empty) C string, never as
+// a null pointer. Resolve $DISPLAY ourselves so a bare run still works.
+BIRTH disp WITH L.getenv("DISPLAY");
+SHOULD LENGTH(disp) == 0 {
+    UTTER("DISPLAY is not set; no X server to connect to.");
+    THIS.DIE();
+    BEQUEATH VOID;
+}
+
+BIRTH display WITH X.XOpenDisplay(disp);
+SHOULD NOT display {
+    UTTER("XOpenDisplay failed for display:", disp);
+    THIS.DIE();
+    BEQUEATH VOID;
+}
+
+BIRTH screen WITH X.XDefaultScreen(display);
+BIRTH root WITH X.XDefaultRootWindow(display);
+
+// X-server identity.
+BIRTH proto WITH STRING(X.XProtocolVersion(display)) + "."
+              + STRING(X.XProtocolRevision(display));
+BIRTH vendor WITH X.XServerVendor(display);
+BIRTH release WITH X.XVendorRelease(display);
+BIRTH versionLine WITH "X" + proto + " " + vendor + " r" + STRING(release);
+UTTER("libX11 connection:", versionLine);
+
+// 0x000000 border, 0xFFFFFF background. Pixel values are TrueColor RGB,
+// which is the only visual modern X / Xwayland servers actually use.
+BIRTH win WITH X.XCreateSimpleWindow(display, root, 100, 100,
+                                     480, 320, 2, 0, 16777215);
+X.XStoreName(display, win, "!~ATH X11 demo (press any key or click to exit)");
+
+// KeyPressMask(1) | ButtonPressMask(4) | ExposureMask(32768) = 32773
+X.XSelectInput(display, win, 32773);
+X.XMapWindow(display, win);
+X.XFlush(display);
+
+// The default GC is preloaded with the server's default font, which is
+// enough for XDrawString without any XLoadFont round-trip.
+BIRTH gc WITH X.XDefaultGC(display, screen);
+X.XSetForeground(display, gc, 0);  // 0 = black on the white background
+
+ENTOMB GREETING WITH "Hello world from !~ATH";
+ENTOMB GREETING_LEN WITH LENGTH(GREETING);
+ENTOMB VERSION_LEN WITH LENGTH(versionLine);
+
+RITE redraw() {
+    // X servers don't preserve window contents, so the text must be redrawn
+    // whenever an Expose tells us a region needs repainting.
+    X.XDrawString(display, win, gc, 40, 150, GREETING, GREETING_LEN);
+    X.XDrawString(display, win, gc, 40, 180, versionLine, VERSION_LEN);
+    X.XFlush(display);
+}
+
+UTTER("Window mapped on", disp, "- press any key in it, click, or wait 10s.");
+
+// XEvent is a union ~192 bytes on x86_64; 256 gives a comfortable margin.
+// We only read byte 0 (low byte of the leading `int type` field), which is
+// sufficient since every event type we care about is < 256.
+BIRTH ev WITH BUFFER(256);
+BIRTH done WITH DEAD;
+
+RITE pump(remainingMs) {
+    SHOULD done {
+        BEQUEATH VOID;
+    }
+    SHOULD remainingMs <= 0 {
+        UTTER("timeout reached, closing.");
+        done = ALIVE;
+        BEQUEATH VOID;
+    }
+
+    ATTEMPT {
+        // Drain at most one event per tick; XPending also flushes pending
+        // output, so the server stays in sync.
+        BIRTH pending WITH X.XPending(display);
+        SHOULD pending > 0 {
+            X.XNextEvent(display, ev);
+            BIRTH type WITH BYTE_AT(ev, 0);
+            // KeyPress = 2, ButtonPress = 4, Expose = 12
+            SHOULD type == 2 {
+                UTTER("key pressed; closing.");
+                done = ALIVE;
+            } LEST SHOULD type == 4 {
+                UTTER("mouse clicked; closing.");
+                done = ALIVE;
+            } LEST SHOULD type == 12 {
+                redraw();
+            } LEST {
+                UTTER("ignoring X event type", type);
+            }
+        }
+    } SALVAGE err {
+        UTTER("X pump error:", err);
+        done = ALIVE;
+    }
+
+    SHOULD done {
+        BEQUEATH VOID;
+    }
+
+    import timer Tick(30ms);
+    ~ATH(Tick) {
+    } EXECUTE(pump(remainingMs - 30));
+}
+
+pump(10000);
+
+// pump() returns synchronously the first time but its tail-call lives in the
+// timer's EXECUTE continuation, so we have to wait on something before
+// killing the session. Use a one-shot watcher on `done` via a polling timer.
+RITE waitDone() {
+    SHOULD done {
+        BEQUEATH VOID;
+    }
+    import timer Wait(50ms);
+    ~ATH(Wait) {
+    } EXECUTE(waitDone());
+}
+waitDone();
+
+// XCloseDisplay runs as the DROPS destructor for `display`, then dlclose.
+X.DIE();
+~ATH(X) {
+} EXECUTE(UTTER("X session closed."));
+
+THIS.DIE();
