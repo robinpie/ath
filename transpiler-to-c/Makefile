@@ -42,10 +42,10 @@ $(LIB): $(OBJS)
 
 # Run the !~ATH-based test harness (tests/harness.~ATH). The harness itself
 # is built with the frozen tests/athtoc-stable, so a broken mainline athtoc
-# still lets the suite run; each test case is transpiled by $(BIN), the
-# mainline transpiler under test.
+# still lets the suite run; each test case is transpiled by $(BIN) via the
+# libruncase FFI session.
 test: $(LIB) $(BIN)
-	tests/run.sh
+	$(MAKE) -C tests run
 
 # Quick smoke test using the self-hosted binary.
 smoke: $(BIN)
@@ -58,4 +58,4 @@ smoke: $(BIN)
 # only if you have another way to rebuild it.
 clean:
 	rm -f $(OBJS) $(LIB) $(BOOTSTRAP_C)
-	rm -rf tests/work
+	$(MAKE) -C tests clean

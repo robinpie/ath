@@ -12,15 +12,22 @@
 // !~ATH test harness.
 //
 // Reads manifest.txt (one "name|mode|stdin" line per corpus case), and for
-// each case spawns runcase.sh as a process entity. runcase.sh transpiles
+// each case calls libruncase via an FFI session. libruncase transpiles
 // cases/<name>.~ATH with the mainline transpiler, compiles it, runs it, and
-// leaves the program output in work/<name>.actual. When the process dies the
-// harness compares that output against cases/<name>.expected and tallies the
-// result. A non-zero exit (via CONDEMN) signals any failure.
+// leaves the program output in work/<name>.actual. The harness then compares
+// that output against cases/<name>.expected and tallies the result. A
+// non-zero exit (via CONDEMN) signals any failure.
 //
-// Cases are run one at a time: each is chained onto the death of the
-// previous case's process, so iteration is expressed -- as the language
-// demands -- by waiting for things to die.
+// Cases are run serially: the FFI call is synchronous, so each case fully
+// completes (transpile + compile + run) before the next begins.
+
+// ---------------------------------------------------------------------------
+// Foreign session: per-case runner (transpile → compile → run).
+// ---------------------------------------------------------------------------
+
+import session RC("./work/libruncase.so") {
+    TRANSCRIBE run_case(STRING, STRING) -> INTEGER;
+};
 
 // ---------------------------------------------------------------------------
 // Sorted-mode comparison.
@@ -79,8 +86,8 @@ RITE report(total, passed, failed, failures) {
 }
 
 // ---------------------------------------------------------------------------
-// Case runner. `passed`, `failed` and `failures` are threaded through the
-// recursion rather than held as mutated globals.
+// Case runner.  The FFI call is synchronous, so runCase is a plain
+// recursive rite with no ~ATH waits.
 // ---------------------------------------------------------------------------
 
 BIRTH manifestRaw WITH SCRY("manifest.txt");
@@ -97,34 +104,30 @@ RITE runCase(i, passed, failed, failures) {
     BIRTH name WITH fields[0];
     BIRTH mode WITH fields[1];
 
-    import process P("sh", "runcase.sh", name);
-    ~ATH(P) {
-    } EXECUTE(
-        BIRTH ok WITH DEAD;
-        ATTEMPT {
-            BIRTH actual WITH SCRY("work/" + name + ".actual");
-            BIRTH expected WITH SCRY("cases/" + name + ".expected");
-            ok = matches(actual, expected, mode);
-        } SALVAGE err {
-            ok = DEAD;
-        }
+    RC.run_case(name, "../athtoc-bin");
 
-        // The branches only tally sync state; the recursive (async) call is
-        // made once, after the conditional — a flat, easy-to-read shape.
-        BIRTH nextPassed WITH passed;
-        BIRTH nextFailed WITH failed;
-        BIRTH nextFailures WITH failures;
-        SHOULD ok {
-            UTTER("  pass  " + name);
-            nextPassed = passed + 1;
-        } LEST {
-            UTTER("  FAIL  " + name);
-            nextFailed = failed + 1;
-            nextFailures = APPEND(failures, name);
-        }
+    BIRTH ok WITH DEAD;
+    ATTEMPT {
+        BIRTH actual WITH SCRY("work/" + name + ".actual");
+        BIRTH expected WITH SCRY("cases/" + name + ".expected");
+        ok = matches(actual, expected, mode);
+    } SALVAGE err {
+        ok = DEAD;
+    }
 
-        runCase(i + 1, nextPassed, nextFailed, nextFailures);
-    );
+    BIRTH nextPassed WITH passed;
+    BIRTH nextFailed WITH failed;
+    BIRTH nextFailures WITH failures;
+    SHOULD ok {
+        UTTER("  pass  " + name);
+        nextPassed = passed + 1;
+    } LEST {
+        UTTER("  FAIL  " + name);
+        nextFailed = failed + 1;
+        nextFailures = APPEND(failures, name);
+    }
+
+    runCase(i + 1, nextPassed, nextFailed, nextFailures);
 }
 
 UTTER("running ", total, " cases...");
