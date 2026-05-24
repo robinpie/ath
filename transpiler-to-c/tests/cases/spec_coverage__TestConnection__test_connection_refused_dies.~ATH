@@ -1,0 +1,6 @@
+import connection C("localhost", 54321);
+
+~ATH(C) {
+} EXECUTE(UTTER("connection died"));
+
+THIS.DIE();

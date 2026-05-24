@@ -1,0 +1,6 @@
+import connection C("localhost", 54325);
+
+~ATH(C) {
+} EXECUTE(UTTER("connection completed"));
+
+THIS.DIE();

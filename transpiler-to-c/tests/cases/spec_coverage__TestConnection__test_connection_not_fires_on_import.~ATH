@@ -1,0 +1,6 @@
+import connection C("localhost", 54322);
+
+~ATH(!C) {
+} EXECUTE(UTTER("connection import detected"));
+
+THIS.DIE();
