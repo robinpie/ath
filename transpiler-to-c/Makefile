@@ -6,12 +6,13 @@ SRCS    = $(filter-out $(RUNTIME_DIR)/test_runtime.c, $(wildcard $(RUNTIME_DIR)/
 OBJS    = $(SRCS:.c=.o)
 LIB     = libath_runtime.a
 BIN     = athtoc-bin
+BIN_I686 = athtoc-bin-i686
 BOOTSTRAP_C = /tmp/_athtoc_bootstrap.c
 
 # Source files for the self-hosted transpiler.
 TRANSPILER_SRCS = transpiler/main.~ATH transpiler/lexer.~ATH transpiler/parser.~ATH transpiler/cps.~ATH transpiler/codegen.~ATH
 
-.PHONY: all bin lib test smoke clean
+.PHONY: all bin bin-i686 lib test smoke clean
 
 # Default target: rebuild athtoc-bin from the latest .~ATH source files,
 # using the existing athtoc-bin to transpile itself.
@@ -30,6 +31,20 @@ $(BIN): $(TRANSPILER_SRCS) $(SRCS)
 	fi
 	cd transpiler && ../$(BIN) < main.~ATH > $(BOOTSTRAP_C)
 	$(CC) $(CFLAGS) -O2 $(BOOTSTRAP_C) $(SRCS) -I$(RUNTIME_DIR) -ldl -lffi -o $(BIN)
+
+# Build the i686 (32-bit) binary using -m32 and the lib32 libffi.
+# Requires: gcc-multilib (or a multilib-enabled gcc) and lib32-libffi.
+# On Arch: pacman -S lib32-libffi
+# On Debian/Ubuntu: apt install gcc-multilib libffi-dev:i386
+bin-i686: $(BIN_I686)
+
+$(BIN_I686): $(TRANSPILER_SRCS) $(SRCS)
+	@if [ ! -x "./$(BIN)" ]; then \
+	  echo "ERROR: ./$(BIN) not found — needed to transpile the source."; \
+	  exit 1; \
+	fi
+	cd transpiler && ../$(BIN) < main.~ATH > $(BOOTSTRAP_C)
+	$(CC) $(CFLAGS) -m32 -O2 $(BOOTSTRAP_C) $(SRCS) -I$(RUNTIME_DIR) -L/usr/lib32 -ldl -lffi -o $(BIN_I686)
 
 # Build the runtime as a static library (for users who want to link against it).
 lib: $(LIB)
@@ -54,8 +69,8 @@ smoke: $(BIN)
 	$(CC) $(CFLAGS) /tmp/_ath_smoke.c $(SRCS) -I$(RUNTIME_DIR) -ldl -lffi -o /tmp/_ath_smoke
 	/tmp/_ath_smoke
 
-# Note: clean does NOT remove athtoc-bin (the bootstrap seed). Remove it manually
-# only if you have another way to rebuild it.
+# Note: clean does NOT remove the pre-built binaries (athtoc-bin, athtoc-bin-i686).
+# Remove them manually only if you have another way to rebuild them.
 clean:
 	rm -f $(OBJS) $(LIB) $(BOOTSTRAP_C)
 	$(MAKE) -C tests clean

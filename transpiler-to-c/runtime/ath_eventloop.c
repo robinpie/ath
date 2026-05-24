@@ -27,6 +27,7 @@ static unsigned long get_now_ms(void) { return (unsigned long)GetTickCount(); }
 static void platform_sleep_ms(unsigned long ms) { Sleep((DWORD)ms); }
 #else
 #include <sys/time.h>
+#include <sys/resource.h>
 #include <time.h>
 static unsigned long get_now_ms(void) {
     struct timeval tv;
@@ -201,6 +202,19 @@ void ath_eventloop_init(void) {
     _fifo_head  = NULL;
     _fifo_tail  = NULL;
     _heap_size  = 0;
+#ifndef _WIN32
+    {
+        /* Raise the stack to at least 256 MB so that deeply recursive programs
+         * (e.g. self-hosting transpilation on 32-bit) do not SIGSEGV. */
+        struct rlimit rl;
+        const rlim_t want = (rlim_t)256 * 1024 * 1024;
+        if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur < want) {
+            rl.rlim_cur = (rl.rlim_max == RLIM_INFINITY || rl.rlim_max >= want)
+                          ? want : rl.rlim_max;
+            setrlimit(RLIMIT_STACK, &rl);
+        }
+    }
+#endif
 }
 
 void ath_eventloop_schedule(AthCont *cont, AthValue result) {
