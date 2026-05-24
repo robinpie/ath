@@ -28,14 +28,25 @@ make lib
 gcc -std=c89 program.c -L. -lath_runtime -Iruntime -o program && ./program
 ```
 
-Works with any C89-compatible compiler (gcc, clang, etc.). Linking the runtime requires libffi and libdl (Arch: `libffi`; Debian/Ubuntu: `libffi-dev`). The repo ships a pre-built x86_64 Linux `athtoc-bin` as the bootstrap seed.
+Works with any C89-compatible compiler (gcc, clang, etc.). Linking the runtime requires libffi and libdl (Arch: `libffi`; Debian/Ubuntu: `libffi-dev`). The repo ships two pre-built Linux bootstrap binaries:
+
+| Binary | Target |
+|---|---|
+| `athtoc-bin` | `x86_64-pc-linux-gnu` |
+| `athtoc-bin-i686` | `i686-pc-linux-gnu` |
 
 ```bash
-# Rebuild athtoc-bin from source
+# Rebuild athtoc-bin from source (x86_64)
 make
+
+# Build the i686 (32-bit) binary
+# Requires a multilib gcc and 32-bit libffi:
+#   Arch:          pacman -S lib32-libffi
+#   Debian/Ubuntu: apt install gcc-multilib libffi-dev:i386
+make bin-i686
 ```
 
-If you're on a non-x86_64-Linux platform, you'll need a working `athtoc-bin` from another machine to bootstrap.
+If you're on a non-x86_64 or i686 Linux platform, you'll need an `athtoc-bin` cross-compiled from another machine to bootstrap.
 
 Current limitations of the implementation (may be worked around in the future):
 
