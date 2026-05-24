@@ -284,7 +284,7 @@ CONDEMN "Something went wrong";  // throw error
 
 #### FOREIGN SESSIONS (FFI)
 
-Sessions are the !~ATH foreign-function interface. A shared library is another universe in paradox space. `import session M(libpath) { ... }` opens a shared library via `dlopen` and exposes transcribed C functions as `M.foo(...)`. The session is itself an entity whose death can be awaited, like everything in !~ATH dies; `~ATH(M)` waits for it to die, and `M.DIE()` triggers orderly cleanup.
+Sessions are the !~ATH foreign-function interface. A shared library is another universe in paradox space. `import session M(libpath) { ... }` opens a shared library via `dlopen` and exposes transcribed C functions as `M.foo(...)`. The session is itself an entity whose death can be awaited; `~ATH(M)` waits for it to die, and `M.DIE()` triggers orderly cleanup.
 
 ```ath
 import session Lc("libc.so.6") {
