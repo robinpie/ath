@@ -56,7 +56,7 @@ If you're on a non-supported platform you'll need an `athtoc-bin` cross-compiled
 
 ### Windows
 
-You can (cross)-compile programs with the MinGW-w64 toolchai:
+You can (cross-)compile programs with the MinGW-w64 toolchai:
 
 ```cygwin or other Windows bash environment
 transpiler-to-c/athtoc-bin-win64.exe < program.~ATH > program.c
