@@ -69,7 +69,7 @@ x86_64-w64-mingw32-gcc -std=c89 -O2 program.c \
     -Wl,-Bdynamic -lws2_32 -static-libgcc \
     -o program.exe
 
-wine program.exe
+program.exe
 ```
 
 Session imports on Windows use `LoadLibraryA`/`GetProcAddress` instead of `dlopen`/`dlsym`. Signal-fault protection is disabled on Windows (all sessions behave as `UNSAFE`); foreign faults crash the process rather than being caught as a recoverable error.
