@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_builtins.c — all !~ATH built-in rites */
+/* ath_builtins.c -- all !~ATH built-in rites */
 #include "ath_builtins.h"
 #include "ath_error.h"
 #include "ath_eventloop.h"

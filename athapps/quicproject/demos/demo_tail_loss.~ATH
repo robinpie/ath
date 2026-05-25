@@ -9,9 +9,9 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// demos/demo_tail_loss.~ATH — PTO Showcase
+// demos/demo_tail_loss.~ATH -- PTO Showcase
 // Drops the last packets of each burst deterministically.
-// No gaps for packet-threshold detection — only PTO can recover.
+// No gaps for packet-threshold detection -- only PTO can recover.
 
 import watcher Pkt("../packets.~ATH");
 import watcher CC("../congestion.~ATH");
@@ -286,7 +286,7 @@ RITE sim_cycle() {
                 SHOULD now - last_ack_time > 250 {
                     UTTER("[PTO] Fired (backoff=" + STRING(pto_count) + ")");
                     pto_count = pto_count + 1;
-                    // PTO sends a probe — don't apply tail loss to probes
+                    // PTO sends a probe -- don't apply tail loss to probes
                     BIRTH probe WITH {
                         type: "probe", pkt_num: next_pkt_num,
                         stream_id: 0, offset: 0, size: 0,

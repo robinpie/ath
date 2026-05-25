@@ -1,0 +1,59 @@
+// winBoxDemo.~ATH -- opens a Windows MessageBox via the C FFI.
+//
+// This demo shows !~ATH calling into a native Windows DLL through the
+// Foreign Session mechanism.  The session loads winbox_wrapper.dll (a thin
+// shim around user32 MessageBoxA) and invokes show_messagebox with two
+// strings and a button flag.
+//
+// ── Build instructions (cross-compile from Linux) ──────────────────────────
+//
+//   1. Build the wrapper DLL:
+//      x86_64-w64-mingw32-gcc -shared -O2 athapps/winbox_wrapper.c \
+//          -o athapps/winbox_wrapper.dll -luser32
+//
+//   2. Transpile this file to C89:
+//      wine transpiler-to-c/athtoc-bin-win64.exe \
+//          < athapps/winBoxDemo.~ATH > /tmp/winBoxDemo.c
+//
+//   3. Compile the C89 output:
+//      x86_64-w64-mingw32-gcc -std=c89 -O2 /tmp/winBoxDemo.c \
+//          transpiler-to-c/runtime/*.c \
+//          -Itranspiler-to-c/runtime \
+//          -Itranspiler-to-c/vendor/win64/libffi/include \
+//          -Wl,-Bstatic transpiler-to-c/vendor/win64/libffi/lib/libffi.a \
+//          -Wl,-Bdynamic -lws2_32 -static-libgcc \
+//          -o /tmp/winBoxDemo.exe
+//
+//   4. Run under Wine (DLL must be in the same directory as the exe):
+//      cp athapps/winbox_wrapper.dll /tmp/
+//      wine /tmp/winBoxDemo.exe
+//
+// ── Button flag constants (MB_* from winuser.h) ────────────────────────────
+//   0   = MB_OK
+//   1   = MB_OKCANCEL
+//   4   = MB_YESNO
+//   MB_ICONINFORMATION = 0x40  (64)
+// ── Return value ──────────────────────────────────────────────────────────
+//   IDOK=1  IDCANCEL=2  IDYES=6  IDNO=7
+
+// MB_OK | MB_ICONINFORMATION
+ENTOMB MB_OK_INFO WITH 64;
+
+import session Lib("winbox_wrapper.dll") {
+    TRANSCRIBE show_messagebox(STRING, STRING, INTEGER) -> INTEGER;
+}
+
+BIRTH result WITH Lib.show_messagebox(
+    "Hello from !~ATH running on Windows!\n\nThe foreign session called MessageBoxA via winbox_wrapper.dll.",
+    "!~ATH Windows Demo",
+    MB_OK_INFO
+);
+
+UTTER("MessageBox returned:", result);
+
+SHOULD result == 1 {
+    UTTER("User clicked OK");
+}
+
+Lib.DIE();
+THIS.DIE();

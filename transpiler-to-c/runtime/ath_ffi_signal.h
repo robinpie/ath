@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_ffi_signal.h — best-effort signal handling for foreign calls.
+/* ath_ffi_signal.h -- best-effort signal handling for foreign calls.
 
    When a transcribed C call faults (SIGSEGV/SIGBUS/SIGFPE/SIGILL) the
    handler marks the session faulted and longjmps out of ffi_call. The FFI
@@ -29,7 +29,11 @@
 struct AthSession;
 
 extern struct AthSession *ath_ffi_active_session;  /* set around ffi_call */
-extern sigjmp_buf         ath_ffi_jmp;             /* current longjmp target */
+#ifdef _WIN32
+extern jmp_buf             ath_ffi_jmp;            /* not used on Windows */
+#else
+extern sigjmp_buf          ath_ffi_jmp;            /* current longjmp target */
+#endif
 extern volatile int       ath_ffi_in_call;         /* 1 while ffi_call runs */
 
 /* Install handlers (idempotent). Called lazily from the FFI layer. */

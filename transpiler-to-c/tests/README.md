@@ -43,6 +43,25 @@ reports a normal FAIL rather than hanging.
 To override the transpiler path, set the `ATHTOC` environment variable before
 running the harness (falls back to `../athtoc-bin`).
 
+### Platform scope
+
+The test suite is Linux-only. `libruncase.so`, `athtoc-stable`, and the
+harness binary are all Linux ELFs; the runner uses `fork`/`exec`/`waitpid`
+internally.
+
+The Windows cross-compiled binary (`athtoc-bin-win64.exe`) is not covered by
+this harness. Windows correctness has to be verified manually, for example:
+
+```bash
+# Smoke-test the Windows transpiler
+echo 'THIS.DIE();' | wine ../athtoc-bin-win64.exe > /tmp/smoke.c
+x86_64-w64-mingw32-gcc -std=c89 /tmp/smoke.c runtime/*.c \
+    -Iruntime -Ivendor/win64/libffi/include \
+    -Wl,-Bstatic vendor/win64/libffi/lib/libffi.a \
+    -Wl,-Bdynamic -lws2_32 -static-libgcc -o /tmp/smoke.exe
+wine /tmp/smoke.exe
+```
+
 ## Manifest format
 
 Each line of `manifest.txt` is `name|mode|stdin`:

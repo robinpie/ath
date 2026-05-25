@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_value.c — tagged-union value implementation */
+/* ath_value.c -- tagged-union value implementation */
 #include "ath_value.h"
 #include "ath_entity.h"
 #include "ath_scope.h"

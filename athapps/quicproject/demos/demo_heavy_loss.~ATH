@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// demos/demo_heavy_loss.~ATH — Stress Test
+// demos/demo_heavy_loss.~ATH -- Stress Test
 // Shows system under heavy loss: frequent retransmits, cwnd stays small.
 
 import watcher Pkt("../packets.~ATH");

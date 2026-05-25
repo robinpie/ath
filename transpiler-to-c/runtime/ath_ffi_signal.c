@@ -75,11 +75,11 @@ void ath_ffi_signal_init(void) {
 #else  /* _WIN32 */
 
 struct AthSession *ath_ffi_active_session = NULL;
-sigjmp_buf         ath_ffi_jmp;
+jmp_buf            ath_ffi_jmp;   /* not used; kept to satisfy the extern */
 volatile int       ath_ffi_in_call = 0;
 
 void ath_ffi_signal_init(void) {
-    /* Windows: no SEH integration. Sessions on Windows behave as if UNSAFE. */
+    /* Windows: no SEH integration. Sessions behave as UNSAFE. */
 }
 
 #endif

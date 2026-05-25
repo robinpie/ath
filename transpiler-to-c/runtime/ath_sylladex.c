@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_sylladex.c — implementation of !~ATH 2.0 sylladices. */
+/* ath_sylladex.c -- implementation of !~ATH 2.0 sylladices. */
 #include "ath_sylladex.h"
 #include "ath_value.h"
 #include "ath_entity.h"
@@ -844,7 +844,7 @@ static void cap_bottle(AthSylladex *s, AthValue value) {
             return;
         }
     }
-    /* No empty slot — discard. */
+    /* No empty slot -- discard. */
 }
 
 static void cap_techhop(AthSylladex *s, AthValue value) {
@@ -883,7 +883,7 @@ static void cap_techhop(AthSylladex *s, AthValue value) {
             }
         }
     }
-    /* No valid empty cell — discard. */
+    /* No valid empty cell -- discard. */
 }
 
 static void cap_juju(AthSylladex *s, AthValue value, AthValue slot_idx) {

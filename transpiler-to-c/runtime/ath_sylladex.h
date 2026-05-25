@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_sylladex.h — !~ATH 2.0 sylladex types (STACK/QUEUE/TREE/HASHMAP/
+/* ath_sylladex.h -- !~ATH 2.0 sylladex types (STACK/QUEUE/TREE/HASHMAP/
    OUIJA/BOTTLE/TECHHOP/JUJU). One AthSylladex struct with kind tag and
    per-kind payload union. */
 #ifndef ATH_SYLLADEX_H

@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_value.h — tagged-union value type for the !~ATH runtime */
+/* ath_value.h -- tagged-union value type for the !~ATH runtime */
 #ifndef ATH_VALUE_H
 #define ATH_VALUE_H
 

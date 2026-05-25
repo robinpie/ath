@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// jsonParser.~ATH — JSON parser for !~ATH
+// jsonParser.~ATH -- JSON parser for !~ATH
 //
 // Provides parseJSON(str) which converts a JSON string into native
 // !~ATH values (maps, arrays, strings, integers, floats, booleans, VOID).

@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// network.~ATH — Simulated Link
+// network.~ATH -- Simulated Link
 
 ENTOMB BASE_RTT WITH 50;       // one-way delay in ms
 ENTOMB JITTER WITH 10;         // +/- jitter in ms

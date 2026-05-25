@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_builtins.h — all !~ATH built-in rites */
+/* ath_builtins.h -- all !~ATH built-in rites */
 #ifndef ATH_BUILTINS_H
 #define ATH_BUILTINS_H
 

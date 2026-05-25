@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// parser.~ATH — recursive descent parser for !~ATH
+// parser.~ATH -- recursive descent parser for !~ATH
 // parse(toks) -> AST root {t:"Program",stmts:[...]}
 // AST nodes: {t:TYPE, ...fields...}
 // Statement types: Import Bifurcate AthLoop Die VarDecl ConstDecl Assign
@@ -96,7 +96,7 @@ RITE parseExprStmt(toks, pos) {
         SHOULD toks[rv.pos].t == ";" { p = rv.pos + 1; } LEST { p = rv.pos; }
         BEQUEATH {node:{t:"Assign",target:expr,val:rv.node,l:expr.l}, pos: p};
     }
-    // x.DIE() — convert to a Die statement instead of a regular call,
+    // x.DIE() -- convert to a Die statement instead of a regular call,
     // matching the top-level parseStmt behaviour. Without this, inside an
     // EXECUTE clause `Lc.DIE()` would degenerate into ath_call_sync on the
     // session's "DIE" rite (which doesn't exist) and CONDEMN.

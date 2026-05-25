@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_ffi.h — libffi marshalling layer for foreign-session calls.
+/* ath_ffi.h -- libffi marshalling layer for foreign-session calls.
    Each transcribed C function gets an AthFfiSig describing its libffi CIF
    and a wrapping AthRite whose sync function is ath_ffi_invoke. The rite's
    `data` slot points at the sig. */
@@ -31,7 +31,7 @@ typedef enum {
     ATH_FFI_VOID     = 4,
     ATH_FFI_RELIC    = 5,
     ATH_FFI_BUFFER   = 6,
-    ATH_FFI_CALLBACK = 7   /* callable parameter — !~ATH rite wrapped as libffi closure */
+    ATH_FFI_CALLBACK = 7   /* callable parameter -- !~ATH rite wrapped as libffi closure */
 } AthFfiTypeTag;
 
 /* A single parameter (or the return) of a transcription. For simple types

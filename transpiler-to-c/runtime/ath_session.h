@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_session.h — loaded shared library + transcribed rites.
+/* ath_session.h -- loaded shared library + transcribed rites.
    Sessions are the !~ATH FFI mechanism: a session value carries a dlopen
    handle, a map of transcribed rites (callable as M.foo(...)), and a
    registry of relics minted by those rites. Sessions are paired with an

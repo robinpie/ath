@@ -26,20 +26,27 @@
 #include "ath_buffer.h"
 #include "ath_error.h"
 #include "ath_builtins.h"  /* ath_call_sync (for callback trampoline) */
-/* ath_current_rite is declared in ath_value.h */
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <setjmp.h>
-#ifndef _WIN32
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
 #include <dlfcn.h>
 #endif
 
-/* Returns 0 on success, non-zero signal number on fault. Save/restore the
-   active-session and jmp_buf globals so nested calls (a callback that
-   re-enters FFI) work — only the innermost protected call catches its own
-   signal; outer call's jmp_buf is preserved. */
+/* Returns 0 on success, non-zero signal number on fault.
+   On Windows there are no POSIX signals, so all sessions behave as UNSAFE. */
 static int _ath_ffi_call_protected(AthFfiSig *sig, void *retbuf, void **arg_ptrs) {
+#ifdef _WIN32
+    /* No POSIX signal handling on Windows -- always call directly. */
+    ffi_call(&sig->cif, FFI_FN(sig->symbol), retbuf, arg_ptrs);
+    return 0;
+#else
     sigjmp_buf saved_jmp;
     struct AthSession *prev_session;
     int prev_in_call;
@@ -63,6 +70,7 @@ static int _ath_ffi_call_protected(AthFfiSig *sig, void *retbuf, void **arg_ptrs
     ath_ffi_active_session = prev_session;
     memcpy(&ath_ffi_jmp, &saved_jmp, sizeof(saved_jmp));
     return signo;
+#endif
 }
 
 #define ATH_FFI_MAX_ARGS 16
@@ -217,18 +225,23 @@ AthFfiSig *ath_ffi_sig_create(AthSession *session,
                               symbol_name, nparams, ATH_FFI_MAX_ARGS);
         return NULL;
     }
-#ifndef _WIN32
-    dlerror();
-    sym = dlsym(session->dlhandle, symbol_name);
-    err = dlerror();
-    if (err) {
-        ath_runtime_error_fmt("session: dlsym(%s): %s", symbol_name, err);
+#ifdef _WIN32
+    sym = (void *)GetProcAddress((HMODULE)session->dlhandle, symbol_name);
+    if (!sym) {
+        ath_runtime_error_fmt("session: GetProcAddress(%s) failed (error %lu)",
+                              symbol_name, (unsigned long)GetLastError());
         return NULL;
     }
 #else
-    sym = NULL;
-    ath_runtime_error("session: symbol resolution unsupported on Windows", 0, 0);
-    return NULL;
+    dlerror();
+    sym = dlsym(session->dlhandle, symbol_name);
+    {
+        char *err = dlerror();
+        if (err) {
+            ath_runtime_error_fmt("session: dlsym(%s): %s", symbol_name, err);
+            return NULL;
+        }
+    }
 #endif
 
     cur = ret_type_name ? ret_type_name : "";
@@ -575,7 +588,7 @@ AthValue ath_ffi_invoke(struct AthScope *scope, int argc, AthValue *argv) {
             /* The signal handler set session->faulted. Trigger the death
                path so the teardown continuation runs the fault branch
                (curse relics, skip dlclose, leak the mapping). Closures
-               leak here too — the universe is gone. */
+               leak here too -- the universe is gone. */
             if (sig->session->entity) ath_entity_die(sig->session->entity);
             ath_runtime_error_fmt(
                 "foreign universe collapsed: signal %d", fault);

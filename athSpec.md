@@ -1,6 +1,6 @@
 # !~ATH Language Specification
 
-Version 2.1
+Version 2.1.1
 
 ## Overview
 
@@ -99,10 +99,10 @@ Double-quoted, with escape sequences
 ```
 
 Escape sequences:
-- `\\` — backslash
-- `\"` — double quote
-- `\n` — newline
-- `\t` — tab
+- `\\` -- backslash
+- `\"` -- double quote
+- `\n` -- newline
+- `\t` -- tab
 
 #### Booleans
 
@@ -164,7 +164,7 @@ A !~ATH program consists of these kinds of statements, which may appear in any o
 4. Bifurcation constructs (split execution)
 5. DIE invocations (trigger death)
 
-Imports are **not** restricted to the top of the file—they execute at runtime when encountered, creating entities dynamically. This allows patterns like importing timers inside EXECUTE clauses for chained iteration.
+Imports are **not** restricted to the top of the file -- they execute at runtime when encountered, creating entities dynamically. This allows patterns like importing timers inside EXECUTE clauses for chained iteration.
 
 The entry point is the top level of the file. Execution proceeds sequentially until a ~ATH loop blocks, then resumes when the awaited entity dies.
 
@@ -324,7 +324,7 @@ THIS.DIE();
 **Module semantics**:
 - The module runs in its own scope with its own `THIS` entity. Module execution completes fully before the import statement returns.
 - All top-level `BIRTH` variables, `ENTOMB` constants, and `RITE` definitions become exports accessible via `ModuleName.export`.
-- The watcher entity still functions normally—it dies when the file is deleted.
+- The watcher entity still functions normally -- it dies when the file is deleted.
 - Modules should call `THIS.DIE()` (a warning is emitted if missing, same as regular programs).
 - `TYPEOF(ModuleName)` returns `"MODULE"`.
 
@@ -422,7 +422,7 @@ Body restriction: In wait mode, the body may only contain nested ~ATH loops. Any
 
 ```
 ~ATH(T) {
-    // Only nested ~ATH loops allowed here—anything else is an error
+    // Only nested ~ATH loops allowed here -- anything else is an error
     ~ATH(T2) {
     } EXECUTE(...);
 } EXECUTE(...);
@@ -524,7 +524,7 @@ bifurcate <entity>[<branch1>, <branch2>];
 
 1. The specified entity is split into two named branches
 2. Both branches begin executing concurrently (structured concurrency via async)
-3. The original entity (e.g., THIS) now represents the combination of its branches—it dies only when ALL branches have died
+3. The original entity (e.g., THIS) now represents the combination of its branches -- it dies only when ALL branches have died
 4. Branches can be further bifurcated
 
 ### Example
@@ -561,7 +561,7 @@ Bifurcated branches must be recombined to be killed together:
 [BRANCH1, BRANCH2].DIE();
 ```
 
-Note: The `[A, B]` syntax in DIE targets is syntactic sugar for "both A and B". It is equivalent to killing both entities. Order does not matter. This syntax is only valid in DIE targets—it is not an entity combination like `&&`.
+Note: The `[A, B]` syntax in DIE targets is syntactic sugar for "both A and B". It is equivalent to killing both entities. Order does not matter. This syntax is only valid in DIE targets -- it is not an entity combination like `&&`.
 
 Nested bifurcation requires nested recombination:
 
@@ -591,7 +591,7 @@ Each branch has its own execution context:
 - Variable access is not subject to data races in the traditional sense
 - However, the order of execution between branches at yield points is **nondeterministic**
 
-If two branches both modify a shared variable between yield points, the final value depends on scheduling order. This is intentional—!~ATH does not provide synchronization primitives.
+If two branches both modify a shared variable between yield points, the final value depends on scheduling order. This is intentional -- !~ATH does not provide synchronization primitives.
 
 ### Branch Semantics
 
@@ -833,7 +833,7 @@ CONDEMN immediately exits to the nearest SALVAGE block, or terminates the progra
 
 #### I/O
 
-UTTER(value, ...) — Print to stdout
+UTTER(value, ...) -- Print to stdout
 ```
 UTTER("Hello");              // prints: Hello
 UTTER("x =", x);             // prints: x = <value of x>
@@ -841,20 +841,20 @@ UTTER(1, 2, 3);              // prints: 1 2 3
 ```
 Multiple arguments are space-separated. A newline is appended.
 
-HEED() — Read line from stdin
+HEED() -- Read line from stdin
 ```
 BIRTH input WITH HEED();     // blocks until line entered
 ```
 Returns the line as a STRING (without trailing newline).
 
-SCRY(path) — Read file contents or stdin
+SCRY(path) -- Read file contents or stdin
 ```
 BIRTH contents WITH SCRY("./data.txt");
 BIRTH stdin WITH SCRY(VOID); // read from stdin until EOF
 ```
 Returns file contents as a STRING. Throws error if file doesn't exist or can't be read.
 
-INSCRIBE(path, content) — Write to file
+INSCRIBE(path, content) -- Write to file
 ```
 INSCRIBE("./output.txt", "Hello, world!");
 ```
@@ -862,7 +862,7 @@ Overwrites file if it exists, creates if it doesn't. Throws error on failure.
 
 #### Type Operations
 
-TYPEOF(value) — Get type as string
+TYPEOF(value) -- Get type as string
 ```
 TYPEOF(42)           // "INTEGER"
 TYPEOF(3.14)         // "FLOAT"
@@ -876,13 +876,13 @@ TYPEOF(TREE())       // "TREE"
 // ...and similarly "QUEUE", "HASHMAP", "OUIJA", "BOTTLE", "TECHHOP", "JUJU"
 ```
 
-LENGTH(value) — Length of string or array
+LENGTH(value) -- Length of string or array
 ```
 LENGTH("hello")      // 5
 LENGTH([1, 2, 3])    // 3
 ```
 
-COUNT(sylladex) — Number of non-`VOID` values held by a sylladex
+COUNT(sylladex) -- Number of non-`VOID` values held by a sylladex
 ```
 COUNT(STACK(3))                  // 0 (empty stack)
 COUNT(myTree)                    // number of nodes
@@ -890,124 +890,124 @@ COUNT(myHashmap)                 // number of occupied slots
 ```
 The precise definition varies by sylladex type; see the *Sylladices* section.
 
-PARSE_INT(string) — Parse string to integer
+PARSE_INT(string) -- Parse string to integer
 ```
 PARSE_INT("42")      // 42
 PARSE_INT("3.14")    // error
 PARSE_INT("abc")     // error
 ```
 
-PARSE_FLOAT(string) — Parse string to float
+PARSE_FLOAT(string) -- Parse string to float
 ```
 PARSE_FLOAT("3.14")  // 3.14
 PARSE_FLOAT("42")    // 42.0
 PARSE_FLOAT("abc")   // error
 ```
 
-STRING(value) — Convert to string representation
+STRING(value) -- Convert to string representation
 ```
 STRING(42)           // "42"
 STRING([1,2,3])      // "[1, 2, 3]"
 STRING({a:1})        // "{a: 1}"
 ```
 
-INT(value) — Convert float to integer (truncates)
+INT(value) -- Convert float to integer (truncates)
 ```
 INT(3.7)             // 3
 INT(-2.9)            // -2
 ```
 
-FLOAT(value) — Convert integer to float
+FLOAT(value) -- Convert integer to float
 ```
 FLOAT(42)            // 42.0
 ```
 
-CHAR(value) — Convert integer code point to character string
+CHAR(value) -- Convert integer code point to character string
 ```
 CHAR(65)             // "A"
 CHAR(9786)           // "☺"
 ```
 
-CODE(value) — Get integer code point of first character in string
+CODE(value) -- Get integer code point of first character in string
 ```
 CODE("A")            // 65
 CODE("☺")            // 9786
 ```
 
-BIN(value) — Convert integer to binary string
+BIN(value) -- Convert integer to binary string
 ```
 BIN(10)              // "1010"
 ```
 
-HEX(value) — Convert integer to hexadecimal string
+HEX(value) -- Convert integer to hexadecimal string
 ```
 HEX(255)             // "FF"
 ```
 
 #### Array Operations
 
-APPEND(array, value) — Add element to end
+APPEND(array, value) -- Add element to end
 ```
 BIRTH arr WITH [1, 2];
 arr = APPEND(arr, 3);    // [1, 2, 3]
 ```
 Returns a new array (does not mutate).
 
-PREPEND(array, value) — Add element to beginning
+PREPEND(array, value) -- Add element to beginning
 ```
 BIRTH arr WITH [2, 3];
 arr = PREPEND(arr, 1);   // [1, 2, 3]
 ```
 
-SLICE(array, start, end) — Extract subsequence
+SLICE(array, start, end) -- Extract subsequence
 ```
 SLICE([1,2,3,4,5], 1, 4)   // [2, 3, 4]
 ```
 Indices are 0-based. End is exclusive.
 
-FIRST(array) — Get first element
+FIRST(array) -- Get first element
 ```
 FIRST([1, 2, 3])     // 1
 FIRST([])            // error
 ```
 
-LAST(array) — Get last element
+LAST(array) -- Get last element
 ```
 LAST([1, 2, 3])      // 3
 LAST([])             // error
 ```
 
-CONCAT(array1, array2) — Concatenate arrays
+CONCAT(array1, array2) -- Concatenate arrays
 ```
 CONCAT([1, 2], [3, 4])   // [1, 2, 3, 4]
 ```
 
 #### Map Operations
 
-KEYS(map) — Get array of keys
+KEYS(map) -- Get array of keys
 ```
 KEYS({a: 1, b: 2})   // ["a", "b"]
 ```
 
-VALUES(map) — Get array of values
+VALUES(map) -- Get array of values
 ```
 VALUES({a: 1, b: 2}) // [1, 2]
 ```
 
-HAS(map, key) — Check if key exists
+HAS(map, key) -- Check if key exists
 ```
 HAS({a: 1}, "a")     // ALIVE
 HAS({a: 1}, "b")     // DEAD
 ```
 
-SET(map, key, value) — Set key-value pair
+SET(map, key, value) -- Set key-value pair
 ```
 BIRTH m WITH {a: 1};
 m = SET(m, "b", 2);      // {a: 1, b: 2}
 ```
 Returns a new map (does not mutate).
 
-DELETE(map, key) — Remove key
+DELETE(map, key) -- Remove key
 ```
 BIRTH m WITH {a: 1, b: 2};
 m = DELETE(m, "a");      // {b: 2}
@@ -1015,55 +1015,55 @@ m = DELETE(m, "a");      // {b: 2}
 
 #### String Operations
 
-SPLIT(string, delimiter) — Split string into array
+SPLIT(string, delimiter) -- Split string into array
 ```
 SPLIT("a,b,c", ",")      // ["a", "b", "c"]
 SPLIT("hello", "")       // ["h", "e", "l", "l", "o"]
 ```
 
-JOIN(array, delimiter) — Join array into string
+JOIN(array, delimiter) -- Join array into string
 ```
 JOIN(["a", "b", "c"], ",")   // "a,b,c"
 ```
 
-SUBSTRING(string, start, end) — Extract substring
+SUBSTRING(string, start, end) -- Extract substring
 ```
 SUBSTRING("hello", 1, 4)     // "ell"
 ```
 
-UPPERCASE(string) — Convert to uppercase
+UPPERCASE(string) -- Convert to uppercase
 ```
 UPPERCASE("hello")       // "HELLO"
 ```
 
-LOWERCASE(string) — Convert to lowercase
+LOWERCASE(string) -- Convert to lowercase
 ```
 LOWERCASE("HELLO")       // "hello"
 ```
 
-TRIM(string) — Remove leading/trailing whitespace
+TRIM(string) -- Remove leading/trailing whitespace
 ```
 TRIM("  hello  ")        // "hello"
 ```
 
-REPLACE(string, old, new) — Replace occurrences
+REPLACE(string, old, new) -- Replace occurrences
 ```
 REPLACE("hello", "l", "w")   // "hewwo"
 ```
 
 #### Utility
 
-RANDOM() — Random float between 0 (inclusive) and 1 (exclusive)
+RANDOM() -- Random float between 0 (inclusive) and 1 (exclusive)
 ```
 BIRTH r WITH RANDOM();   // e.g., 0.7291...
 ```
 
-RANDOM_INT(min, max) — Random integer in range (inclusive)
+RANDOM_INT(min, max) -- Random integer in range (inclusive)
 ```
 BIRTH r WITH RANDOM_INT(1, 6);   // e.g., 4
 ```
 
-TIME() — Current Unix timestamp in milliseconds
+TIME() -- Current Unix timestamp in milliseconds
 ```
 BIRTH now WITH TIME();
 ```
@@ -1072,7 +1072,7 @@ BIRTH now WITH TIME();
 
 ## Sylladices
 
-A sylladex is a mutable, structured collection of values. Unlike arrays, sylladices are interacted with only through type-specific write and read operations — there is no random access, no indexing, and no iteration construct. To inspect a stored value, one must read it out, and reading consumes.
+A sylladex is a mutable, structured collection of values. Unlike arrays, sylladices are interacted with only through type-specific write and read operations -- there is no random access, no indexing, and no iteration construct. To inspect a stored value, one must read it out, and reading consumes.
 
 Each sylladex type defines its own capacity model (fixed-size with overflow ejection, or unbounded), its own insertion rule, and its own read access points. Slots and nodes may hold any value (INTEGER, FLOAT, STRING, BOOLEAN, VOID, ARRAY, MAP, or another sylladex); element types need not be uniform within a single sylladex.
 
@@ -1084,8 +1084,8 @@ The currently defined sylladex types are STACK, QUEUE, TREE, HASHMAP, OUIJA, BOT
 
 Two operations are defined on all sylladices. Their precise semantics vary by type (see each type's section).
 
-- `CAPTCHALOGUE expr INTO sylladex;` — write. Statement only; does not yield a value. The ejected value (if any) is discarded. Some sylladex types extend this syntax with modifiers (e.g., `WITH key` for HASHMAP, `SLOT n` for JUJU).
-- `EJECT FROM sylladex` — read. Expression; evaluates to the consumed value. The exact return value (and whether `VOID`, a scalar, or an array) depends on the sylladex type and the read modifier used. Some sylladex types extend this syntax with modifiers (e.g., `EJECT ROOT FROM T`).
+- `CAPTCHALOGUE expr INTO sylladex;` -- write. Statement only; does not yield a value. The ejected value (if any) is discarded. Some sylladex types extend this syntax with modifiers (e.g., `WITH key` for HASHMAP, `SLOT n` for JUJU).
+- `EJECT FROM sylladex` -- read. Expression; evaluates to the consumed value. The exact return value (and whether `VOID`, a scalar, or an array) depends on the sylladex type and the read modifier used. Some sylladex types extend this syntax with modifiers (e.g., `EJECT ROOT FROM T`).
 
 Sylladices may **not** be indexed with `[]` or have their internal structure assigned directly. Attempting to do so is a runtime error. There is no iteration construct; to traverse contents, one must repeatedly `EJECT`, which destroys the sylladex.
 
@@ -1125,11 +1125,11 @@ The size argument must be a non-negative integer. Negative sizes are a runtime e
 
 #### Write
 
-`CAPTCHALOGUE expr INTO S` — Inserts a value into slot 0. All existing slots shift one position toward higher indices. The value previously occupying the final slot is ejected (discarded).
+`CAPTCHALOGUE expr INTO S` -- Inserts a value into slot 0. All existing slots shift one position toward higher indices. The value previously occupying the final slot is ejected (discarded).
 
 #### Read
 
-`EJECT FROM S` — Removes and returns the value in slot 0. All remaining slots shift one position toward lower indices, and the final slot is refilled with `VOID`.
+`EJECT FROM S` -- Removes and returns the value in slot 0. All remaining slots shift one position toward lower indices, and the final slot is refilled with `VOID`.
 
 #### Example
 
@@ -1177,11 +1177,11 @@ The size argument must be a non-negative integer. Negative sizes are a runtime e
 
 #### Write
 
-`CAPTCHALOGUE expr INTO Q` — Inserts a value into slot 0. All existing slots shift one position toward higher indices. The value previously occupying the final slot is ejected (discarded). *(Identical to STACK write.)*
+`CAPTCHALOGUE expr INTO Q` -- Inserts a value into slot 0. All existing slots shift one position toward higher indices. The value previously occupying the final slot is ejected (discarded). *(Identical to STACK write.)*
 
 #### Read
 
-`EJECT FROM Q` — Removes and returns the value in the final slot (slot *n*−1). All remaining slots shift one position toward higher indices to fill the vacated slot, and slot 0 is refilled with `VOID`.
+`EJECT FROM Q` -- Removes and returns the value in the final slot (slot *n*−1). All remaining slots shift one position toward higher indices to fill the vacated slot, and slot 0 is refilled with `VOID`.
 
 #### Example
 
@@ -1245,8 +1245,8 @@ Trees are unbounded and never overflow. Captchaloguing never ejects an existing 
 
 Trees require an explicit modifier. Bare `EJECT FROM T` on a tree is a runtime error.
 
-- `EJECT ROOT FROM T` — Removes the root and cascades: all values in the tree are ejected. Returns an ARRAY of all ejected values in in-order traversal (which, given the BST invariant, is sorted by string comparison). The tree becomes empty. If the tree was already empty, returns `[]`. A single-node tree yields a single-element array.
-- `EJECT LEAF FROM T` — Removes and returns the leftmost leaf at maximum depth as a bare value. If the tree has only a root (the root is itself a leaf), the root is removed and returned as a bare value, and the tree becomes empty. If the tree is empty, returns `VOID`.
+- `EJECT ROOT FROM T` -- Removes the root and cascades: all values in the tree are ejected. Returns an ARRAY of all ejected values in in-order traversal (which, given the BST invariant, is sorted by string comparison). The tree becomes empty. If the tree was already empty, returns `[]`. A single-node tree yields a single-element array.
+- `EJECT LEAF FROM T` -- Removes and returns the leftmost leaf at maximum depth as a bare value. If the tree has only a root (the root is itself a leaf), the root is removed and returned as a bare value, and the tree becomes empty. If the tree is empty, returns `VOID`.
 
 Note that `EJECT ROOT` always returns an array (or `[]` for an empty tree), while `EJECT LEAF` returns a bare value or `VOID`. These return shapes are asymmetric by design.
 
@@ -1311,18 +1311,18 @@ The `WITH key` clause is required for hashmaps. `CAPTCHALOGUE value INTO H` with
 - The key is coerced to a string via `STRING(key)`.
 - The string is hashed; the slot index is `abs(hash) % size`.
 - The value (paired internally with its key) is placed in that slot.
-- If the slot was already occupied, the previous (key, value) pair is ejected (discarded). This includes the case where the same key is captchalogued again — the old value is overwritten.
+- If the slot was already occupied, the previous (key, value) pair is ejected (discarded). This includes the case where the same key is captchalogued again -- the old value is overwritten.
 
 #### Read
 
 `EJECT key FROM H` or `EJECT SLOT n FROM H`:
 
-- `EJECT expr FROM H` — by-name access. The expression is coerced to a string, hashed to find the slot, and the slot's stored key is compared to the requested key.
+- `EJECT expr FROM H` -- by-name access. The expression is coerced to a string, hashed to find the slot, and the slot's stored key is compared to the requested key.
   - If the slot is empty: returns `VOID`.
   - If the stored key matches the requested key: returns the value and clears the slot.
   - If the stored key differs (collision victim occupies the slot): returns `VOID`; the slot is **not** cleared.
 
-- `EJECT SLOT n FROM H` — by-slot access. Removes and returns the value in slot `n` regardless of key. The stored key is discarded along with the value. If the slot is empty, returns `VOID`. If `n` is out of range (negative or `>= size`), runtime error.
+- `EJECT SLOT n FROM H` -- by-slot access. Removes and returns the value in slot `n` regardless of key. The stored key is discarded along with the value. If the slot is empty, returns `VOID`. If `n` is out of range (negative or `>= size`), runtime error.
 
 Note that `EJECT 3 FROM H` looks up the key `"3"` (via string coercion), while `EJECT SLOT 3 FROM H` looks up the physical slot at index 3. These are different operations.
 
@@ -1368,7 +1368,7 @@ Truthy if any slot is occupied; falsy if all slots are empty.
 
 #### Equality
 
-Two hashmaps are `==` iff they have the same size, the same hash function (compared by rite identity — not by extensional equivalence of outputs), and the same (key, value) pair in every slot. Two hashmaps with different hash functions are never `==` even if they happen to hold identical contents, since their subsequent operations would diverge.
+Two hashmaps are `==` iff they have the same size, the same hash function (compared by rite identity -- not by extensional equivalence of outputs), and the same (key, value) pair in every slot. Two hashmaps with different hash functions are never `==` even if they happen to hold identical contents, since their subsequent operations would diverge.
 
 ### OUIJA
 
@@ -1376,15 +1376,15 @@ An OUIJA is a fixed-size sylladex where both writes and reads target uniformly r
 
 #### Initialization
 
-`BIRTH O WITH OUIJA(n);` — size *n* must be a positive integer.
+`BIRTH O WITH OUIJA(n);` -- size *n* must be a positive integer.
 
 #### Write
 
-`CAPTCHALOGUE value INTO O` — Selects a uniformly random slot index. The value previously at that slot is ejected (discarded). The new value is placed there.
+`CAPTCHALOGUE value INTO O` -- Selects a uniformly random slot index. The value previously at that slot is ejected (discarded). The new value is placed there.
 
 #### Read
 
-`EJECT FROM O` — Selects a uniformly random slot index. Returns the value at that slot (possibly `VOID` if the spirits picked an empty one) and clears the slot.
+`EJECT FROM O` -- Selects a uniformly random slot index. Returns the value at that slot (possibly `VOID` if the spirits picked an empty one) and clears the slot.
 
 #### Truthiness
 
@@ -1428,19 +1428,19 @@ Slots have three states: *empty* (no value, usable), *occupied* (holds a value),
 
 #### Initialization
 
-`BIRTH B WITH BOTTLE(n);` — size *n* must be a positive integer. All slots start *empty*.
+`BIRTH B WITH BOTTLE(n);` -- size *n* must be a positive integer. All slots start *empty*.
 
 #### Write
 
-`CAPTCHALOGUE value INTO B` — Places the value in the lowest-indexed *empty* slot, which becomes *occupied*. If there is no empty slot (all are occupied or dead), the value is discarded.
+`CAPTCHALOGUE value INTO B` -- Places the value in the lowest-indexed *empty* slot, which becomes *occupied*. If there is no empty slot (all are occupied or dead), the value is discarded.
 
 #### Read
 
 `EJECT FROM B` or `EJECT SLOT n FROM B`:
 
-- `EJECT FROM B` — reads from the lowest-indexed non-dead slot. If that slot is *occupied*, returns its value. If that slot is *empty*, returns `VOID`. Either way, the slot becomes *dead*. If all slots are dead, runtime error.
+- `EJECT FROM B` -- reads from the lowest-indexed non-dead slot. If that slot is *occupied*, returns its value. If that slot is *empty*, returns `VOID`. Either way, the slot becomes *dead*. If all slots are dead, runtime error.
 
-- `EJECT SLOT n FROM B` — reads from slot `n`. If *occupied*, returns the value; if *empty*, returns `VOID`. Either way, the slot becomes *dead*. If the slot was already *dead*, runtime error. If `n` is out of range, runtime error.
+- `EJECT SLOT n FROM B` -- reads from slot `n`. If *occupied*, returns the value; if *empty*, returns `VOID`. Either way, the slot becomes *dead*. If the slot was already *dead*, runtime error. If `n` is out of range, runtime error.
 
 Slot-dead and all-dead errors can be recovered via `ATTEMPT/SALVAGE`.
 
@@ -1497,10 +1497,10 @@ A TECHHOP is a fixed-size 2D sylladex organized into groove rows and shade colum
 BIRTH TH WITH TECHHOP(grooves, shades, groovePredicate, shadePredicate);
 ```
 
-- `grooves` — number of groove rows (positive integer)
-- `shades` — number of shade columns (positive integer)
-- `groovePredicate` — rite of signature `RITE(value, groove_index) -> BOOLEAN`; returns whether the value belongs in that groove
-- `shadePredicate` — rite of signature `RITE(value, shade_index) -> BOOLEAN`; returns whether the value belongs in that shade
+- `grooves` -- number of groove rows (positive integer)
+- `shades` -- number of shade columns (positive integer)
+- `groovePredicate` -- rite of signature `RITE(value, groove_index) -> BOOLEAN`; returns whether the value belongs in that groove
+- `shadePredicate` -- rite of signature `RITE(value, shade_index) -> BOOLEAN`; returns whether the value belongs in that shade
 
 Both predicates are fixed at birth.
 
@@ -1515,13 +1515,13 @@ Both predicates are fixed at birth.
 5. The value is placed there.
 6. If no valid empty cell exists (because no cells qualified, or all qualifying cells are occupied), the value is ejected (discarded).
 
-Unlike HASHMAP, collisions do not overwrite — occupied cells are inviolate until explicitly ejected.
+Unlike HASHMAP, collisions do not overwrite -- occupied cells are inviolate until explicitly ejected.
 
 #### Read
 
-`EJECT GROOVE g SHADE s FROM TH` — Returns and clears the cell at (groove `g`, shade `s`). If the cell is empty, returns `VOID`. If `g` or `s` is out of range, runtime error.
+`EJECT GROOVE g SHADE s FROM TH` -- Returns and clears the cell at (groove `g`, shade `s`). If the cell is empty, returns `VOID`. If `g` or `s` is out of range, runtime error.
 
-Bare `EJECT FROM TH` is a runtime error — TECHHOP requires explicit positional access.
+Bare `EJECT FROM TH` is a runtime error -- TECHHOP requires explicit positional access.
 
 #### Truthiness
 
@@ -1591,15 +1591,15 @@ JUJUs maintain internal references to bifurcate branches; these references are i
 
 #### Initialization
 
-`BIRTH J WITH JUJU(n);` — size *n* must be a positive integer. No branch arguments; participants are determined dynamically by use.
+`BIRTH J WITH JUJU(n);` -- size *n* must be a positive integer. No branch arguments; participants are determined dynamically by use.
 
 #### Write
 
-`CAPTCHALOGUE value INTO J SLOT n` — Places the value in slot *n* and records the current branch as the slot's writer. The current branch is added to the JUJU's set of *participants*. If slot *n* is already occupied, runtime error. If *n* is out of range, runtime error. If executed outside any branch (e.g., at top level, before any `bifurcate`), runtime error — JUJUs require a branch context.
+`CAPTCHALOGUE value INTO J SLOT n` -- Places the value in slot *n* and records the current branch as the slot's writer. The current branch is added to the JUJU's set of *participants*. If slot *n* is already occupied, runtime error. If *n* is out of range, runtime error. If executed outside any branch (e.g., at top level, before any `bifurcate`), runtime error -- JUJUs require a branch context.
 
 #### Read
 
-`EJECT SLOT n FROM J` — Reads slot *n*. The current branch must be a different branch from the one recorded as the slot's writer; if it is the same branch, runtime error. The current branch is added to the JUJU's set of *participants*. Returns the value and clears the slot (the slot becomes empty and has no recorded writer). If slot *n* is empty, returns `VOID` without error (but still records the current branch as a participant). If *n* is out of range, runtime error. If executed outside any branch, runtime error.
+`EJECT SLOT n FROM J` -- Reads slot *n*. The current branch must be a different branch from the one recorded as the slot's writer; if it is the same branch, runtime error. The current branch is added to the JUJU's set of *participants*. Returns the value and clears the slot (the slot becomes empty and has no recorded writer). If slot *n* is empty, returns `VOID` without error (but still records the current branch as a participant). If *n* is out of range, runtime error. If executed outside any branch, runtime error.
 
 Bare `CAPTCHALOGUE value INTO J` and bare `EJECT FROM J` are syntax errors. JUJUs require explicit slot addressing.
 
@@ -1696,9 +1696,9 @@ Each transcription declares one foreign function:
 TRANSCRIBE <name>(<type>, <type>, ...) -> <type> [DROPS <destructor>] ;
 ```
 
-- `<name>` — the foreign symbol resolved via `dlsym`.
+- `<name>` -- the foreign symbol resolved via `dlsym`.
 - Parameters and return are typed (see *Marshalling* below).
-- `DROPS <destructor>` — optional. If `<name>` returns a `RELIC`, the destructor (also a transcribed name in the same session) is attached to the relic and runs at session-orderly-death or `BANISH`.
+- `DROPS <destructor>` -- optional. If `<name>` returns a `RELIC`, the destructor (also a transcribed name in the same session) is attached to the relic and runs at session-orderly-death or `BANISH`.
 
 `TYPEOF` on a session returns `"SESSION"`.
 
@@ -1728,7 +1728,7 @@ A `RELIC` is the opaque-pointer value type. It is a value, not an entity: assign
 
 A relic is cursed when its session dies (or when explicitly `BANISH`-ed). A cursed relic's pointer is cleared; further use as an FFI argument is a runtime error (catchable via `ATTEMPT/SALVAGE`).
 
-Cross-session passing: a relic from session A cannot be passed to a call on session B. The exception is loose relics — relics returned through `CALLBACK` arguments, which have no recorded owner and may be passed anywhere; the caller is responsible for not crossing universes with them.
+Cross-session passing: a relic from session A cannot be passed to a call on session B. The exception is loose relics -- relics returned through `CALLBACK` arguments, which have no recorded owner and may be passed anywhere; the caller is responsible for not crossing universes with them.
 
 `TYPEOF(r)` is `"RELIC"`. Truthy iff non-NULL pointer and not cursed.
 
@@ -1738,12 +1738,12 @@ Cross-session passing: a relic from session A cannot be passed to a call on sess
 
 Built-ins:
 
-- `BUFFER(n)` — allocate.
-- `LENGTH(b)` — current size in bytes.
-- `BYTE_AT(b, i)` — read byte (0–255).
-- `SET_BYTE(b, i, v)` — write byte.
-- `BUFFER_TO_STRING(b)` / `BUFFER_TO_STRING(b, n)` — copy `n` bytes (or all of `b`) into a fresh string.
-- `STRING_TO_BUFFER(s)` — copy a string's bytes into a fresh buffer.
+- `BUFFER(n)` -- allocate.
+- `LENGTH(b)` -- current size in bytes.
+- `BYTE_AT(b, i)` -- read byte (0–255).
+- `SET_BYTE(b, i, v)` -- write byte.
+- `BUFFER_TO_STRING(b)` / `BUFFER_TO_STRING(b, n)` -- copy `n` bytes (or all of `b`) into a fresh string.
+- `STRING_TO_BUFFER(s)` -- copy a string's bytes into a fresh buffer.
 
 `TYPEOF(b)` is `"BUFFER"`. Truthy iff any byte is non-zero.
 
@@ -1797,7 +1797,7 @@ Sessions use two-phase death to avoid running cleanup on a corrupted runtime and
 
 - Orderly path (`M.DIE()`):
   1. Walk relics in LIFO creation order. For each that has a destructor, run it (with the session's *dying* flag temporarily cleared so destructor can call other transcribed functions of the same session). Curse the relic.
-  2. If any destructor raises, escalate to fault path — curse remaining relics, skip `dlclose`.
+  2. If any destructor raises, escalate to fault path -- curse remaining relics, skip `dlclose`.
   3. `dlclose` the library.
   4. Mark the session entity DEAD; fire `~ATH(M)` waiters.
 
@@ -1822,7 +1822,9 @@ import session UNSAFE M("./libfoo.so") { ... }
 
 ### Limitations (current - may be improved in the future)
 
-- POSIX-only (`dlopen`/libffi/sigaction). Windows builds compile but `import session` raises at runtime.
+- `session` (FFI) works on POSIX (via `dlopen`) and Windows (via `LoadLibraryA`); it requires `libffi` on both.
+- On Windows: `INTEGER` FFI parameters map to C `long` (4 bytes); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.) -- see `athapps/winbox/winBoxDemo.~ATH` for the wrapper-DLL pattern.
+- On Windows: foreign-fault recovery is not available (sessions behave as `UNSAFE`).
 - At most 16 parameters per transcription.
 - `BUFFER` and `CALLBACK` as return types are not supported.
 - Returned `STRING` is always copied; libraries that return `malloc`-owned strings will leak (no `STRING_OWNED` variant yet).
@@ -2087,7 +2089,7 @@ eject_modifier  = "ROOT"                                          // tree
 // is a runtime error.
 //
 // Parsing note: the `expression` alternative (hashmap by-name) and `FROM` keyword
-// are disambiguated by lookahead — after `EJECT`, if the next token is one of
+// are disambiguated by lookahead -- after `EJECT`, if the next token is one of
 // `ROOT`, `LEAF`, `SLOT`, `GROOVE`, or `FROM`, the corresponding production is
 // chosen; otherwise the parser begins an expression and expects it to be
 // followed by `FROM`.

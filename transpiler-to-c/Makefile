@@ -7,12 +7,21 @@ OBJS    = $(SRCS:.c=.o)
 LIB     = libath_runtime.a
 BIN     = athtoc-bin
 BIN_I686 = athtoc-bin-i686
+BIN_WIN64 = athtoc-bin-win64.exe
 BOOTSTRAP_C = /tmp/_athtoc_bootstrap.c
 
 # Source files for the self-hosted transpiler.
 TRANSPILER_SRCS = transpiler/main.~ATH transpiler/lexer.~ATH transpiler/parser.~ATH transpiler/cps.~ATH transpiler/codegen.~ATH
 
-.PHONY: all bin bin-i686 lib test smoke clean
+# MinGW-w64 cross-compiler and vendored Windows libffi.
+# libffi is from the MSYS2 mingw-w64-x86_64-libffi package (vendored in vendor/win64/).
+CROSS_CC     = x86_64-w64-mingw32-gcc
+WIN64_LIBFFI = vendor/win64/libffi
+# Silence some MinGW-specific pedantic warnings that don't affect correctness.
+WIN64_CFLAGS = -std=c89 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter \
+               -Wno-unused-variable -Wno-pedantic-ms-format
+
+.PHONY: all bin bin-i686 bin-win64 lib test smoke clean
 
 # Default target: rebuild athtoc-bin from the latest .~ATH source files,
 # using the existing athtoc-bin to transpile itself.
@@ -40,11 +49,30 @@ bin-i686: $(BIN_I686)
 
 $(BIN_I686): $(TRANSPILER_SRCS) $(SRCS)
 	@if [ ! -x "./$(BIN)" ]; then \
-	  echo "ERROR: ./$(BIN) not found — needed to transpile the source."; \
+	  echo "ERROR: ./$(BIN) not found -- needed to transpile the source."; \
 	  exit 1; \
 	fi
 	cd transpiler && ../$(BIN) < main.~ATH > $(BOOTSTRAP_C)
 	$(CC) $(CFLAGS) -m32 -O2 $(BOOTSTRAP_C) $(SRCS) -I$(RUNTIME_DIR) -L/usr/lib32 -ldl -lffi -o $(BIN_I686)
+
+# Build the x86_64 Windows binary using MinGW-w64 cross-compiler.
+# Requires: mingw-w64-gcc (pacman -S mingw-w64-gcc)
+# Vendored Windows libffi lives in vendor/win64/libffi/ (from MSYS2
+# mingw-w64-x86_64-libffi package -- see vendor/win64/README.md).
+# The resulting exe can be tested with Wine: wine ./athtoc-bin-win64.exe
+bin-win64: $(BIN_WIN64)
+
+$(BIN_WIN64): $(TRANSPILER_SRCS) $(SRCS)
+	@if [ ! -x "./$(BIN)" ]; then \
+	  echo "ERROR: ./$(BIN) not found -- needed to transpile the source."; \
+	  exit 1; \
+	fi
+	cd transpiler && ../$(BIN) < main.~ATH > $(BOOTSTRAP_C)
+	$(CROSS_CC) $(WIN64_CFLAGS) -O2 $(BOOTSTRAP_C) $(SRCS) \
+	    -I$(RUNTIME_DIR) -I$(WIN64_LIBFFI)/include \
+	    -Wl,-Bstatic $(WIN64_LIBFFI)/lib/libffi.a \
+	    -Wl,-Bdynamic -lws2_32 -static-libgcc \
+	    -o $(BIN_WIN64)
 
 # Build the runtime as a static library (for users who want to link against it).
 lib: $(LIB)

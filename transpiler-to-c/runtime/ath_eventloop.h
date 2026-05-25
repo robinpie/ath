@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_eventloop.h — cooperative event loop: FIFO queue + timer min-heap */
+/* ath_eventloop.h -- cooperative event loop: FIFO queue + timer min-heap */
 #ifndef ATH_EVENTLOOP_H
 #define ATH_EVENTLOOP_H
 

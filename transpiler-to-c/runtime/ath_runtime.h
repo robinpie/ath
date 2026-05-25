@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_runtime.h — umbrella header for the !~ATH C89 runtime */
+/* ath_runtime.h -- umbrella header for the !~ATH C89 runtime */
 #ifndef ATH_RUNTIME_H
 #define ATH_RUNTIME_H
 

@@ -25,13 +25,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#ifndef _WIN32
-#include <dlfcn.h>
+#include <sys/stat.h>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #endif
-#ifndef _WIN32
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <dlfcn.h>
 #include <sys/select.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <fcntl.h>
 #endif
 
 /* ===== pollable entity registry ===== */
@@ -113,7 +123,7 @@ void ath_entity_die(AthEntity *e) {
     /* Sessions defer their actual teardown to the event loop top: mark the
        session dying (blocks new FFI calls) and schedule the teardown
        continuation. The continuation walks destructors LIFO, dlcloses
-       (orderly only), marks is_dead, and fires waiters — see
+       (orderly only), marks is_dead, and fires waiters -- see
        ath_session_schedule_teardown. */
     if (e->kind == ATH_ENTITY_SESSION && e->session) {
         if (!e->session->dying) {
@@ -340,10 +350,8 @@ AthEntity *ath_entity_not_new(AthEntity *inner) {
 /* ===== Process ===== */
 
 #ifdef _WIN32
-#include <windows.h>
 AthEntity *ath_entity_process_new(const char *name, const char *cmd, char *const argv[]) {
     AthEntity *e = ath_entity_alloc(ATH_ENTITY_PROCESS, name);
-    /* Windows: build command string */
     char cmdline[4096];
     int i, pos = 0;
     STARTUPINFOA si;
@@ -354,25 +362,21 @@ AthEntity *ath_entity_process_new(const char *name, const char *cmd, char *const
     ZeroMemory(&si, sizeof(si)); si.cb = sizeof(si);
     ZeroMemory(&pi, sizeof(pi));
     if (!CreateProcessA(NULL, cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-        /* failed: die immediately */
         ath_eventloop_schedule_entity_die(e);
     } else {
-        e->pid = (int)(intptr_t)pi.hProcess;
+        e->pid = (intptr_t)pi.hProcess;  /* store HANDLE as intptr_t */
         ath_entity_register_pollable(e);
         CloseHandle(pi.hThread);
     }
     return e;
 }
 #else
-#include <unistd.h>
-#include <sys/wait.h>
 AthEntity *ath_entity_process_new(const char *name, const char *cmd, char *const argv[]) {
     AthEntity *e = ath_entity_alloc(ATH_ENTITY_PROCESS, name);
     pid_t pid = fork();
     if (pid < 0) {
         ath_eventloop_schedule_entity_die(e);
     } else if (pid == 0) {
-        /* child */
         char **args;
         int argc = 0, i;
         while (argv && argv[argc]) argc++;
@@ -383,7 +387,7 @@ AthEntity *ath_entity_process_new(const char *name, const char *cmd, char *const
         execvp(cmd, args);
         _exit(1);
     } else {
-        e->pid = (int)pid;
+        e->pid = (intptr_t)pid;
         ath_entity_register_pollable(e);
     }
     return e;
@@ -393,15 +397,18 @@ AthEntity *ath_entity_process_new(const char *name, const char *cmd, char *const
 /* ===== Connection ===== */
 
 #ifdef _WIN32
-#include <winsock2.h>
-#pragma comment(lib,"ws2_32.lib")
+static int _wsa_initialized = 0;
+static void _wsa_init(void) {
+    WSADATA wd;
+    if (!_wsa_initialized) { WSAStartup(MAKEWORD(2,2), &wd); _wsa_initialized = 1; }
+}
 AthEntity *ath_entity_connection_new(const char *name, const char *host, int port) {
     AthEntity *e = ath_entity_alloc(ATH_ENTITY_CONNECTION, name);
-    WSADATA wd;
     SOCKET sock;
     struct sockaddr_in sa;
     struct hostent *he;
-    WSAStartup(MAKEWORD(2,2), &wd);
+    unsigned long mode;
+    _wsa_init();
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == INVALID_SOCKET) { ath_eventloop_schedule_entity_die(e); return e; }
     he = gethostbyname(host);
@@ -410,19 +417,17 @@ AthEntity *ath_entity_connection_new(const char *name, const char *host, int por
     sa.sin_family = AF_INET;
     sa.sin_port   = htons((unsigned short)port);
     memcpy(&sa.sin_addr, he->h_addr_list[0], he->h_length);
-    if (connect(sock,(struct sockaddr*)&sa,sizeof(sa)) < 0) {
+    if (connect(sock,(struct sockaddr*)&sa,sizeof(sa)) != 0) {
         closesocket(sock); ath_eventloop_schedule_entity_die(e); return e;
     }
-    e->sockfd = (int)sock;
+    /* Set non-blocking for polling */
+    mode = 1;
+    ioctlsocket(sock, FIONBIO, &mode);
+    e->sockfd = (intptr_t)sock;  /* store SOCKET as intptr_t */
     ath_entity_register_pollable(e);
     return e;
 }
 #else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <fcntl.h>
 AthEntity *ath_entity_connection_new(const char *name, const char *host, int port) {
     AthEntity *e = ath_entity_alloc(ATH_ENTITY_CONNECTION, name);
     int sock;
@@ -439,17 +444,14 @@ AthEntity *ath_entity_connection_new(const char *name, const char *host, int por
     if (connect(sock,(struct sockaddr*)&sa,(socklen_t)sizeof(sa)) < 0) {
         close(sock); ath_eventloop_schedule_entity_die(e); return e;
     }
-    /* Set non-blocking for polling */
     fcntl(sock, F_SETFL, fcntl(sock,F_GETFL,0) | O_NONBLOCK);
-    e->sockfd = sock;
+    e->sockfd = (intptr_t)sock;
     ath_entity_register_pollable(e);
     return e;
 }
 #endif
 
 /* ===== Watcher ===== */
-
-#include <sys/stat.h>
 
 AthEntity *ath_entity_watcher_new(const char *name, const char *filepath) {
     AthEntity *e = ath_entity_alloc(ATH_ENTITY_WATCHER, name);
@@ -471,34 +473,55 @@ AthEntity *ath_entity_watcher_new(const char *name, const char *filepath) {
 void ath_entity_poll(AthEntity *e, unsigned long now_ms) {
     if (e->is_dead) return;
     switch (e->kind) {
-#ifndef _WIN32
     case ATH_ENTITY_PROCESS: {
-        int status;
-        if (waitpid(e->pid, &status, WNOHANG) > 0)
+#ifdef _WIN32
+        HANDLE h = (HANDLE)e->pid;
+        if (WaitForSingleObject(h, 0) == WAIT_OBJECT_0) {
+            CloseHandle(h);
+            e->pid = 0;
             ath_entity_die(e);
+        }
+#else
+        int status;
+        if (waitpid((pid_t)e->pid, &status, WNOHANG) > 0)
+            ath_entity_die(e);
+#endif
         break;
     }
     case ATH_ENTITY_CONNECTION: {
+#ifdef _WIN32
         fd_set fds;
         struct timeval tv;
         char buf[1];
+        SOCKET sock = (SOCKET)e->sockfd;
         FD_ZERO(&fds);
-        FD_SET(e->sockfd, &fds);
+        FD_SET(sock, &fds);
         tv.tv_sec = 0; tv.tv_usec = 0;
-        if (select(e->sockfd+1, &fds, NULL, NULL, &tv) > 0) {
-            int n = (int)recv(e->sockfd, buf, 1, MSG_PEEK);
-            if (n == 0) { /* EOF = connection closed */
-#ifdef _WIN32
-                closesocket((SOCKET)e->sockfd);
-#else
-                close(e->sockfd);
-#endif
+        if (select(0 /* ignored on Windows */, &fds, NULL, NULL, &tv) > 0) {
+            int n = (int)recv(sock, buf, 1, MSG_PEEK);
+            if (n == 0) {
+                closesocket(sock);
                 ath_entity_die(e);
             }
         }
+#else
+        fd_set fds;
+        struct timeval tv;
+        char buf[1];
+        int fd = (int)e->sockfd;
+        FD_ZERO(&fds);
+        FD_SET(fd, &fds);
+        tv.tv_sec = 0; tv.tv_usec = 0;
+        if (select(fd + 1, &fds, NULL, NULL, &tv) > 0) {
+            int n = (int)recv(fd, buf, 1, MSG_PEEK);
+            if (n == 0) {
+                close(fd);
+                ath_entity_die(e);
+            }
+        }
+#endif
         break;
     }
-#endif
     case ATH_ENTITY_WATCHER: {
         struct stat st;
         if (now_ms < e->next_poll_ms) break;

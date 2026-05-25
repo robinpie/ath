@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// main.~ATH — QUIC Transport Behavior Simulation
+// main.~ATH -- QUIC Transport Behavior Simulation
 //
 // Architecture: single-threaded simulation loop.
 // Each cycle: send a burst of packets (instant delivery),

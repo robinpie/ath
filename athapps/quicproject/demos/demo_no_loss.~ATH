@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// demos/demo_no_loss.~ATH — Clean Slow Start
+// demos/demo_no_loss.~ATH -- Clean Slow Start
 // Shows pure exponential cwnd growth with zero loss.
 
 import watcher Pkt("../packets.~ATH");

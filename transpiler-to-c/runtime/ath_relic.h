@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_relic.h — opaque foreign pointer minted by a session.
+/* ath_relic.h -- opaque foreign pointer minted by a session.
    A relic carries a raw C pointer plus a weak back-reference to the session
    that produced it. When the session dies, all its still-live relics are
    cursed (ptr cleared, cursed flag set) so dangling pointers go inert. */
