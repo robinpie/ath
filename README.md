@@ -28,7 +28,7 @@ make lib
 gcc -std=c89 program.c -L. -lath_runtime -Iruntime -o program && ./program
 ```
 
-Works with any C89-compatible compiler (gcc, clang, etc.). Linking the runtime requires libffi and libdl (Arch: `libffi`; Debian/Ubuntu: `libffi-dev`). The repo ships three pre-built bootstrap binaries:
+Works with any C89-compatible compiler (gcc, clang, etc.). Linking the runtime requires libffi and libdl (Arch: `libffi`; Debian/Ubuntu: `libffi-dev`, Windows: included in the repo). The repo ships three pre-built bootstrap binaries:
 
 | Binary | Target |
 |---|---|
