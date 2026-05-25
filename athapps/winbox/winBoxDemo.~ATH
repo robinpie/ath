@@ -1,3 +1,14 @@
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
 // winBoxDemo.~ATH -- opens a Windows MessageBox via the C FFI.
 //
 // This demo shows !~ATH calling into a native Windows DLL through the
@@ -5,7 +16,7 @@
 // shim around user32 MessageBoxA) and invokes show_messagebox with two
 // strings and a button flag.
 //
-// ── Build instructions (cross-compile from Linux) ──────────────────────────
+// ── Build instructions for cross-compiling from Linux) ────────────────────
 //
 //   1. Build the wrapper DLL:
 //      x86_64-w64-mingw32-gcc -shared -O2 athapps/winbox_wrapper.c \
@@ -28,7 +39,7 @@
 //      cp athapps/winbox_wrapper.dll /tmp/
 //      wine /tmp/winBoxDemo.exe
 //
-// ── Button flag constants (MB_* from winuser.h) ────────────────────────────
+// ── Button flag constants (MB_* from winuser.h) ───────────────────────────
 //   0   = MB_OK
 //   1   = MB_OKCANCEL
 //   4   = MB_YESNO
