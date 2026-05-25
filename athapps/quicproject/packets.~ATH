@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// packets.~ATH — Packet Representation
+// packets.~ATH -- Packet Representation
 
 // Create a data packet
 RITE make_packet(pkt_num, stream_id, offset, payload_size, send_time) {
@@ -48,7 +48,7 @@ RITE _is_acked_loop(pkt_num, ranges, i) {
     BEQUEATH _is_acked_loop(pkt_num, ranges, i + 1);
 }
 
-// Create a retransmission entry — same stream data, NEW packet number
+// Create a retransmission entry -- same stream data, NEW packet number
 RITE make_retransmit(old_pkt, new_pkt_num, send_time) {
     BEQUEATH {
         type: "data",

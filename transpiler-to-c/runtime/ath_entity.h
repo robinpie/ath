@@ -11,11 +11,12 @@
  * GNU General Public License for more details.
  */
 
-/* ath_entity.h — entity lifecycle (timer, process, connection, watcher, branch, composite) */
+/* ath_entity.h -- entity lifecycle (timer, process, connection, watcher, branch, composite) */
 #ifndef ATH_ENTITY_H
 #define ATH_ENTITY_H
 
 #include "ath_value.h"
+#include <stdint.h>
 
 /* forward */
 struct AthCont;
@@ -46,10 +47,10 @@ typedef struct AthEntity {
     AthWaiter     *waiters;
     /* timer */
     unsigned long  deadline_ms;
-    /* process (POSIX) */
-    int            pid;
-    /* connection */
-    int            sockfd;
+    /* process -- pid_t on POSIX, HANDLE (cast to intptr_t) on Windows */
+    intptr_t       pid;
+    /* connection -- fd on POSIX, SOCKET (cast to intptr_t) on Windows */
+    intptr_t       sockfd;
     /* watcher */
     char          *filepath;
     unsigned long  next_poll_ms;
@@ -99,7 +100,7 @@ void ath_entity_register_pollable(AthEntity *e);
 void ath_entity_unregister_pollable(AthEntity *e);
 void ath_entity_poll_all(unsigned long now_ms);
 
-/* number of live (non-dead) pollable entities — keeps the event loop alive */
+/* number of live (non-dead) pollable entities -- keeps the event loop alive */
 int ath_entity_pending_count(void);
 
 #endif /* ATH_ENTITY_H */

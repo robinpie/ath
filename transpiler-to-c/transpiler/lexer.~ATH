@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// lexer.~ATH — tokenizer for !~ATH source
+// lexer.~ATH -- tokenizer for !~ATH source
 // tokenize(src) -> array of token maps {t,v,l,c}
 
 RITE isDigit(ch) {

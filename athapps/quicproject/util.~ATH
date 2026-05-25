@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// util.~ATH — Constants & Helpers for QUIC simulation
+// util.~ATH -- Constants & Helpers for QUIC simulation
 
 ENTOMB INITIAL_RTT WITH 100;        // ms
 ENTOMB MIN_RTT WITH 1;              // ms

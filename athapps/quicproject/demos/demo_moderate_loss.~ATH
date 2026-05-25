@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// demos/demo_moderate_loss.~ATH — Sawtooth Pattern
+// demos/demo_moderate_loss.~ATH -- Sawtooth Pattern
 // Shows classic congestion control: cwnd grows, loss halves it, repeat.
 
 import watcher Pkt("../packets.~ATH");

@@ -1,4 +1,4 @@
-/* libruncase.c — per-case executor for the !~ATH test harness.
+/* libruncase.c -- per-case executor for the !~ATH test harness.
  *
  * Exported function:
  *   long ath_run_case(const char *name, const char *athtoc)
@@ -160,7 +160,7 @@ long run_case(const char *name, const char *athtoc) {
         const char *stdin_path = path_exists(stdin_file) ? stdin_file : "/dev/null";
         char *argv[] = { bin_file, NULL };
         run_cmd(argv, stdin_path, actual, err_file, cases_dir);
-        /* Ignore run exit status — harness compares output files. */
+        /* Ignore run exit status -- harness compares output files. */
     }
 
     return 0;

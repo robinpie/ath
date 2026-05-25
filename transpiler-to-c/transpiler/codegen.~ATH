@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// codegen.~ATH — AST -> C89 source string
+// codegen.~ATH -- AST -> C89 source string
 // generate(ast, asyncRites) -> string
 
 ENTOMB BUILTINS WITH {

@@ -21,7 +21,12 @@
 #include "ath_ffi.h"
 #include <stdlib.h>
 #include <stdio.h>
-#ifndef _WIN32
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
 #include <dlfcn.h>
 #endif
 
@@ -179,7 +184,9 @@ static void _session_teardown(AthCont *self, AthValue unused) {
             if (s->relics[i]) ath_relic_curse(s->relics[i]);
         }
     } else if (s->dlhandle) {
-#ifndef _WIN32
+#ifdef _WIN32
+        FreeLibrary((HMODULE)s->dlhandle);
+#else
         dlclose(s->dlhandle);
 #endif
         s->dlhandle = NULL;
@@ -242,29 +249,26 @@ void ath_session_transcribe(AthSession *s,
 }
 
 AthSession *ath_session_create(const char *name, const char *libpath, int unsafe) {
-#ifdef _WIN32
-    /* No Windows FFI support yet (no LoadLibrary integration). */
-    (void)name; (void)libpath; (void)unsafe;
-    ath_runtime_error("session imports are not supported on Windows yet", 0, 0);
-    return NULL;
-#else
-    void *handle = dlopen(libpath, RTLD_NOW | RTLD_LOCAL);
+    void *handle;
     AthEntity *entity;
     AthSession *session;
+#ifdef _WIN32
+    handle = (void *)LoadLibraryA(libpath);
+    if (!handle) {
+        ath_runtime_error_fmt("session: LoadLibraryA failed for '%s' (error %lu)",
+                              libpath, (unsigned long)GetLastError());
+        return NULL;
+    }
+#else
+    handle = dlopen(libpath, RTLD_NOW | RTLD_LOCAL);
     if (!handle) {
         ath_runtime_error_fmt("session: dlopen failed: %s", dlerror());
         return NULL;
     }
+#endif
     entity = ath_entity_session_new(name);
     session = ath_session_new(entity, handle, unsafe);
-    /* Weak back-ref so the entity's death path can reach the session. The
-       session owns the entity strongly (incref'd in ath_session_new), so the
-       entity stays alive as long as the session does. */
     entity->session = session;
-    /* The caller owns the only ref to the session. The entity ref taken by
-       ath_session_new (and incref'd inside it) is the entity's lifeline; we
-       don't need to keep a separate entity ref here. */
     ath_entity_decref(entity);
     return session;
-#endif
 }

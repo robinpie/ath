@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* test_runtime.c — hand-written CPS test of the runtime.
+/* test_runtime.c -- hand-written CPS test of the runtime.
    Equivalent to:
      import timer T(5ms);
      ~ATH(T) {} EXECUTE(UTTER("Hello from C runtime!"));
@@ -48,7 +48,7 @@ static void main_frame_free(MainFrame *f) {
     free(f);
 }
 
-/* seg1: EXECUTE body — UTTER("Hello from C runtime!") + THIS.DIE() */
+/* seg1: EXECUTE body -- UTTER("Hello from C runtime!") + THIS.DIE() */
 static void main_seg1(AthCont *self, AthValue result) {
     MainFrame *f = (MainFrame *)self;
     AthValue args[1];
@@ -78,7 +78,7 @@ static void main_seg0(AthCont *self, AthValue result) {
     f->T_entity = ath_entity_val(T);
     ath_scope_define(f->scope, "T", f->T_entity, 0);
 
-    /* ~ATH(T) {} EXECUTE(seg1) — register seg1 as waiter on T */
+    /* ~ATH(T) {} EXECUTE(seg1) -- register seg1 as waiter on T */
     f->base.resume = main_seg1;
     ath_entity_on_death(T, (AthCont*)f);
 

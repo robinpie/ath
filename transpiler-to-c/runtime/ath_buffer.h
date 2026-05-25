@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_buffer.h — mutable byte buffer for C FFI out-parameters.
+/* ath_buffer.h -- mutable byte buffer for C FFI out-parameters.
    BUFFER is the only mutable value type in !~ATH; mutations are visible
    across all aliases. Memory is freed when refcount drops to zero, or
    explicitly via ath_buffer_release (used by BANISH). */

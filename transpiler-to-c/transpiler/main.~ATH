@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// main.~ATH — transpiler entry point
+// main.~ATH -- transpiler entry point
 // Reads !~ATH source from stdin, outputs C89 to stdout.
 
 import watcher Lex("./lexer.~ATH");

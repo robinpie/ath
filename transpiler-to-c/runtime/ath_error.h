@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_error.h — error handling (setjmp/longjmp) for ATTEMPT/SALVAGE/CONDEMN */
+/* ath_error.h -- error handling (setjmp/longjmp) for ATTEMPT/SALVAGE/CONDEMN */
 #ifndef ATH_ERROR_H
 #define ATH_ERROR_H
 

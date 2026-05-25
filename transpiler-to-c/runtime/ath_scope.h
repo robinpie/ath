@@ -11,14 +11,14 @@
  * GNU General Public License for more details.
  */
 
-/* ath_scope.h — lexical scope chain */
+/* ath_scope.h -- lexical scope chain */
 #ifndef ATH_SCOPE_H
 #define ATH_SCOPE_H
 
 #include "ath_value.h"
 
 typedef struct AthBinding {
-    const char *name;  /* interned C string literal or malloc'd — owned by entry */
+    const char *name;  /* interned C string literal or malloc'd -- owned by entry */
     AthValue    value;
     int         is_const;
 } AthBinding;

@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_eventloop.c — cooperative event loop with FIFO queue and timer min-heap */
+/* ath_eventloop.c -- cooperative event loop with FIFO queue and timer min-heap */
 #if !defined(_WIN32)
 #define _POSIX_C_SOURCE 200112L
 #endif
@@ -240,7 +240,7 @@ void ath_eventloop_set_this(AthEntity *e) {
 }
 
 /* Current bifurcate branch context (for JUJU sylladex). NULL outside any
-   branch. Single-threaded — no locking needed. */
+   branch. Single-threaded -- no locking needed. */
 static AthEntity *_current_branch = NULL;
 
 AthEntity *ath_eventloop_get_current_branch(void) {
@@ -264,12 +264,12 @@ void ath_eventloop_run(void) {
         }
 
         /* Per spec: THIS.DIE() terminates the program. After draining all
-           ready continuations, if THIS has died, exit — don't wait on
+           ready continuations, if THIS has died, exit -- don't wait on
            pending timers or poll other entities. */
         if (_this_entity && _this_entity->is_dead) return;
 
         /* Check if anything remains. A pending process/connection/watcher
-           keeps the loop alive even when the timer heap is empty — otherwise
+           keeps the loop alive even when the timer heap is empty -- otherwise
            ~ATH on such an entity would never resolve. */
         if (heap_empty() && ath_entity_pending_count() == 0) break;
 
@@ -297,7 +297,7 @@ void ath_eventloop_run(void) {
                 platform_sleep_ms(sleep_ms);
             }
         } else {
-            /* No timers, but pollable entities are still pending — sleep
+            /* No timers, but pollable entities are still pending -- sleep
                briefly so the next poll doesn't busy-spin the CPU. */
             platform_sleep_ms(10);
         }
