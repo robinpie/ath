@@ -12,94 +12,6 @@ There is also a deprecated Python interpreter for !~ATH 1.3, and a partial depre
 
 The JavaScript interpreter powers [a Web playground for !~ATH 1.3](https://robinpie.neocities.org/ath/).
 
-## Usage
-
-All commands run from `transpiler-to-c/`:
-
-```bash
-# Transpile stdin → C89 stdout
-./athtoc-bin < program.~ATH > program.c
-
-# Compile and run
-gcc -std=c89 program.c runtime/*.c -Iruntime -o program && ./program
-
-# Or: build the runtime library and link against it
-make lib
-gcc -std=c89 program.c -L. -lath_runtime -Iruntime -o program && ./program
-```
-
-Works with any C89-compatible compiler (gcc, clang, etc.). Linking the runtime requires libffi and libdl (Arch: `libffi`; Debian/Ubuntu: `libffi-dev`, Windows: included in the repo). The repo ships three pre-built bootstrap binaries:
-
-| Binary | Target |
-|---|---|
-| `athtoc-bin` | `x86_64-pc-linux-gnu` |
-| `athtoc-bin-i686` | `i686-pc-linux-gnu` |
-| `athtoc-bin-win64.exe` | `x86_64-pc-windows-gnu` |
-
-```bash
-# Rebuild athtoc-bin from source (x86_64)
-make
-
-# Build the i686 (32-bit) binary
-# Requires a multilib gcc and 32-bit libffi:
-#   Arch:          pacman -S lib32-libffi
-#   Debian/Ubuntu: apt install gcc-multilib libffi-dev:i386
-make bin-i686
-
-# Build the Windows x86_64 binary (cross-compile)
-# Requires mingw-w64-gcc (Arch: pacman -S mingw-w64-gcc).
-# Vendored libffi (MSYS2 package) is in vendor/win64/libffi/
-make bin-win64
-```
-
-If you're on a non-supported platform you'll need an `athtoc-bin` cross-compiled from another machine to bootstrap.
-
-### Windows
-
-You can (cross-)compile programs with the MinGW-w64 toolchai:
-
-```cygwin or other Windows bash environment
-transpiler-to-c/athtoc-bin-win64.exe < program.~ATH > program.c
-
-x86_64-w64-mingw32-gcc -std=c89 -O2 program.c \
-    transpiler-to-c/runtime/*.c \
-    -Itranspiler-to-c/runtime \
-    -Itranspiler-to-c/vendor/win64/libffi/include \
-    -Wl,-Bstatic transpiler-to-c/vendor/win64/libffi/lib/libffi.a \
-    -Wl,-Bdynamic -lws2_32 -static-libgcc \
-    -o program.exe
-
-program.exe
-```
-
-Session imports on Windows use `LoadLibraryA`/`GetProcAddress` instead of `dlopen`/`dlsym`. Signal-fault protection is disabled on Windows (all sessions behave as `UNSAFE`); foreign faults crash the process rather than being caught as a recoverable error.
-
-Current limitations of the implementation (may be worked around in the future):
-
-- Integers are C `long` (64-bit on LP64 systems, 32-bit on Windows LLP64), not unbounded
-- Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
-- Sync rites recurse on the C call stack; deep recursion will stack-overflow
-- The FFI supports at most 16 parameters per transcription; `BUFFER` and `CALLBACK` as return types are not supported
-- On Windows: FFI INTEGER maps to C `long` (4 bytes, not pointer-sized); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.) — see `athapps/winbox/winBoxDemo.~ATH` for a wrapper pattern
-
-### Test suite
-
-```bash
-cd transpiler-to-c
-make test     # runs the !~ATH test harness over all cases
-make smoke    # quick hello-world sanity check
-```
-The test suite is currently only for the Linux version.
-
-The test harness is itself an !~ATH program (`tests/harness.~ATH`).
-
-## Debugging !~ATH programs
-
-No specialized tools beyond existing C debugging tools exist for !~ATH.
-
-The deprecated Python interpreter at `deprecated/python-interpreter/` includes a stepping debugger (`--step`), TUI debugger (`--tui`), and non-interactive JSON trace mode (`--trace`). These are useful for debugging !~ATH 1.3 logic. Run from that directory with `python3 untildeath.py --help`.
-
-
 ## Spec and Reference
 
 The full !~ATH spec is located at ./athSpec.md, but a quick reference is located below.
@@ -411,6 +323,93 @@ BUFFER_TO_STRING(b[, n])  // FFI: copy buffer bytes to string
 STRING_TO_BUFFER(s)       // FFI: copy string bytes to fresh buffer
 BANISH x;                 // FFI: free a RELIC (run destructor) or BUFFER
 ```
+
+## Usage
+
+All commands run from `transpiler-to-c/`:
+
+```bash
+# Transpile stdin → C89 stdout
+./athtoc-bin < program.~ATH > program.c
+
+# Compile and run
+gcc -std=c89 program.c runtime/*.c -Iruntime -o program && ./program
+
+# Or: build the runtime library and link against it
+make lib
+gcc -std=c89 program.c -L. -lath_runtime -Iruntime -o program && ./program
+```
+
+Works with any C89-compatible compiler (gcc, clang, etc.). Linking the runtime requires libffi and libdl (Arch: `libffi`; Debian/Ubuntu: `libffi-dev`, Windows: included in the repo). The repo ships three pre-built bootstrap binaries:
+
+| Binary | Target |
+|---|---|
+| `athtoc-bin` | `x86_64-pc-linux-gnu` |
+| `athtoc-bin-i686` | `i686-pc-linux-gnu` |
+| `athtoc-bin-win64.exe` | `x86_64-pc-windows-gnu` |
+
+```bash
+# Rebuild athtoc-bin from source (x86_64)
+make
+
+# Build the i686 (32-bit) binary
+# Requires a multilib gcc and 32-bit libffi:
+#   Arch:          pacman -S lib32-libffi
+#   Debian/Ubuntu: apt install gcc-multilib libffi-dev:i386
+make bin-i686
+
+# Build the Windows x86_64 binary (cross-compile)
+# Requires mingw-w64-gcc (Arch: pacman -S mingw-w64-gcc).
+# Vendored libffi (MSYS2 package) is in vendor/win64/libffi/
+make bin-win64
+```
+
+If you're on a non-supported platform, you'll need an `athtoc-bin` cross-compiled from another machine to bootstrap.
+
+### Windows
+
+You can (cross-)compile programs with the MinGW-w64 toolchai:
+
+```cygwin or other Windows bash environment
+transpiler-to-c/athtoc-bin-win64.exe < program.~ATH > program.c
+
+x86_64-w64-mingw32-gcc -std=c89 -O2 program.c \
+    transpiler-to-c/runtime/*.c \
+    -Itranspiler-to-c/runtime \
+    -Itranspiler-to-c/vendor/win64/libffi/include \
+    -Wl,-Bstatic transpiler-to-c/vendor/win64/libffi/lib/libffi.a \
+    -Wl,-Bdynamic -lws2_32 -static-libgcc \
+    -o program.exe
+
+program.exe
+```
+
+Session imports on Windows use `LoadLibraryA`/`GetProcAddress` instead of `dlopen`/`dlsym`. Signal-fault protection is disabled on Windows (all sessions behave as `UNSAFE`); foreign faults crash the process rather than being caught as a recoverable error.
+
+Current limitations of the implementation (may be worked around in the future):
+
+- Integers are C `long` (64-bit on LP64 systems, 32-bit on Windows LLP64), not unbounded
+- Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
+- Sync rites recurse on the C call stack; deep recursion will stack-overflow
+- The FFI supports at most 16 parameters per transcription; `BUFFER` and `CALLBACK` as return types are not supported
+- On Windows: FFI INTEGER maps to C `long` (4 bytes, not pointer-sized); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.) — see `athapps/winbox/winBoxDemo.~ATH` for a wrapper pattern
+
+### Test suite
+
+```bash
+cd transpiler-to-c
+make test     # runs the !~ATH test harness over all cases
+make smoke    # quick hello-world sanity check
+```
+The test suite is currently only for the Linux version.
+
+The test harness is itself an !~ATH program (`tests/harness.~ATH`).
+
+## Debugging !~ATH programs
+
+No specialized tools beyond existing C debugging tools exist for !~ATH.
+
+The deprecated Python interpreter at `deprecated/python-interpreter/` includes a stepping debugger (`--step`), TUI debugger (`--tui`), and non-interactive JSON trace mode (`--trace`). These are useful for debugging !~ATH 1.3 logic. Run from that directory with `python3 untildeath.py --help`.
 
 ---
 
