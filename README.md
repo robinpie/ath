@@ -6,7 +6,7 @@
 
 ## Implementation
 
-The primary implementation of !~ATH is a transpiler to C89 that compiles via CPS transform. It is self-hosting, the transpiler itself is written in !~ATH.
+The primary implementation of !~ATH is a transpiler to C89 that compiles via CPS transform. It is self-hosting, the transpiler itself is written in !~ATH. See the *Usage* section for how to compile your code.
 
 There is also a deprecated Python interpreter for !~ATH 1.3, and a partial deprecated JavaScript interpreter for !~ATH 1.3.
 
