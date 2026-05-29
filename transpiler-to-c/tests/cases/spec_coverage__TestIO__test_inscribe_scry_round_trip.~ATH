@@ -1,0 +1,12 @@
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+INSCRIBE("../work/ath_spec_coverage_inscribe_round_trip.txt", "alpha\nbeta"); BIRTH s WITH SCRY("../work/ath_spec_coverage_inscribe_round_trip.txt"); UTTER(LENGTH(s)); SHOULD s == "alpha\nbeta" { UTTER("ok"); } LEST { UTTER("bad"); } THIS.DIE();
