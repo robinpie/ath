@@ -374,7 +374,10 @@ AthValue ath_builtin_BIN(AthScope *s, int argc, AthValue *argv) {
     REQUIRE_INT(argv[0], "BIN", "value");
     v = (unsigned long)argv[0].as.integer;
     if (v == 0) return ath_str_cstr("0");
-    for (bit = 63; bit >= 0; bit--)
+    /* Start from the top bit of unsigned long's actual width: 63 on LP64,
+     * 31 on Windows (LLP64). Shifting by >= the width is undefined, which
+     * previously produced garbage leading bits on Windows. */
+    for (bit = (int)(sizeof(unsigned long) * 8) - 1; bit >= 0; bit--)
         if (v & (1UL << bit)) break;
     for (; bit >= 0; bit--)
         buf[pos++] = (v & (1UL << bit)) ? '1' : '0';

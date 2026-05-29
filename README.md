@@ -398,10 +398,11 @@ Current limitations of the implementation (may be worked around in the future):
 
 ```bash
 cd transpiler-to-c
-make test     # runs the !~ATH test harness over all cases
-make smoke    # quick hello-world sanity check
+make test        # runs the harness over all cases on both platforms
+make test-linux  # Linux/native only
+make test-win64  # Windows only, via wine + mingw (requires wine + mingw-w64-gcc)
+make smoke       # quick hello-world sanity check
 ```
-The test suite is currently only for the Linux version.
 
 The test harness is itself an !~ATH program (`tests/harness.~ATH`).
 

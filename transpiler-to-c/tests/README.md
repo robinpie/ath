@@ -1,12 +1,18 @@
 From `transpiler-to-c/`:
 
 ```bash
-make test
+make test          # both platforms: Linux (native) then Windows (wine)
+make test-linux    # Linux only
+make test-win64    # Windows only, via wine + mingw (requires wine + mingw-w64-gcc)
 ```
 
-The harness prints a `pass`/`FAIL` line per case and a summary, and exits
+The harness prints a `pass`/`FAIL`/`skip` line per case and a summary, and exits
 non-zero if any case fails. Incremental: only rebuilds artifacts that are
 out of date.
+
+Each run targets one platform. Cases are filtered to the current target by their
+manifest platform field (see *Manifest format* below), so the summary also
+reports a `skipped` count for cases that don't apply to that target.
 
 ## How it works
 
@@ -45,32 +51,40 @@ running the harness (falls back to `../athtoc-bin`).
 
 ### Platform scope
 
-The test suite is Linux-only. `libruncase.so`, `athtoc-stable`, and the
-harness binary are all Linux ELFs; the runner uses `fork`/`exec`/`waitpid`
-internally.
+The harness binary, `libruncase.so`, and `athtoc-stable` are always Linux ELFs;
+the runner uses `fork`/`exec`/`waitpid` internally. What changes per target is
+the per-case toolchain, selected by the `ATH_TARGET` env var that the `make`
+targets set (and which `libruncase` reads and reports back to the harness via
+`ath_target()`, since !~ATH has no `getenv`):
 
-The Windows cross-compiled binary (`athtoc-bin-win64.exe`) is not covered by
-this harness. Windows correctness has to be verified manually, for example:
+- native (`make test-linux`): transpiles each case with `../athtoc-bin`,
+  compiles with `gcc`, runs the ELF directly.
+- win64 (`make test-win64`): transpiles with `../athtoc-bin-win64.exe` under
+  wine, cross-compiles with `x86_64-w64-mingw32-gcc` against the vendored
+  libffi and `libath_runtime_win64.a` (built by `make lib-win64`), and run the
+  `.exe` under wine. Requires `wine` and `mingw-w64-gcc`. The Windows runtime
+  writes stdout in text mode (CRLF), so `libruncase` normalises the captured
+  output to LF before comparing.
 
-```bash
-# Smoke-test the Windows transpiler
-echo 'THIS.DIE();' | wine ../athtoc-bin-win64.exe > /tmp/smoke.c
-x86_64-w64-mingw32-gcc -std=c89 /tmp/smoke.c runtime/*.c \
-    -Iruntime -Ivendor/win64/libffi/include \
-    -Wl,-Bstatic vendor/win64/libffi/lib/libffi.a \
-    -Wl,-Bdynamic -lws2_32 -static-libgcc -o /tmp/smoke.exe
-wine /tmp/smoke.exe
-```
+`make test-win64` is much slower than `test-linux` (every case spawns wine twice
+plus a cross-compile).
 
 ## Manifest format
 
-Each line of `manifest.txt` is `name|mode|stdin`:
+Each line of `manifest.txt` is `name|mode|stdin` and optionally `platforms`:
 
 |  |  |
 | --- | --- |
 | `name` | The case basename under `./cases/`. |
 | `mode` | `exact` (stdout must match `<name>.expected` byte-for-byte) or `sorted` (compare line-sorted; used for bifurcated programs whose branches interleave nondeterministically). |
 | `stdin` | `1` if a `<name>.stdin` file should be fed to the program, else `0`. |
+| `platforms` | Optional comma-separated list of targets the case applies to (`linux`, `win64`). Omitted/empty means **all** targets. A case not applicable to the current target is reported as `skip`. |
+
+Use `linux` for cases that cannot run under wine (e.g. FFI sessions that
+`dlopen` a Linux `.so`, processes that spawn unix commands) and for cases whose
+output legitimately differs on Windows' 32-bit `long`. For the latter, add a
+parallel `win64`-tagged case asserting the Windows-correct output (see
+`*_large_integer_fits_in_long` / `*_large_integer_wraps_on_win64`).
 
 
 ## Adding a test
@@ -81,3 +95,5 @@ Each line of `manifest.txt` is `name|mode|stdin`:
 4. If it does `import watcher M("...~ATH")`, drop the module file in `cases/`
    and reference it by basename (the case is transpiled with cwd = `cases/`).
 5. Append a line to `manifest.txt`. Use `sorted` mode for any `bifurcate` case.
+   Add a `platforms` field if the case is platform-specific (e.g. `|linux` for an
+   FFI/`.so` or unix-process case).

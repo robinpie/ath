@@ -1,0 +1,5 @@
+# Build artifacts (runtime objects and static libraries built by the Makefile).
+# Vendored deps under vendor/ are committed and not matched by these anchored rules.
+/runtime/*.o
+/libath_runtime.a
+/libath_runtime_win64.a
