@@ -27,7 +27,13 @@
 
 import session RC("./work/libruncase.so") {
     TRANSCRIBE run_case(STRING, STRING) -> INTEGER;
+    TRANSCRIBE ath_target() -> STRING;
 };
+
+// The harness has no getenv, so it asks libruncase which target the run is for
+// ("native" or "win64"). Cases are filtered against this by their manifest
+// platform field (see appliesTo / manifest format in README.md).
+BIRTH target WITH RC.ath_target();
 
 // ---------------------------------------------------------------------------
 // Sorted-mode comparison.
@@ -61,6 +67,32 @@ RITE matches(actual, expected, mode) {
 }
 
 // ---------------------------------------------------------------------------
+// Platform filtering.
+//
+// A manifest line's optional 4th field is a comma-separated list of targets the
+// case applies to ("linux", "win64"). An empty/absent field means all targets.
+// ---------------------------------------------------------------------------
+
+RITE inList(parts, i, n, want) {
+    SHOULD i < n {
+        SHOULD TRIM(parts[i]) == want {
+            BEQUEATH ALIVE;
+        }
+        BEQUEATH inList(parts, i + 1, n, want);
+    }
+    BEQUEATH DEAD;
+}
+
+RITE appliesTo(platforms, target) {
+    BIRTH p WITH TRIM(platforms);
+    SHOULD p == "" {
+        BEQUEATH ALIVE;
+    }
+    BIRTH parts WITH SPLIT(p, ",");
+    BEQUEATH inList(parts, 0, LENGTH(parts), target);
+}
+
+// ---------------------------------------------------------------------------
 // Reporting.
 // ---------------------------------------------------------------------------
 
@@ -71,12 +103,13 @@ RITE printFailures(failures, i, n) {
     }
 }
 
-RITE report(total, passed, failed, failures) {
+RITE report(total, passed, failed, skipped, failures) {
     UTTER("");
-    UTTER("==== !~ATH test harness ====");
-    UTTER("total:  ", total);
-    UTTER("passed: ", passed);
-    UTTER("failed: ", failed);
+    UTTER("==== !~ATH test harness (" + target + ") ====");
+    UTTER("total:   ", total);
+    UTTER("passed:  ", passed);
+    UTTER("failed:  ", failed);
+    UTTER("skipped: ", skipped);
     SHOULD failed > 0 {
         UTTER("failing cases:");
         printFailures(failures, 0, LENGTH(failures));
@@ -94,15 +127,26 @@ BIRTH manifestRaw WITH SCRY("manifest.txt");
 BIRTH lines WITH SPLIT(TRIM(manifestRaw), "\n");
 BIRTH total WITH LENGTH(lines);
 
-RITE runCase(i, passed, failed, failures) {
+RITE runCase(i, passed, failed, skipped, failures) {
     SHOULD i >= total {
-        report(total, passed, failed, failures);
+        report(total, passed, failed, skipped, failures);
         BEQUEATH VOID;
     }
 
     BIRTH fields WITH SPLIT(lines[i], "|");
     BIRTH name WITH fields[0];
     BIRTH mode WITH fields[1];
+    BIRTH platforms WITH "";
+    SHOULD LENGTH(fields) > 3 {
+        platforms = fields[3];
+    }
+
+    // Skip cases that don't apply to the current target -- no transpile/run.
+    SHOULD NOT appliesTo(platforms, target) {
+        UTTER("  skip  " + name);
+        runCase(i + 1, passed, failed, skipped + 1, failures);
+        BEQUEATH VOID;
+    }
 
     RC.run_case(name, "../athtoc-bin");
 
@@ -127,10 +171,10 @@ RITE runCase(i, passed, failed, failures) {
         nextFailures = APPEND(failures, name);
     }
 
-    runCase(i + 1, nextPassed, nextFailed, nextFailures);
+    runCase(i + 1, nextPassed, nextFailed, skipped, nextFailures);
 }
 
-UTTER("running ", total, " cases...");
-runCase(0, 0, 0, []);
+UTTER("running ", total, " cases (", target, ")...");
+runCase(0, 0, 0, 0, []);
 
 THIS.DIE();

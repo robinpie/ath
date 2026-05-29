@@ -13,14 +13,26 @@
 
 /* libruncase.c -- per-case executor for the !~ATH test harness.
  *
- * Exported function:
- *   long ath_run_case(const char *name, const char *athtoc)
+ * Exported functions:
+ *   long        run_case(const char *name, const char *athtoc)
+ *   const char *ath_target(void)
  *
- * Transpiles cases/<name>.~ATH with athtoc (falling back to the ATHTOC
- * environment variable, then "../athtoc-bin"), compiles the result with
- * gcc, runs the binary, and writes stdout to work/<name>.actual.
- * On any toolchain failure the actual file is filled with a sentinel
- * (TRANSPILE_FAIL / COMPILE_FAIL) so the harness sees a clean FAIL.
+ * Transpiles cases/<name>.~ATH, compiles the result, runs it, and writes
+ * stdout to work/<name>.actual.  On any toolchain failure the actual file is
+ * filled with a sentinel (TRANSPILE_FAIL / COMPILE_FAIL) so the harness sees a
+ * clean FAIL.
+ *
+ * Two targets, selected by the ATH_TARGET environment variable:
+ *   "native" (default) -- transpile with athtoc (arg -> ATHTOC -> ../athtoc-bin),
+ *                         compile with gcc, run the ELF directly.
+ *   "win64"            -- transpile with the Windows transpiler under wine,
+ *                         cross-compile with mingw + vendored libffi, run the
+ *                         .exe under wine.  The win64 program emits CRLF line
+ *                         endings, so the .actual file is normalised to LF
+ *                         before the harness compares it.
+ *
+ * ath_target() lets the harness (which has no getenv) discover the target so it
+ * can filter cases by their manifest platform field.
  *
  * Must be invoked with the process cwd set to the tests/ directory.
  */
@@ -97,10 +109,80 @@ static void abspath(char *buf, size_t bufsz, const char *base, const char *rel) 
     }
 }
 
+/* The active target, from ATH_TARGET ("win64" or, by default, "native"). */
+static int target_is_win64(void) {
+    const char *t = getenv("ATH_TARGET");
+    return t && strcmp(t, "win64") == 0;
+}
+
+/* The platform label reported to the harness (which has no getenv of its own),
+ * matching the manifest platform-field vocabulary: "win64" or "linux". */
+const char *ath_target(void) {
+    return target_is_win64() ? "win64" : "linux";
+}
+
+/* Copy name into dst, replacing characters that wine mishandles when they
+ * appear in the program-path argument (notably the double quotes in some
+ * parametrised case names) with '_'. Only the intermediate .exe filename is
+ * sanitised; the .actual/.err/.c paths are opened by us directly and keep the
+ * exact case name. Brackets are kept (wine handles them and they keep names
+ * distinct). */
+static void sanitize_exe(char *dst, size_t dstsz, const char *name) {
+    size_t i;
+    for (i = 0; name[i] && i + 1 < dstsz; i++) {
+        char c = name[i];
+        int ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                 (c >= '0' && c <= '9') ||
+                 c == '.' || c == '_' || c == '-' || c == '[' || c == ']';
+        dst[i] = (char)(ok ? c : '_');
+    }
+    dst[i < dstsz ? i : dstsz - 1] = '\0';
+}
+
+/* Strip carriage returns from a file in place.  The win64 runtime writes its
+ * stdout in text mode, so newlines arrive as CRLF; the corpus stores LF, so we
+ * normalise before the harness does its byte-exact compare.  Harmless when the
+ * file contains no CR. */
+static void strip_cr(const char *path) {
+    FILE *f;
+    long n, i, j;
+    char *buf;
+
+    f = fopen(path, "rb");
+    if (!f) return;
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return; }
+    n = ftell(f);
+    if (n < 0) { fclose(f); return; }
+    rewind(f);
+    buf = (char *)malloc((size_t)n);
+    if (!buf) { fclose(f); return; }
+    if (fread(buf, 1, (size_t)n, f) != (size_t)n) { free(buf); fclose(f); return; }
+    fclose(f);
+
+    for (i = 0, j = 0; i < n; i++) {
+        if (buf[i] != '\r') buf[j++] = buf[i];
+    }
+
+    f = fopen(path, "wb");
+    if (f) { fwrite(buf, 1, (size_t)j, f); fclose(f); }
+    free(buf);
+}
+
 long run_case(const char *name, const char *athtoc) {
-    /* Resolve the transpiler path: argument → ATHTOC env → default */
-    const char *transpiler = (athtoc && *athtoc) ? athtoc : getenv("ATHTOC");
-    if (!transpiler || !*transpiler) transpiler = "../athtoc-bin";
+    int win64 = target_is_win64();
+
+    /* Resolve the transpiler path.
+     * native: argument -> ATHTOC env -> ../athtoc-bin
+     * win64:  ATHTOC env -> ../athtoc-bin-win64.exe (the native arg is ignored,
+     *         since the harness passes the native binary path unconditionally). */
+    const char *transpiler;
+    if (win64) {
+        transpiler = getenv("ATHTOC");
+        if (!transpiler || !*transpiler) transpiler = "../athtoc-bin-win64.exe";
+    } else {
+        transpiler = (athtoc && *athtoc) ? athtoc : getenv("ATHTOC");
+        if (!transpiler || !*transpiler) transpiler = "../athtoc-bin";
+    }
 
     /* Absolute cwd (tests/) for building paths that survive chdir in children */
     char tests_dir[4096];
@@ -116,7 +198,15 @@ long run_case(const char *name, const char *athtoc) {
 
     snprintf(src,       sizeof src,       "%s/%s.~ATH",   cases_dir, name);
     snprintf(c_file,    sizeof c_file,    "%s/work/%s.c",      tests_dir, name);
-    snprintf(bin_file,  sizeof bin_file,  "%s/work/%s.bin",    tests_dir, name);
+    if (win64) {
+        /* The .exe path is passed to wine as the program argument, which
+         * mishandles some characters; sanitise it. */
+        char safe[4096];
+        sanitize_exe(safe, sizeof safe, name);
+        snprintf(bin_file, sizeof bin_file, "%s/work/%s.exe", tests_dir, safe);
+    } else {
+        snprintf(bin_file, sizeof bin_file, "%s/work/%s.bin", tests_dir, name);
+    }
     snprintf(actual,    sizeof actual,    "%s/work/%s.actual",  tests_dir, name);
     snprintf(err_file,  sizeof err_file,  "%s/work/%s.err",     tests_dir, name);
     snprintf(stdin_file,sizeof stdin_file,"%s/%s.stdin",   cases_dir, name);
@@ -128,10 +218,13 @@ long run_case(const char *name, const char *athtoc) {
 
     /* ------------------------------------------------------------------ */
     /* Step 1: Transpile.  cwd = cases/ so module watcher imports resolve. */
+    /* win64: the transpiler is a PE binary, run under wine.               */
     /* ------------------------------------------------------------------ */
     {
-        char *argv[] = { transpiler_abs, NULL };
-        int rc = run_cmd(argv, src, c_file, err_file, cases_dir);
+        char *native_argv[] = { transpiler_abs, NULL };
+        char *win64_argv[]  = { "wine", transpiler_abs, NULL };
+        int rc = run_cmd(win64 ? win64_argv : native_argv,
+                         src, c_file, err_file, cases_dir);
         if (rc != 0) {
             write_sentinel(actual, "TRANSPILE_FAIL");
             return 0;
@@ -141,7 +234,31 @@ long run_case(const char *name, const char *athtoc) {
     /* ------------------------------------------------------------------ */
     /* Step 2: Compile.  cwd = tests/ (runtime paths are relative to it). */
     /* ------------------------------------------------------------------ */
-    {
+    if (win64) {
+        /* Cross-compile with mingw + vendored libffi; mirrors the bin-win64
+         * recipe.  Link order: object -> runtime .a -> libffi .a -> ws2_32. */
+        char runtime_inc[4096], ffi_inc[4096], runtime_lib[4096], ffi_lib[4096];
+        snprintf(runtime_inc, sizeof runtime_inc, "-I%s/../runtime", tests_dir);
+        snprintf(ffi_inc,     sizeof ffi_inc,     "-I%s/../vendor/win64/libffi/include", tests_dir);
+        snprintf(runtime_lib, sizeof runtime_lib, "%s/../libath_runtime_win64.a", tests_dir);
+        snprintf(ffi_lib,     sizeof ffi_lib,     "%s/../vendor/win64/libffi/lib/libffi.a", tests_dir);
+
+        char *argv[] = {
+            "x86_64-w64-mingw32-gcc", "-std=c89",
+            "-Wno-unused-variable", "-Wno-declaration-after-statement",
+            "-Wno-pedantic-ms-format",
+            c_file, runtime_inc, ffi_inc, runtime_lib,
+            "-Wl,-Bstatic", ffi_lib, "-Wl,-Bdynamic", "-lws2_32",
+            "-static-libgcc",
+            "-o", bin_file,
+            NULL
+        };
+        int rc = run_cmd(argv, NULL, NULL, err_file, tests_dir);
+        if (rc != 0) {
+            write_sentinel(actual, "COMPILE_FAIL");
+            return 0;
+        }
+    } else {
         char runtime_inc[4096], lib_dir[4096];
         /* tests_dir is .../transpiler-to-c/tests/; runtime and lib are one level up */
         snprintf(runtime_inc, sizeof runtime_inc, "-I%s/../runtime", tests_dir);
@@ -165,12 +282,16 @@ long run_case(const char *name, const char *athtoc) {
 
     /* ------------------------------------------------------------------ */
     /* Step 3: Run.  cwd = cases/ so module watcher imports resolve. */
+    /* win64: run the .exe under wine, then normalise CRLF -> LF.     */
     /* ------------------------------------------------------------------ */
     {
         const char *stdin_path = path_exists(stdin_file) ? stdin_file : "/dev/null";
-        char *argv[] = { bin_file, NULL };
-        run_cmd(argv, stdin_path, actual, err_file, cases_dir);
+        char *native_argv[] = { bin_file, NULL };
+        char *win64_argv[]  = { "wine", bin_file, NULL };
+        run_cmd(win64 ? win64_argv : native_argv,
+                stdin_path, actual, err_file, cases_dir);
         /* Ignore run exit status -- harness compares output files. */
+        if (win64) strip_cr(actual);
     }
 
     return 0;

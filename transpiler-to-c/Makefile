@@ -21,6 +21,12 @@ BIN_I686 = athtoc-bin-i686
 BIN_WIN64 = athtoc-bin-win64.exe
 BOOTSTRAP_C = /tmp/_athtoc_bootstrap.c
 
+# Win64 runtime static library: the runtime cross-compiled with MinGW-w64 and
+# vendored libffi, so the wine-based test target can link cases without
+# recompiling runtime/*.c for every case.
+LIB_WIN64  = libath_runtime_win64.a
+WIN64_OBJS = $(SRCS:.c=.win64.o)
+
 # Source files for the self-hosted transpiler.
 TRANSPILER_SRCS = transpiler/main.~ATH transpiler/lexer.~ATH transpiler/parser.~ATH transpiler/cps.~ATH transpiler/codegen.~ATH
 
@@ -32,7 +38,7 @@ WIN64_LIBFFI = vendor/win64/libffi
 WIN64_CFLAGS = -std=c89 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter \
                -Wno-unused-variable -Wno-pedantic-ms-format
 
-.PHONY: all bin bin-i686 bin-win64 lib test smoke clean
+.PHONY: all bin bin-i686 bin-win64 lib lib-win64 test test-linux test-win64 smoke clean
 
 # Default target: rebuild athtoc-bin from the latest .~ATH source files,
 # using the existing athtoc-bin to transpile itself.
@@ -94,12 +100,33 @@ $(LIB): $(OBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Build the runtime as a Windows static library (for the wine-based test target).
+# Requires: mingw-w64-gcc. Uses the vendored Windows libffi headers.
+lib-win64: $(LIB_WIN64)
+
+$(LIB_WIN64): $(WIN64_OBJS)
+	x86_64-w64-mingw32-ar rcs $@ $^
+
+%.win64.o: %.c
+	$(CROSS_CC) $(WIN64_CFLAGS) -I$(WIN64_LIBFFI)/include -c $< -o $@
+
 # Run the !~ATH-based test harness (tests/harness.~ATH). The harness itself
 # is built with the frozen tests/athtoc-stable, so a broken mainline athtoc
 # still lets the suite run; each test case is transpiled by $(BIN) via the
-# libruncase FFI session.
-test: $(LIB) $(BIN)
-	$(MAKE) -C tests run
+# libruncase FFI session. The harness binary is always native; the target
+# (native vs. win64) is selected by the ATH_TARGET env var, read by libruncase.
+#
+# 'test' runs both platforms; 'test-linux' and 'test-win64' run one each.
+# Cases are filtered per target by the optional platform field in manifest.txt.
+test: test-linux test-win64
+
+test-linux: $(LIB) $(BIN)
+	ATH_TARGET=native $(MAKE) -C tests run
+
+# Requires: wine + mingw-w64-gcc. Transpiles each case with athtoc-bin-win64.exe
+# under wine, cross-compiles, and runs under wine.
+test-win64: $(LIB) $(LIB_WIN64) $(BIN_WIN64)
+	ATH_TARGET=win64 $(MAKE) -C tests run
 
 # Quick smoke test using the self-hosted binary.
 smoke: $(BIN)
@@ -111,5 +138,5 @@ smoke: $(BIN)
 # Note: clean does NOT remove the pre-built binaries (athtoc-bin, athtoc-bin-i686).
 # Remove them manually only if you have another way to rebuild them.
 clean:
-	rm -f $(OBJS) $(LIB) $(BOOTSTRAP_C)
+	rm -f $(OBJS) $(LIB) $(WIN64_OBJS) $(LIB_WIN64) $(BOOTSTRAP_C)
 	$(MAKE) -C tests clean
