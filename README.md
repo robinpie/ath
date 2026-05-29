@@ -332,15 +332,22 @@ All commands run from `transpiler-to-c/`:
 # Transpile stdin → C89 stdout
 ./athtoc-bin < program.~ATH > program.c
 
-# Compile and run
-gcc -std=c89 program.c runtime/*.c -Iruntime -o program && ./program
-
-# Or: build the runtime library and link against it
+# Build the runtime library and link against it (recommended)
 make lib
-gcc -std=c89 program.c -L. -lath_runtime -Iruntime -o program && ./program
+gcc -std=c89 program.c -L. -lath_runtime -Iruntime -lffi -ldl -o program && ./program
 ```
 
-Works with any C89-compatible compiler (gcc, clang, etc.). Linking the runtime requires libffi and libdl (Arch: `libffi`; Debian/Ubuntu: `libffi-dev`, Windows: included in the repo). The repo ships three pre-built bootstrap binaries:
+Linking the runtime requires **libffi** and **libdl** (Arch: `libffi`; Debian/Ubuntu: `libffi-dev`; Windows: included in the repo). Put `-lffi -ldl` *after* the sources/library so the linker resolves them.
+
+If you'd rather compile the runtime sources directly instead of using `make lib`, exclude `runtime/test_runtime.c` — it has its own `main` (it's the runtime's standalone test driver) and will collide with your program's `main`:
+
+```bash
+# Compile and run (note: skip test_runtime.c)
+gcc -std=c89 program.c $(ls runtime/*.c | grep -v test_runtime) \
+    -Iruntime -lffi -ldl -o program && ./program
+```
+
+Works with any C89-compatible compiler (gcc, clang, etc.). The repo ships three pre-built bootstrap binaries:
 
 | Binary | Target |
 |---|---|
@@ -374,7 +381,7 @@ You can (cross-)compile programs with the MinGW-w64 toolchai:
 transpiler-to-c/athtoc-bin-win64.exe < program.~ATH > program.c
 
 x86_64-w64-mingw32-gcc -std=c89 -O2 program.c \
-    transpiler-to-c/runtime/*.c \
+    $(ls transpiler-to-c/runtime/*.c | grep -v test_runtime) \
     -Itranspiler-to-c/runtime \
     -Itranspiler-to-c/vendor/win64/libffi/include \
     -Wl,-Bstatic transpiler-to-c/vendor/win64/libffi/lib/libffi.a \
