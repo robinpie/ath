@@ -121,6 +121,7 @@ e2e__test_negation_precedence|exact|0
 e2e__test_negative_numbers|exact|0
 e2e__test_nested_attempt|exact|0
 e2e__test_nested_map_access|exact|0
+e2e__test_nested_rite|exact|0
 e2e__test_no_error_attempt|exact|0
 e2e__test_not_equal|exact|0
 e2e__test_not|exact|0
