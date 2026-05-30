@@ -772,6 +772,8 @@ RITE genSyncRite(stmt, ctx) {
     BIRTH np WITH LENGTH(params);
     BIRTH saved_fn WITH ctx.fn;
     BIRTH saved_cl WITH ctx.cl;
+    BIRTH saved_sv WITH ctx.sv;
+    BIRTH saved_tc WITH ctx.tc;
 
     ctx = emitFwd(ctx, "static AthValue _rite_"+name+"(AthScope*,int,AthValue*);");
 
@@ -794,8 +796,11 @@ RITE genSyncRite(stmt, ctx) {
         "    return _ret;\n"+
         "}\n";
 
-    ctx = emitDef(ctx, fn);
-    BEQUEATH SET(SET(ctx,"fn",saved_fn),"cl",saved_cl);
+    // Emit into rctx so any forward-decls/defs accumulated while generating
+    // nested rites in the body are preserved; restore the per-rite context
+    // fields (sv/fn/cl/tc) the caller depends on.
+    rctx = emitDef(rctx, fn);
+    BEQUEATH SET(SET(SET(SET(rctx,"fn",saved_fn),"cl",saved_cl),"sv",saved_sv),"tc",saved_tc);
 }
 
 RITE genParamBinds(params, i, sc) {
