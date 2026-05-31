@@ -1,6 +1,6 @@
 version = 1
 SPDX-PackageName = "athdev"
-SPDX-PackageSupplier = "robinpie <silasjamesreel2004@gmail.com>"
+SPDX-PackageSupplier = "robinpie <robin413@protonmail.com>"
 SPDX-PackageDownloadLocation = "https://github.com/robinpie/athdev"
 
 [[annotations]]
