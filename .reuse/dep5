@@ -1,0 +1,12 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: athdev
+Upstream-Contact: robinpie <silasjamesreel2004@gmail.com>
+Source: https://github.com/robinpie/athdev
+
+Files: *
+Copyright: 2025-2026 robinpie
+License: GPL-2.0-only
+
+Files: athapps/golf/*
+Copyright: 2025-2026 robinpie
+License: CC-BY-SA-4.0
