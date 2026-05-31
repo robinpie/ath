@@ -1,0 +1,16 @@
+version = 1
+SPDX-PackageName = "athdev"
+SPDX-PackageSupplier = "robinpie <silasjamesreel2004@gmail.com>"
+SPDX-PackageDownloadLocation = "https://github.com/robinpie/athdev"
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025-2026 robinpie"
+SPDX-License-Identifier = "GPL-2.0-only"
+
+[[annotations]]
+path = "athapps/golf/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025-2026 robinpie"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
