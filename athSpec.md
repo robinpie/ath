@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: GPL-2.0-only -->
 # !~ATH Language Specification
 
 Version 2.1.1

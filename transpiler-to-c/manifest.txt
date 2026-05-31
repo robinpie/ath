@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 c_specific__TestBitwiseOps__test_and|exact|0
 c_specific__TestBitwiseOps__test_lshift|exact|0
 c_specific__TestBitwiseOps__test_not|exact|0
