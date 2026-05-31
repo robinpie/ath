@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: GPL-2.0-only -->
 # vendor/win64 — Windows cross-compilation dependencies
 
 This directory contains pre-built Windows (x86_64) libraries needed to
