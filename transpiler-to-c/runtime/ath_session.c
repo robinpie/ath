@@ -12,6 +12,7 @@
  * GNU General Public License for more details.
  */
 
+#include "ath_platform.h"
 #include "ath_session.h"
 #include "ath_relic.h"
 #include "ath_entity.h"
@@ -27,6 +28,9 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#elif defined(ATH_WASM)
+/* No dynamic loader under WASI -- foreign sessions are unsupported. The
+   entity/death plumbing below stays intact; only session-open is stubbed. */
 #else
 #include <dlfcn.h>
 #endif
@@ -187,6 +191,8 @@ static void _session_teardown(AthCont *self, AthValue unused) {
     } else if (s->dlhandle) {
 #ifdef _WIN32
         FreeLibrary((HMODULE)s->dlhandle);
+#elif defined(ATH_WASM)
+        /* Unreachable: sessions never open under WASM (dlhandle stays NULL). */
 #else
         dlclose(s->dlhandle);
 #endif
@@ -253,6 +259,13 @@ AthSession *ath_session_create(const char *name, const char *libpath, int unsafe
     void *handle;
     AthEntity *entity;
     AthSession *session;
+#if defined(ATH_WASM)
+    (void)name; (void)libpath; (void)unsafe; (void)handle;
+    (void)entity; (void)session;
+    ath_runtime_error_fmt("session: foreign sessions are not supported in WASM "
+                          "(cannot open '%s')", libpath);
+    return NULL;
+#else
 #ifdef _WIN32
     handle = (void *)LoadLibraryA(libpath);
     if (!handle) {
@@ -272,4 +285,5 @@ AthSession *ath_session_create(const char *name, const char *libpath, int unsafe
     entity->session = session;
     ath_entity_decref(entity);
     return session;
+#endif /* !ATH_WASM */
 }

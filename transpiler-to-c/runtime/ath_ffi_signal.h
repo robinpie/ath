@@ -25,13 +25,14 @@
 #ifndef ATH_FFI_SIGNAL_H
 #define ATH_FFI_SIGNAL_H
 
+#include "ath_platform.h"
 #include <setjmp.h>
 
 struct AthSession;
 
 extern struct AthSession *ath_ffi_active_session;  /* set around ffi_call */
-#ifdef _WIN32
-extern jmp_buf             ath_ffi_jmp;            /* not used on Windows */
+#if defined(_WIN32) || defined(ATH_WASM)
+extern jmp_buf             ath_ffi_jmp;            /* not used (no POSIX signals) */
 #else
 extern sigjmp_buf          ath_ffi_jmp;            /* current longjmp target */
 #endif

@@ -16,6 +16,7 @@
 #if !defined(_WIN32)
 #define _POSIX_C_SOURCE 200112L
 #endif
+#include "ath_platform.h"
 #include "ath_entity.h"
 #include "ath_eventloop.h"
 #include "ath_error.h"
@@ -26,7 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <sys/stat.h>
+#include <sys/stat.h>   /* stat() -- watcher polling, available under WASI */
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -34,6 +35,10 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#elif defined(ATH_WASM)
+/* WASI: only the watcher entity (stat() polling) is supported. Process and
+   connection entities have no sockets/fork/exec, so their constructors stub
+   to a catchable runtime error and the poll switch omits their cases. */
 #else
 #include <dlfcn.h>
 #include <sys/select.h>
@@ -371,6 +376,12 @@ AthEntity *ath_entity_process_new(const char *name, const char *cmd, char *const
     }
     return e;
 }
+#elif defined(ATH_WASM)
+AthEntity *ath_entity_process_new(const char *name, const char *cmd, char *const argv[]) {
+    (void)name; (void)cmd; (void)argv;
+    ath_runtime_error("process entities are not supported in WASM", 0, 0);
+    return NULL;
+}
 #else
 AthEntity *ath_entity_process_new(const char *name, const char *cmd, char *const argv[]) {
     AthEntity *e = ath_entity_alloc(ATH_ENTITY_PROCESS, name);
@@ -428,6 +439,12 @@ AthEntity *ath_entity_connection_new(const char *name, const char *host, int por
     ath_entity_register_pollable(e);
     return e;
 }
+#elif defined(ATH_WASM)
+AthEntity *ath_entity_connection_new(const char *name, const char *host, int port) {
+    (void)name; (void)host; (void)port;
+    ath_runtime_error("connection entities are not supported in WASM", 0, 0);
+    return NULL;
+}
 #else
 AthEntity *ath_entity_connection_new(const char *name, const char *host, int port) {
     AthEntity *e = ath_entity_alloc(ATH_ENTITY_CONNECTION, name);
@@ -482,6 +499,8 @@ void ath_entity_poll(AthEntity *e, unsigned long now_ms) {
             e->pid = 0;
             ath_entity_die(e);
         }
+#elif defined(ATH_WASM)
+        /* unreachable: process entities never construct under WASM */
 #else
         int status;
         if (waitpid((pid_t)e->pid, &status, WNOHANG) > 0)
@@ -505,6 +524,8 @@ void ath_entity_poll(AthEntity *e, unsigned long now_ms) {
                 ath_entity_die(e);
             }
         }
+#elif defined(ATH_WASM)
+        /* unreachable: connection entities never construct under WASM */
 #else
         fd_set fds;
         struct timeval tv;

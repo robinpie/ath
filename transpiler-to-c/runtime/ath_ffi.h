@@ -19,7 +19,17 @@
 #ifndef ATH_FFI_H
 #define ATH_FFI_H
 
+#include "ath_platform.h"
+#if defined(ATH_WASM)
+/* libffi is unavailable in the wasi sysroot. Provide stub types so the
+   AthFfiSig struct still compiles for the entity/death plumbing; ath_ffi.c
+   compiles as a stub TU whose entry points raise a catchable runtime error.
+   No FFI call is ever reached (foreign sessions cannot open under WASM). */
+typedef struct { int _unused; } ffi_cif;
+typedef struct ath_ffi_type_stub ffi_type;
+#else
 #include <ffi.h>
+#endif
 #include "ath_value.h"
 
 struct AthSession;

@@ -19,6 +19,7 @@
 #endif
 #endif
 
+#include "ath_platform.h"
 #include "ath_ffi.h"
 #include "ath_ffi_signal.h"
 #include "ath_session.h"
@@ -30,6 +31,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+#if !defined(ATH_WASM)
+/* === Real FFI implementation (POSIX + Windows). Under WASM, libffi is
+   unavailable in the wasi sysroot, so this whole TU collapses to the stub
+   entry points at the bottom of the file. === */
+
 #include <setjmp.h>
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -632,3 +639,42 @@ AthValue ath_ffi_invoke(struct AthScope *scope, int argc, AthValue *argv) {
     }
     return result;
 }
+
+#else /* ATH_WASM -- stub TU: no libffi, no foreign calls reachable. */
+
+int ath_ffi_tag_from_name(const char *name) {
+    if (!name) return -1;
+    if (strcmp(name, "INTEGER")  == 0) return ATH_FFI_INTEGER;
+    if (strcmp(name, "FLOAT")    == 0) return ATH_FFI_FLOAT;
+    if (strcmp(name, "BOOLEAN")  == 0) return ATH_FFI_BOOLEAN;
+    if (strcmp(name, "STRING")   == 0) return ATH_FFI_STRING;
+    if (strcmp(name, "VOID")     == 0) return ATH_FFI_VOID;
+    if (strcmp(name, "RELIC")    == 0) return ATH_FFI_RELIC;
+    if (strcmp(name, "BUFFER")   == 0) return ATH_FFI_BUFFER;
+    if (strcmp(name, "CALLBACK") == 0) return ATH_FFI_CALLBACK;
+    return -1;
+}
+
+AthFfiSig *ath_ffi_sig_create(struct AthSession *session,
+                              const char *symbol_name,
+                              const char *ret_type_name,
+                              int nparams,
+                              const char **param_type_names,
+                              const char *drops_name_or_null) {
+    (void)session; (void)symbol_name; (void)ret_type_name;
+    (void)nparams; (void)param_type_names; (void)drops_name_or_null;
+    ath_runtime_error("FFI: foreign sessions are not supported in WASM", 0, 0);
+    return NULL;
+}
+
+void ath_ffi_sig_free(AthFfiSig *sig) {
+    (void)sig; /* never created under WASM */
+}
+
+AthValue ath_ffi_invoke(struct AthScope *scope, int argc, AthValue *argv) {
+    (void)scope; (void)argc; (void)argv;
+    ath_runtime_error("FFI: foreign sessions are not supported in WASM", 0, 0);
+    return ath_void();
+}
+
+#endif /* ATH_WASM */

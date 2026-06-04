@@ -16,6 +16,7 @@
 #ifndef ATH_RUNTIME_H
 #define ATH_RUNTIME_H
 
+#include "ath_platform.h"
 #include "ath_value.h"
 #include "ath_scope.h"
 #include "ath_entity.h"
