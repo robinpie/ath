@@ -16,6 +16,7 @@
 #if !defined(_WIN32)
 #define _POSIX_C_SOURCE 200112L
 #endif
+#include "ath_platform.h"
 #include "ath_eventloop.h"
 #include "ath_entity.h"
 #include "ath_error.h"
@@ -26,9 +27,33 @@
 #include <windows.h>
 static unsigned long get_now_ms(void) { return (unsigned long)GetTickCount(); }
 static void platform_sleep_ms(unsigned long ms) { Sleep((DWORD)ms); }
+#elif defined(ATH_WASM)
+#include <time.h>
+/* WASM is LP32: `unsigned long` is 32 bits, so an absolute Unix-epoch ms value
+ * (~1.7e12) overflows it -- the high bits are lost and the result can read as a
+ * negative !~ATH INTEGER, breaking TIME() (`TIME() > 0`). Return the low 31
+ * bits of the real (wall-clock) epoch ms instead: always a positive 32-bit
+ * value, wall-clock-derived (so TIME() is meaningful), and monotonically
+ * increasing within any ~24-day window -- ample for timer-deadline ordering.
+ * (CLOCK_MONOTONIC starts at 0 under wasmtime, which would make TIME() read 0
+ * at startup, so realtime is used.) */
+static unsigned long get_now_ms(void) {
+    struct timespec ts;
+    unsigned long long ms;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ms = (unsigned long long)ts.tv_sec * 1000ULL
+       + (unsigned long long)ts.tv_nsec / 1000000ULL;
+    return (unsigned long)(ms & 0x7FFFFFFFULL);
+}
+static void platform_sleep_ms(unsigned long ms) {
+    struct timespec ts;
+    ts.tv_sec  = (time_t)(ms / 1000);
+    ts.tv_nsec = (long)((ms % 1000) * 1000000L);
+    nanosleep(&ts, NULL);
+}
 #else
 #include <sys/time.h>
-#include <sys/resource.h>
+#include <sys/resource.h>   /* setrlimit */
 #include <time.h>
 static unsigned long get_now_ms(void) {
     struct timeval tv;
@@ -203,7 +228,9 @@ void ath_eventloop_init(void) {
     _fifo_head  = NULL;
     _fifo_tail  = NULL;
     _heap_size  = 0;
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(ATH_WASM)
+    /* Under WASM the linear-memory stack size is fixed at link time
+     * (-Wl,-z,stack-size); there is no setrlimit to grow it at runtime. */
     {
         /* Raise the stack to at least 256 MB so that deeply recursive programs
          * (e.g. self-hosting transpilation on 32-bit) do not SIGSEGV. */

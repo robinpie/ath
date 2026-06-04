@@ -1,5 +1,8 @@
 # Build artifacts (runtime objects and static libraries built by the Makefile).
 # Vendored deps under vendor/ are committed and not matched by these anchored rules.
+# Committed bootstrap seed binaries are deliberately not gitignored
 /runtime/*.o
+/runtime/*.wasm.o
 /libath_runtime.a
 /libath_runtime_win64.a
+/libath_runtime_wasm.a

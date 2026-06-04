@@ -348,13 +348,14 @@ gcc -std=c89 program.c $(ls runtime/*.c | grep -v test_runtime) \
     -Iruntime -lffi -ldl -o program && ./program
 ```
 
-Works with any C89-compatible compiler (gcc, clang, etc.). The repo ships three pre-built bootstrap binaries:
+Works with any C89-compatible compiler (gcc, clang, etc.). The repo ships four pre-built bootstrap binaries:
 
 | Binary | Target |
 |---|---|
 | `athtoc-bin` | `x86_64-pc-linux-gnu` |
 | `athtoc-bin-i686` | `i686-pc-linux-gnu` |
 | `athtoc-bin-win64.exe` | `x86_64-pc-windows-gnu` |
+| `athtoc.wasm` | `wasm32-wasi` (WASI module, run under `wasmtime`) |
 
 ```bash
 # Rebuild athtoc-bin from source (x86_64)
@@ -370,9 +371,23 @@ make bin-i686
 # Requires mingw-w64-gcc (Arch: pacman -S mingw-w64-gcc).
 # Vendored libffi (MSYS2 package) is in vendor/win64/libffi/
 make bin-win64
+
+# Build the self-hosting WASM transpiler, athtoc.wasm
+# Requires a wasi-sdk clang + wasmtime (Arch: pacman -S wasi-libc wasi-compiler-rt
+# wasi-libc++ wasmtime; or set WASI_SDK=/opt/wasi-sdk for a monolithic install).
+make bin-wasm
 ```
 
 If you're on a non-supported platform, you'll need an `athtoc-bin` cross-compiled from another machine to bootstrap.
+
+Current limitations of the implementation (may be worked around in the future):
+
+- Integers are C `long` (64-bit on LP64 systems, 32-bit on Windows LLP64 and on WASM LP32), not unbounded
+- Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
+- Sync rites recurse on the C call stack; deep recursion will stack-overflow
+- The FFI supports at most 16 parameters per transcription; `BUFFER` and `CALLBACK` as return types are not supported
+- On Windows: FFI INTEGER maps to C `long` (4 bytes, not pointer-sized); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.). See `athapps/winbox/winBoxDemo.~ATH` for a wrapper pattern.
+- On WASM: no FFI/sessions, no `process`/`connection` entities, and `watcher` is limited to `--dir`-granted paths
 
 ### Windows
 
@@ -394,21 +409,32 @@ program.exe
 
 Session imports on Windows use `LoadLibraryA`/`GetProcAddress` instead of `dlopen`/`dlsym`. Signal-fault protection is disabled on Windows (all sessions behave as `UNSAFE`); foreign faults crash the process rather than being caught as a recoverable error.
 
-Current limitations of the implementation (may be worked around in the future):
+### WebAssembly / WASI
 
-- Integers are C `long` (64-bit on LP64 systems, 32-bit on Windows LLP64), not unbounded
-- Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
-- Sync rites recurse on the C call stack; deep recursion will stack-overflow
-- The FFI supports at most 16 parameters per transcription; `BUFFER` and `CALLBACK` as return types are not supported
-- On Windows: FFI INTEGER maps to C `long` (4 bytes, not pointer-sized); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.) — see `athapps/winbox/winBoxDemo.~ATH` for a wrapper pattern
+`athtoc.wasm` is a WASI module that reads `.~ATH` on stdin and emits C89 on stdout just like the native binaries. Transpiled programs compile to standalone `.wasm` against `libath_runtime_wasm.a`. You need a wasi-sdk clang and [`wasmtime`](https://wasmtime.dev/) (Arch: `pacman -S wasi-libc wasi-compiler-rt wasi-libc++ wasi-libc++abi wasmtime`; or a monolithic [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) via `WASI_SDK=/opt/wasi-sdk`).
+
+```bash
+wasmtime run -W exceptions=y transpiler-to-c/athtoc.wasm < program.~ATH > program.c # (-W exceptions=y is required: setjmp/longjmp lower to the wasm exception-handling proposal)
+
+# Compile + run
+cd transpiler-to-c && make lib-wasm
+clang --target=wasm32-wasi --sysroot=/usr/share/wasi-sysroot -std=c89 -O2 \
+    -mllvm -wasm-enable-sjlj -mllvm -wasm-use-legacy-eh=false \
+    program.c -Iruntime libath_runtime_wasm.a \
+    -lsetjmp -Wl,-z,stack-size=268435456 -Wl,--stack-first -o program.wasm
+wasmtime run -W exceptions=y -W max-wasm-stack=1073741824 --dir .::. program.wasm
+```
+
+On WASM, foreign sessions (FFI) and `process`/`connection` entities are unavailable (they raise a catchable runtime error); `watcher` works only within `--dir`-granted paths; and `TIME()` returns a positive 32-bit value rather than a full Unix-epoch timestamp.
 
 ### Test suite
 
 ```bash
 cd transpiler-to-c
-make test        # runs the harness over all cases on both platforms
+make test        # runs the harness over all cases on every target
 make test-linux  # Linux/native only
 make test-win64  # Windows only, via wine + mingw (requires wine + mingw-w64-gcc)
+make test-wasm   # WebAssembly/WASI only, via wasmtime + wasi-sdk clang
 make smoke       # quick hello-world sanity check
 ```
 

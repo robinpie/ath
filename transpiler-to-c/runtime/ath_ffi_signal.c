@@ -12,7 +12,9 @@
  * GNU General Public License for more details.
  */
 
-#if !defined(_WIN32)
+#include "ath_platform.h"
+
+#if !defined(_WIN32) && !defined(ATH_WASM)
 /* Need POSIX 2008 XSI extensions for sigaltstack, stack_t, SA_NODEFER,
    SA_ONSTACK. _GNU_SOURCE is the simplest umbrella on Linux. */
 #ifndef _GNU_SOURCE
@@ -24,7 +26,7 @@
 #include "ath_session.h"
 #include <string.h>
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(ATH_WASM)
 #include <signal.h>
 
 struct AthSession *ath_ffi_active_session = NULL;
@@ -73,14 +75,14 @@ void ath_ffi_signal_init(void) {
     sigaction(SIGILL,  &sa, NULL);
 }
 
-#else  /* _WIN32 */
+#else  /* _WIN32 or ATH_WASM: no POSIX signals */
 
 struct AthSession *ath_ffi_active_session = NULL;
 jmp_buf            ath_ffi_jmp;   /* not used; kept to satisfy the extern */
 volatile int       ath_ffi_in_call = 0;
 
 void ath_ffi_signal_init(void) {
-    /* Windows: no SEH integration. Sessions behave as UNSAFE. */
+    /* No SEH/signal integration. Sessions behave as UNSAFE. */
 }
 
 #endif
