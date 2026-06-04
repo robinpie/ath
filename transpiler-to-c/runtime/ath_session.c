@@ -12,6 +12,7 @@
  * GNU General Public License for more details.
  */
 
+#include "ath_platform.h"
 #include "ath_session.h"
 #include "ath_relic.h"
 #include "ath_entity.h"
@@ -27,6 +28,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#elif defined(ATH_WASM)
+/* No dynamic loader under WASI -- foreign sessions are unsupported. The entity/death plumbing below stays intact; only session-open is stubbed. */
 #else
 #include <dlfcn.h>
 #endif
@@ -72,8 +75,7 @@ void ath_session_decref(AthSession *s) {
     if (s->relics) free(s->relics);
     if (s->rites) ath_map_decref(s->rites);
     if (s->entity) ath_entity_decref(s->entity);
-    /* Note: dlhandle is not closed here. dlclose happens in
-       ath_session_schedule_teardown, which runs while refcount is still > 0. */
+    /* Note: dlhandle is not closed here. dlclose happens in ath_session_schedule_teardown, which runs while refcount is still > 0. */
     free(s);
 }
 
@@ -106,10 +108,7 @@ void ath_session_unregister_relic(AthSession *s, AthRelic *r) {
 }
 
 /* ===== Two-phase death =====
-   ath_entity_die marks the session dying (blocking new FFI calls) and
-   schedules _session_teardown via the event loop. The continuation runs
-   destructors and dlcloses at the loop top so it can't trample a foreign
-   call still on the C stack. */
+   ath_entity_die marks the session dying (blocking new FFI calls) and schedules _session_teardown via the event loop. The continuation runs destructors and dlcloses at the loop top so it can't trample a foreign call still on the C stack. */
 
 typedef struct {
     AthCont     base;
@@ -125,18 +124,12 @@ static void _session_teardown(AthCont *self, AthValue unused) {
     (void)unused;
 
     if (!s->faulted) {
-        /* Orderly path: run destructors LIFO. The relic registry is append-
-           only with shift-down on unregister, so reverse-array order is
-           reverse creation order. Each destructor is allowed to call back
-           into the session, so we clear `dying` for the duration. If a
-           destructor itself raises, escalate to fault death and stop. */
+        /* Orderly path: run destructors LIFO. The relic registry is append- only with shift-down on unregister, so reverse-array order is reverse creation order. Each destructor is allowed to call back into the session, so we clear `dying` for the duration. If a destructor itself raises, escalate to fault death and stop. */
         for (i = s->relic_count - 1; i >= 0; i--) {
             AthRelic *r = s->relics[i];
             if (!r || r->cursed) continue;
             if (r->destructor) {
-                /* volatile: these are read after the longjmp from ATTEMPT,
-                   so the compiler must not assume the values are still in
-                   registers. */
+                /* volatile: these are read after the longjmp from ATTEMPT, so the compiler must not assume the values are still in registers. */
                 volatile AthValue       dv = ath_rite_val(r->destructor);
                 volatile AthValue       arg = ath_relic_val(r);
                 AthErrorFrame  ef;
@@ -166,9 +159,7 @@ static void _session_teardown(AthCont *self, AthValue unused) {
                 }
                 s->dying = old_dying;
                 if (s->faulted) {
-                    /* Escalation: curse this relic and everything below it
-                       (we walked relics[i..count-1] already in earlier
-                       iterations, or about to). */
+                    /* Escalation: curse this relic and everything below it (we walked relics[i..count-1] already in earlier iterations, or about to). */
                     int j;
                     for (j = 0; j <= i; j++) {
                         if (s->relics[j]) ath_relic_curse(s->relics[j]);
@@ -187,15 +178,15 @@ static void _session_teardown(AthCont *self, AthValue unused) {
     } else if (s->dlhandle) {
 #ifdef _WIN32
         FreeLibrary((HMODULE)s->dlhandle);
+#elif defined(ATH_WASM)
+        /* Unreachable: sessions never open under WASM (dlhandle stays NULL). */
 #else
         dlclose(s->dlhandle);
 #endif
         s->dlhandle = NULL;
     }
 
-    /* Mark entity dead and fire waiters last, so ~ATH(M) observers only
-       see the session after every destructor has run and the library is
-       gone. */
+    /* Mark entity dead and fire waiters last, so ~ATH(M) observers only see the session after every destructor has run and the library is gone. */
     e = s->entity;
     if (e && !e->is_dead) {
         e->is_dead = 1;
@@ -253,6 +244,13 @@ AthSession *ath_session_create(const char *name, const char *libpath, int unsafe
     void *handle;
     AthEntity *entity;
     AthSession *session;
+#if defined(ATH_WASM)
+    (void)name; (void)libpath; (void)unsafe; (void)handle;
+    (void)entity; (void)session;
+    ath_runtime_error_fmt("session: foreign sessions are not supported in WASM "
+                          "(cannot open '%s')", libpath);
+    return NULL;
+#else
 #ifdef _WIN32
     handle = (void *)LoadLibraryA(libpath);
     if (!handle) {
@@ -272,4 +270,5 @@ AthSession *ath_session_create(const char *name, const char *libpath, int unsafe
     entity->session = session;
     ath_entity_decref(entity);
     return session;
+#endif /* !ATH_WASM */
 }

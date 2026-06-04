@@ -13,9 +13,7 @@
 // winBoxDemo.~ATH -- opens a Windows MessageBox via the C FFI.
 //
 // This demo shows !~ATH calling into a native Windows DLL through the
-// Foreign Session mechanism.  The session loads winbox_wrapper.dll (a thin
-// shim around user32 MessageBoxA) and invokes show_messagebox with two
-// strings and a button flag.
+// Foreign Session mechanism.  The session loads winbox_wrapper.dll (a thin shim around user32 MessageBoxA) and invokes show_messagebox with two strings and a button flag.
 //
 // ── Build instructions for cross-compiling from Linux) ────────────────────
 //

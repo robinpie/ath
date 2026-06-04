@@ -14,8 +14,7 @@
 // Brainfuck Interpreter in !~ATH
 // =============================================================================
 // An interpreter for the Brainfuck esoteric programming language.
-// Uses CODE() and CHAR() builtins for character/codepoint conversion,
-// and bitwise & for byte wrapping.
+// Uses CODE() and CHAR() builtins for character/codepoint conversion, and bitwise & for byte wrapping.
 //
 // Usage: Call runBrainfuck(code, input) where:
 //   - code: string of Brainfuck commands (+-[]<>.,)

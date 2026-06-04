@@ -13,8 +13,7 @@
 // parser.~ATH -- recursive descent parser for !~ATH
 // parse(toks) -> AST root {t:"Program",stmts:[...]}
 // AST nodes: {t:TYPE, ...fields...}
-// Statement types: Import Bifurcate AthLoop Die VarDecl ConstDecl Assign
-//   RiteDef Cond AttemptSalvage Condemn Bequeath ExprStmt
+// Statement types: Import Bifurcate AthLoop Die VarDecl ConstDecl Assign RiteDef Cond AttemptSalvage Condemn Bequeath ExprStmt
 // Expression types: Lit Ident BinOp UnaryOp Call Index Member Array Map
 
 // --- Helpers ---
@@ -97,10 +96,7 @@ RITE parseExprStmt(toks, pos) {
         SHOULD toks[rv.pos].t == ";" { p = rv.pos + 1; } LEST { p = rv.pos; }
         BEQUEATH {node:{t:"Assign",target:expr,val:rv.node,l:expr.l}, pos: p};
     }
-    // x.DIE() -- convert to a Die statement instead of a regular call,
-    // matching the top-level parseStmt behaviour. Without this, inside an
-    // EXECUTE clause `Lc.DIE()` would degenerate into ath_call_sync on the
-    // session's "DIE" rite (which doesn't exist) and CONDEMN.
+    // x.DIE() -- convert to a Die statement instead of a regular call, matching the top-level parseStmt behaviour. Without this, inside an EXECUTE clause `Lc.DIE()` would degenerate into ath_call_sync on the session's "DIE" rite (which doesn't exist) and CONDEMN.
     SHOULD expr.t == "Call" AND HAS(expr, "callee") AND expr.callee.t == "Member" AND expr.callee.mem == "DIE" {
         BIRTH obj WITH expr.callee.obj;
         BIRTH nm WITH obj.name;
@@ -185,8 +181,7 @@ RITE parseImport(toks, pos) {
 }
 
 // --- Transcription block (session only) ---
-// Grammar: '{' TRANSCRIBE name '(' typespec (',' typespec)* ')' '->' typespec
-//                          [ 'DROPS' name ] ';'  ... '}'
+// Grammar: '{' TRANSCRIBE name '(' typespec (',' typespec)* ')' '->' typespec [ 'DROPS' name ] ';'  ... '}'
 RITE parseTranscriptions(toks, pos, acc) {
     SHOULD toks[pos].t == "}" OR toks[pos].t == "EOF" {
         BEQUEATH {list: acc, pos: pos};
@@ -243,9 +238,7 @@ RITE expectArrow(toks, pos) {
     BEQUEATH pos;
 }
 
-// Type names are bare identifiers (INTEGER, FLOAT, STRING, BOOLEAN, VOID,
-// RELIC, BUFFER), or 'CALLBACK' '(' types ')' '->' type. VOID is a real
-// keyword in the lexer; the rest tokenize as IDs.
+// Type names are bare identifiers (INTEGER, FLOAT, STRING, BOOLEAN, VOID, RELIC, BUFFER), or 'CALLBACK' '(' types ')' '->' type. VOID is a real keyword in the lexer; the rest tokenize as IDs.
 RITE parseTypeSpec(toks, pos) {
     BIRTH l WITH toks[pos].l;
     BIRTH name WITH "";
