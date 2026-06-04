@@ -12,9 +12,7 @@
  * GNU General Public License for more details.
  */
 
-/* ath_sylladex.h -- !~ATH 2.0 sylladex types (STACK/QUEUE/TREE/HASHMAP/
-   OUIJA/BOTTLE/TECHHOP/JUJU). One AthSylladex struct with kind tag and
-   per-kind payload union. */
+/* ath_sylladex.h -- !~ATH 2.0 sylladex types (STACK/QUEUE/TREE/HASHMAP/ OUIJA/BOTTLE/TECHHOP/JUJU). One AthSylladex struct with kind tag and per-kind payload union. */
 #ifndef ATH_SYLLADEX_H
 #define ATH_SYLLADEX_H
 
@@ -113,9 +111,7 @@ char *ath_syl_stringify(AthSylladex *s);              /* malloc'd */
 const char *ath_syl_typeof_str(AthSylladex *s);
 
 /* ---- Operations ----
-   Per-kind modifier validity is enforced inside. Pass NULL for unused
-   modifier args; the implementation will error if a required modifier is
-   missing or a disallowed one is provided. */
+   Per-kind modifier validity is enforced inside. Pass NULL for unused modifier args; the implementation will error if a required modifier is missing or a disallowed one is provided. */
 void     ath_syl_captchalogue(AthSylladex *s,
                               AthValue value,
                               AthValue *with_key,    /* HASHMAP requires */

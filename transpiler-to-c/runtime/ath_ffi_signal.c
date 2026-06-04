@@ -15,8 +15,7 @@
 #include "ath_platform.h"
 
 #if !defined(_WIN32) && !defined(ATH_WASM)
-/* Need POSIX 2008 XSI extensions for sigaltstack, stack_t, SA_NODEFER,
-   SA_ONSTACK. _GNU_SOURCE is the simplest umbrella on Linux. */
+/* Need POSIX 2008 XSI extensions for sigaltstack, stack_t, SA_NODEFER, SA_ONSTACK. _GNU_SOURCE is the simplest umbrella on Linux. */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -35,8 +34,7 @@ volatile int       ath_ffi_in_call = 0;
 
 static int _installed = 0;
 
-/* Fixed-size alternate stack. SIGSTKSZ is non-constant on recent glibc, and
-   we'd rather pick a known-good size than fight feature-test macros. */
+/* Fixed-size alternate stack. SIGSTKSZ is non-constant on recent glibc, and we'd rather pick a known-good size than fight feature-test macros. */
 #define ATH_FFI_ALTSTACK_SIZE 65536
 static char _altstack[ATH_FFI_ALTSTACK_SIZE];
 

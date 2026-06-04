@@ -33,9 +33,7 @@
 #include <stdio.h>
 
 #if !defined(ATH_WASM)
-/* === Real FFI implementation (POSIX + Windows). Under WASM, libffi is
-   unavailable in the wasi sysroot, so this whole TU collapses to the stub
-   entry points at the bottom of the file. === */
+/* === Real FFI implementation (POSIX + Windows). Under WASM, libffi is unavailable in the wasi sysroot, so this whole TU collapses to the stub entry points at the bottom of the file. === */
 
 #include <setjmp.h>
 #ifdef _WIN32
@@ -47,8 +45,7 @@
 #include <dlfcn.h>
 #endif
 
-/* Returns 0 on success, non-zero signal number on fault.
-   On Windows there are no POSIX signals, so all sessions behave as UNSAFE. */
+/* Returns 0 on success, non-zero signal number on fault. On Windows there are no POSIX signals, so all sessions behave as UNSAFE. */
 static int _ath_ffi_call_protected(AthFfiSig *sig, void *retbuf, void **arg_ptrs) {
 #ifdef _WIN32
     /* No POSIX signal handling on Windows -- always call directly. */
@@ -322,8 +319,7 @@ void ath_ffi_sig_free(AthFfiSig *sig) {
     free(sig);
 }
 
-/* Each raw arg slot holds one C primitive. We pass &raw[i].<field> as the
-   arg pointer to ffi_call. */
+/* Each raw arg slot holds one C primitive. We pass &raw[i].<field> as the arg pointer to ffi_call. */
 typedef union {
     long          i;
     double        f;
@@ -359,9 +355,7 @@ static void _ath_ffi_trampoline(ffi_cif *cif, void *ret, void **args, void *user
             break;
         }
         case ATH_FFI_RELIC: {
-            /* Hand the foreign pointer back as a "loose" relic (no owner,
-               no destructor). It survives session death and BANISH on it
-               is a no-op. */
+            /* Hand the foreign pointer back as a "loose" relic (no owner, no destructor). It survives session death and BANISH on it is a no-op. */
             void     *p = *(void **)args[i];
             AthRelic *r = ath_relic_new(p, NULL, NULL);
             argv[i] = ath_relic_val(r);
@@ -398,8 +392,7 @@ static void _ath_ffi_trampoline(ffi_cif *cif, void *ret, void **args, void *user
     case ATH_FFI_VOID:
         break;
     case ATH_FFI_STRING: {
-        /* C-side gets a malloc'd copy; it's the C caller's job to free
-           (or accept the leak). */
+        /* C-side gets a malloc'd copy; it's the C caller's job to free (or accept the leak). */
         char *out = NULL;
         if (rv.type == ATH_STRING && rv.as.string && rv.as.string->length > 0) {
             out = (char *)malloc((size_t)rv.as.string->length + 1);
@@ -542,8 +535,7 @@ AthValue ath_ffi_invoke(struct AthScope *scope, int argc, AthValue *argv) {
                 ath_runtime_error_fmt("FFI arg %d: relic is cursed", i);
                 return ath_void();
             }
-            /* Loose relics (owner == NULL) are accepted; they come from
-               foreign callbacks where we don't know the originating session. */
+            /* Loose relics (owner == NULL) are accepted; they come from foreign callbacks where we don't know the originating session. */
             if (v.as.relic->owner != NULL &&
                 v.as.relic->owner != sig->session) {
                 int j; for (j = 0; j < nclosures; j++) _ath_ffi_free_closure(&closures[j]);
@@ -593,10 +585,7 @@ AthValue ath_ffi_invoke(struct AthScope *scope, int argc, AthValue *argv) {
     {
         int fault = _ath_ffi_call_protected(sig, &retbuf, arg_ptrs);
         if (fault != 0) {
-            /* The signal handler set session->faulted. Trigger the death
-               path so the teardown continuation runs the fault branch
-               (curse relics, skip dlclose, leak the mapping). Closures
-               leak here too -- the universe is gone. */
+            /* The signal handler set session->faulted. Trigger the death path so the teardown continuation runs the fault branch (curse relics, skip dlclose, leak the mapping). Closures leak here too -- the universe is gone. */
             if (sig->session->entity) ath_entity_die(sig->session->entity);
             ath_runtime_error_fmt(
                 "foreign universe collapsed: signal %d", fault);

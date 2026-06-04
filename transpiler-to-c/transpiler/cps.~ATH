@@ -13,8 +13,7 @@
 // cps.~ATH -- CPS analysis pass
 // analyze(ast, branchNames) -> {ast: annotatedAst, asyncRites: asyncRiteSet}
 // Annotates each node with "async": ALIVE or DEAD.
-// A node is async if it contains (directly or transitively) an AthLoop
-// whose entity is not a known branch entity.
+// A node is async if it contains (directly or transitively) an AthLoop whose entity is not a known branch entity.
 
 RITE entityIsAsync(entityNode, branchNames) {
     SHOULD entityNode.t == "EntityIdent" {

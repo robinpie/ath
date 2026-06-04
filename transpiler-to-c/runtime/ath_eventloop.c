@@ -29,14 +29,7 @@ static unsigned long get_now_ms(void) { return (unsigned long)GetTickCount(); }
 static void platform_sleep_ms(unsigned long ms) { Sleep((DWORD)ms); }
 #elif defined(ATH_WASM)
 #include <time.h>
-/* WASM is LP32: `unsigned long` is 32 bits, so an absolute Unix-epoch ms value
- * (~1.7e12) overflows it -- the high bits are lost and the result can read as a
- * negative !~ATH INTEGER, breaking TIME() (`TIME() > 0`). Return the low 31
- * bits of the real (wall-clock) epoch ms instead: always a positive 32-bit
- * value, wall-clock-derived (so TIME() is meaningful), and monotonically
- * increasing within any ~24-day window -- ample for timer-deadline ordering.
- * (CLOCK_MONOTONIC starts at 0 under wasmtime, which would make TIME() read 0
- * at startup, so realtime is used.) */
+/* WASM is LP32: `unsigned long` is 32 bits, so an absolute Unix-epoch ms value (~1.7e12) overflows it -- the high bits are lost and the result can read as a negative !~ATH INTEGER, breaking TIME() (`TIME() > 0`). Return the low 31 bits of the real (wall-clock) epoch ms instead: always a positive 32-bit value, wall-clock-derived (so TIME() is meaningful), and monotonically increasing within any ~24-day window -- ample for timer-deadline ordering. (CLOCK_MONOTONIC starts at 0 under wasmtime, which would make TIME() read 0 at startup, so realtime is used.) */
 static unsigned long get_now_ms(void) {
     struct timespec ts;
     unsigned long long ms;
@@ -229,11 +222,9 @@ void ath_eventloop_init(void) {
     _fifo_tail  = NULL;
     _heap_size  = 0;
 #if !defined(_WIN32) && !defined(ATH_WASM)
-    /* Under WASM the linear-memory stack size is fixed at link time
-     * (-Wl,-z,stack-size); there is no setrlimit to grow it at runtime. */
+    /* Under WASM the linear-memory stack size is fixed at link time (-Wl,-z,stack-size); there is no setrlimit to grow it at runtime. */
     {
-        /* Raise the stack to at least 256 MB so that deeply recursive programs
-         * (e.g. self-hosting transpilation on 32-bit) do not SIGSEGV. */
+        /* Raise the stack to at least 256 MB so that deeply recursive programs (e.g. self-hosting transpilation on 32-bit) do not SIGSEGV. */
         struct rlimit rl;
         const rlim_t want = (rlim_t)256 * 1024 * 1024;
         if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur < want) {
@@ -267,8 +258,7 @@ void ath_eventloop_set_this(AthEntity *e) {
     _this_entity = e;
 }
 
-/* Current bifurcate branch context (for JUJU sylladex). NULL outside any
-   branch. Single-threaded -- no locking needed. */
+/* Current bifurcate branch context (for JUJU sylladex). NULL outside any branch. Single-threaded -- no locking needed. */
 static AthEntity *_current_branch = NULL;
 
 AthEntity *ath_eventloop_get_current_branch(void) {
@@ -281,9 +271,7 @@ void ath_eventloop_set_current_branch(AthEntity *e) {
 
 void ath_eventloop_run(void) {
     for (;;) {
-        /* 1. Drain FIFO (run-to-completion). Drain all the way: continuations
-           added by the death of THIS (e.g. ~ATH(THIS) waiters) need to fire
-           before the loop exits. */
+        /* 1. Drain FIFO (run-to-completion). Drain all the way: continuations added by the death of THIS (e.g. ~ATH(THIS) waiters) need to fire before the loop exits. */
         while (!fifo_empty()) {
             AthCont  *cont;
             AthValue  result;
@@ -291,14 +279,10 @@ void ath_eventloop_run(void) {
                 cont->resume(cont, result);
         }
 
-        /* Per spec: THIS.DIE() terminates the program. After draining all
-           ready continuations, if THIS has died, exit -- don't wait on
-           pending timers or poll other entities. */
+        /* Per spec: THIS.DIE() terminates the program. After draining all ready continuations, if THIS has died, exit -- don't wait on pending timers or poll other entities. */
         if (_this_entity && _this_entity->is_dead) return;
 
-        /* Check if anything remains. A pending process/connection/watcher
-           keeps the loop alive even when the timer heap is empty -- otherwise
-           ~ATH on such an entity would never resolve. */
+        /* Check if anything remains. A pending process/connection/watcher keeps the loop alive even when the timer heap is empty -- otherwise ~ATH on such an entity would never resolve. */
         if (heap_empty() && ath_entity_pending_count() == 0) break;
 
         /* 2. Poll process/connection/watcher entities */
@@ -325,8 +309,7 @@ void ath_eventloop_run(void) {
                 platform_sleep_ms(sleep_ms);
             }
         } else {
-            /* No timers, but pollable entities are still pending -- sleep
-               briefly so the next poll doesn't busy-spin the CPU. */
+            /* No timers, but pollable entities are still pending -- sleep briefly so the next poll doesn't busy-spin the CPU. */
             platform_sleep_ms(10);
         }
     }

@@ -52,9 +52,7 @@ RITE mkCtx(asyncRites, syncRites, branchNames, pipeline) {
     BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],pre:[],defs:[],pm:DEAD,ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline,cb:DEAD};
 }
 
-// If we're emitting a segment inside a branch frame (ctx.cb is truthy),
-// produce the prologue line that re-installs current_branch on resume.
-// Otherwise empty.
+// If we're emitting a segment inside a branch frame (ctx.cb is truthy), produce the prologue line that re-installs current_branch on resume. Otherwise empty.
 RITE branchPrologue(ctx) {
     SHOULD ctx.cb { BEQUEATH "    ath_eventloop_set_current_branch(f->branch);\n"; }
     BEQUEATH "";
@@ -89,9 +87,7 @@ RITE escChar(c) {
     SHOULD c == "\t" { BEQUEATH "\\t"; }
     BIRTH code WITH CODE(c);
     SHOULD code == 13 { BEQUEATH "\\r"; }
-    // Escape ASCII control chars and DEL (0-31, 127) with \xNN.
-    // Characters >= 128 are passed through as raw UTF-8 bytes; the C
-    // compiler sees them as byte sequences in the string literal.
+    // Escape ASCII control chars and DEL (0-31, 127) with \xNN. Characters >= 128 are passed through as raw UTF-8 bytes; the C compiler sees them as byte sequences in the string literal.
     SHOULD code < 32 OR code == 127 {
         BIRTH h WITH HEX(code);
         SHOULD LENGTH(h) < 2 { h = "0" + h; }
@@ -691,9 +687,7 @@ RITE genSyncImport(stmt, depth, ctx) {
 
 // ===== Session imports =====
 
-// Serialise a Type AST node to its on-the-wire string. Simple types are
-// their name ("INTEGER", "RELIC", ...). CALLBACK is recursive:
-//   CALLBACK(INTEGER,STRING)->INTEGER
+// Serialise a Type AST node to its on-the-wire string. Simple types are their name ("INTEGER", "RELIC", ...). CALLBACK is recursive: CALLBACK(INTEGER,STRING)->INTEGER
 RITE typeToString(t) {
     SHOULD t.n == "CALLBACK" {
         BIRTH inner WITH cbParamsToString(t.params, 0, "");
@@ -797,9 +791,7 @@ RITE genSyncRite(stmt, ctx) {
         "    return _ret;\n"+
         "}\n";
 
-    // Emit into rctx so any forward-decls/defs accumulated while generating
-    // nested rites in the body are preserved; restore the per-rite context
-    // fields (sv/fn/cl/tc) the caller depends on.
+    // Emit into rctx so any forward-decls/defs accumulated while generating nested rites in the body are preserved; restore the per-rite context fields (sv/fn/cl/tc) the caller depends on.
     rctx = emitDef(rctx, fn);
     BEQUEATH SET(SET(SET(SET(rctx,"fn",saved_fn),"cl",saved_cl),"sv",saved_sv),"tc",saved_tc);
 }
@@ -858,9 +850,7 @@ RITE genAsyncBodyStmts(stmts, i, fname, ctx) {
     BEQUEATH genAsyncBodyStmts(stmts, i+1, fname, ctx);
 }
 
-// genAsyncAttempt: handle AttemptSalvage with async content in async context.
-// Emits sync pre-stmts, sets up the wait, then the NEXT segment wraps everything
-// in ATH_ATTEMPT_BEGIN/SALVAGE so setjmp is valid on that segment's C stack.
+// genAsyncAttempt: handle AttemptSalvage with async content in async context. Emits sync pre-stmts, sets up the wait, then the NEXT segment wraps everything in ATH_ATTEMPT_BEGIN/SALVAGE so setjmp is valid on that segment's C stack.
 RITE genAsyncAttempt(node, post, fname, ctx) {
     BIRTH sv WITH "f->scope";
     BIRTH j WITH findFirstAsyncDeep(node.attempt, 0, ctx);
@@ -1094,10 +1084,7 @@ RITE genAsyncSegments(stmts, fname, ctx) {
     BEQUEATH ctx2;
 }
 
-// genAsyncCond: handle SHOULD cond { then } [LEST { els }] in async context.
-// Either branch may contain async work (a ~ATH wait or an async rite call),
-// so each is generated as its own CPS segment: the true path continues the
-// current segment, the false path jumps to a fresh segment.
+// genAsyncCond: handle SHOULD cond { then } [LEST { els }] in async context. Either branch may contain async work (a ~ATH wait or an async rite call), so each is generated as its own CPS segment: the true path continues the current segment, the false path jumps to a fresh segment.
 RITE genAsyncCond(condNode, post, fname, ctx) {
     BIRTH sv WITH "f->scope";
     BIRTH rctx WITH SET(ctx,"sv",sv);
@@ -1106,8 +1093,7 @@ RITE genAsyncCond(condNode, post, fname, ctx) {
     BIRTH rc WITH genExpr(condNode.cond, rctx); rctx = rc.ctx;
     ctx = SET(ctx,"n",rctx.n); ctx = SET(ctx,"tc",rctx.tc);
 
-    // Normalise the else branch to a statement list: an array of statements
-    // as-is, an else-if (Cond node) wrapped in a singleton list, VOID empty.
+    // Normalise the else branch to a statement list: an array of statements as-is, an else-if (Cond node) wrapped in a singleton list, VOID empty.
     BIRTH elseStmts WITH [];
     SHOULD TYPEOF(condNode.els) == "ARRAY" {
         elseStmts = condNode.els;
@@ -1125,15 +1111,13 @@ RITE genAsyncCond(condNode, post, fname, ctx) {
     ctx = emitDef(ctx, rc.stmts +
         "    if (!ath_is_truthy("+rc.t+")) { "+elseName+"((AthCont*)f,ath_void()); return; }\n");
 
-    // True path: then ++ post continues the current open segment. Close it
-    // here, the same way the rite/branch caller would close a tail segment.
+    // True path: then ++ post continues the current open segment. Close it here, the same way the rite/branch caller would close a tail segment.
     BIRTH thenAndPost WITH CONCAT(condNode.then, post);
     ctx = genAsyncSegments(thenAndPost, fname, resetTc(ctx));
     ctx = emitDef(ctx, ctx.cl + "    return;");
     ctx = emitDef(ctx, "}");
 
-    // False path: a fresh segment running els ++ post, left open for the
-    // caller to close like any other tail segment.
+    // False path: a fresh segment running els ++ post, left open for the caller to close like any other tail segment.
     ctx = emitDef(ctx, "static void "+elseName+"(AthCont *_self,AthValue _result) {");
     ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
     ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
@@ -1143,9 +1127,7 @@ RITE genAsyncCond(condNode, post, fname, ctx) {
     BEQUEATH genAsyncSegments(elseAndPost, fname, resetTc(ctx));
 }
 
-// genAsyncCallSplit: async rite call in async context
-// If post is empty: tail-call optimization (pass f->base.next directly)
-// Otherwise: split to new segment
+// genAsyncCallSplit: async rite call in async context. If post is empty: tail-call optimization (pass f->base.next directly). Otherwise: split to new segment.
 RITE genAsyncCallSplit(callExpr, post, fname, ctx) {
     BIRTH callee WITH callExpr.callee;
     BIRTH args WITH callExpr.args;
@@ -1216,8 +1198,7 @@ RITE genBranchFrame(fname, brName, bodyStmts, execStmts, ctx) {
 
     BIRTH allStmts WITH CONCAT(bodyStmts, execStmts);
 
-    // Pre-pass: generate top-level rites of the branch body before opening
-    // the segment function, so they don't end up nested inside it.
+    // Pre-pass: generate top-level rites of the branch body before opening the segment function, so they don't end up nested inside it.
     BIRTH brSyncRites WITH collectSyncRites(allStmts, 0, ctx.ar);
     BIRTH brAsyncNames WITH collectAsyncRiteNames(allStmts, 0, ctx.ar);
     ctx = genAllRites(allStmts, 0, ctx.ar, ctx);
@@ -1401,8 +1382,7 @@ RITE generate(ast, asyncRites, pipeline) {
     BIRTH stmts WITH ast.stmts;
     BIRTH syncRites WITH collectSyncRites(stmts, 0, asyncRites);
     BIRTH asyncRiteNames WITH collectAsyncRiteNames(stmts, 0, asyncRites);
-    // Pre-populate sr with all top-level rite names (sync + async) so genSyncStmt
-    // doesn't re-generate rites that genAllRites already emitted.
+    // Pre-populate sr with all top-level rite names (sync + async) so genSyncStmt doesn't re-generate rites that genAllRites already emitted.
     BIRTH allTopRites WITH mergeIntoSr(syncRites, KEYS(asyncRiteNames), 0);
     BIRTH ctx WITH mkCtx(asyncRites, allTopRites, {}, pipeline);
 
