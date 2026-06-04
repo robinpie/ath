@@ -283,8 +283,7 @@ static AthTreeNode *tree_find_leftmost_max_leaf(AthTreeNode *root,
         head++;
     }
     if (max_idx < 0) {
-        /* No leaf? Root itself is a leaf only if root && both children NULL,
-           which was handled. Fall through to root case. */
+        /* No leaf? Root itself is a leaf only if root && both children NULL, which was handled. Fall through to root case. */
         for (i = 0; i < tail; i++) {
             if (queue[i]->left == NULL && queue[i]->right == NULL) {
                 max_idx = i; break;
@@ -475,8 +474,7 @@ static char *stringify_tree(AthSylladex *s) {
         str_append(&out, &off, &cap, "TREE[]");
         return out;
     }
-    /* Collect in-order. The bracketed list uses ath_stringify (unquoted),
-       matching the existing array stringification behavior. */
+    /* Collect in-order. The bracketed list uses ath_stringify (unquoted), matching the existing array stringification behavior. */
     {
         AthValue *vals = (AthValue *)malloc(sizeof(AthValue) * s->as.tree.count);
         int idx = 0;
@@ -777,8 +775,7 @@ static void juju_check_alive(AthSylladex *s) {
     int i, alive = 0;
     for (i = 0; i < s->as.juju.p_count; i++)
         if (!s->as.juju.participants[i]->is_dead) alive++;
-    /* A JUJU with zero or one participants is alive but inert. It dies only
-       when it had multiple participants and now has <2 alive. */
+    /* A JUJU with zero or one participants is alive but inert. It dies only when it had multiple participants and now has <2 alive. */
     if (s->as.juju.p_count >= 2 && alive < 2) s->as.juju.dead = 1;
 }
 

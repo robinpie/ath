@@ -68,11 +68,7 @@ static int run_cmd(char *const argv[], const char *stdin_path,
         int fd;
         struct rlimit rl;
 
-        /* Best-effort: give the child an unbounded stack. Native test programs
-         * raise this themselves (ath_eventloop_init), but wasm programs run
-         * inside wasmtime -- which executes wasm on this host stack -- and the
-         * WASM build cannot setrlimit, so deeply-recursive cases need the room
-         * granted here before exec. Harmless for the gcc/wine children. */
+        /* Best-effort: give the child an unbounded stack. Native test programs raise this themselves (ath_eventloop_init), but wasm programs run inside wasmtime -- which executes wasm on this host stack -- and the WASM build cannot setrlimit, so deeply-recursive cases need the room granted here before exec. Harmless for the gcc/wine children. */
         if (getrlimit(RLIMIT_STACK, &rl) == 0) {
             rl.rlim_cur = rl.rlim_max;
             setrlimit(RLIMIT_STACK, &rl);
@@ -129,8 +125,7 @@ static void abspath(char *buf, size_t bufsz, const char *base, const char *rel) 
     }
 }
 
-/* The active target, from ATH_TARGET: "win64", "wasm", or (by default)
- * "native". */
+/* The active target, from ATH_TARGET: "win64", "wasm", or (by default) "native". */
 enum ath_tgt { TGT_NATIVE, TGT_WIN64, TGT_WASM };
 static enum ath_tgt active_target(void) {
     const char *t = getenv("ATH_TARGET");
@@ -139,9 +134,7 @@ static enum ath_tgt active_target(void) {
     return TGT_NATIVE;
 }
 
-/* The platform label reported to the harness (which has no getenv of its own),
- * matching the manifest platform-field vocabulary: "win64", "wasm", or
- * "linux". */
+/* The platform label reported to the harness (which has no getenv of its own), matching the manifest platform-field vocabulary: "win64", "wasm", or "linux". */
 const char *ath_target(void) {
     switch (active_target()) {
     case TGT_WIN64: return "win64";
@@ -156,12 +149,7 @@ static const char *env_or(const char *name, const char *dflt) {
     return (v && *v) ? v : dflt;
 }
 
-/* Copy name into dst, replacing characters that wine mishandles when they
- * appear in the program-path argument (notably the double quotes in some
- * parametrised case names) with '_'. Only the intermediate .exe filename is
- * sanitised; the .actual/.err/.c paths are opened by us directly and keep the
- * exact case name. Brackets are kept (wine handles them and they keep names
- * distinct). */
+/* Copy name into dst, replacing characters that wine mishandles when they appear in the program-path argument (notably the double quotes in some parametrised case names) with '_'. Only the intermediate .exe filename is sanitised; the .actual/.err/.c paths are opened by us directly and keep the exact case name. Brackets are kept (wine handles them and they keep names distinct). */
 static void sanitize_exe(char *dst, size_t dstsz, const char *name) {
     size_t i;
     for (i = 0; name[i] && i + 1 < dstsz; i++) {
@@ -174,10 +162,7 @@ static void sanitize_exe(char *dst, size_t dstsz, const char *name) {
     dst[i < dstsz ? i : dstsz - 1] = '\0';
 }
 
-/* Strip carriage returns from a file in place.  The win64 runtime writes its
- * stdout in text mode, so newlines arrive as CRLF; the corpus stores LF, so we
- * normalise before the harness does its byte-exact compare.  Harmless when the
- * file contains no CR. */
+/* Strip carriage returns from a file in place.  The win64 runtime writes its stdout in text mode, so newlines arrive as CRLF; the corpus stores LF, so we normalise before the harness does its byte-exact compare.  Harmless when the file contains no CR. */
 static void strip_cr(const char *path) {
     FILE *f;
     long n, i, j;
@@ -247,8 +232,7 @@ long run_case(const char *name, const char *athtoc) {
     snprintf(src,       sizeof src,       "%s/%s.~ATH",   cases_dir, name);
     snprintf(c_file,    sizeof c_file,    "%s/work/%s.c",      tests_dir, name);
     if (win64) {
-        /* The .exe path is passed to wine as the program argument, which
-         * mishandles some characters; sanitise it. */
+        /* The .exe path is passed to wine as the program argument, which mishandles some characters; sanitise it. */
         char safe[4096];
         sanitize_exe(safe, sizeof safe, name);
         snprintf(bin_file, sizeof bin_file, "%s/work/%s.exe", tests_dir, safe);
@@ -261,8 +245,7 @@ long run_case(const char *name, const char *athtoc) {
     /* Pre-format the reused wasm flags. --dir grants are added per-invocation. */
     snprintf(sysroot_flag,  sizeof sysroot_flag,  "--sysroot=%s", wasi_root);
     snprintf(maxstack_flag, sizeof maxstack_flag, "max-wasm-stack=%s", wasm_stack);
-    /* Run-step grant: map tests/work to guest ../work so INSCRIBE/SCRY cases
-     * that write a sibling-of-cases path resolve under the WASI sandbox. */
+    /* Run-step grant: map tests/work to guest ../work so INSCRIBE/SCRY cases that write a sibling-of-cases path resolve under the WASI sandbox. */
     char work_grant[4096];
     snprintf(work_grant, sizeof work_grant, "%s/work::../work", tests_dir);
     snprintf(actual,    sizeof actual,    "%s/work/%s.actual",  tests_dir, name);
@@ -281,8 +264,7 @@ long run_case(const char *name, const char *athtoc) {
     {
         char *native_argv[] = { transpiler_abs, NULL };
         char *win64_argv[]  = { "wine", transpiler_abs, NULL };
-        /* wasm: run athtoc.wasm under wasmtime with cwd = cases/ and a --dir
-         * grant on cwd so module-import watchers resolve sibling .~ATH files. */
+        /* wasm: run athtoc.wasm under wasmtime with cwd = cases/ and a --dir grant on cwd so module-import watchers resolve sibling .~ATH files. */
         char *wasm_argv[] = {
             (char *)wasmtime, "run",
             "-W", "exceptions=y", "-W", maxstack_flag,
@@ -304,8 +286,7 @@ long run_case(const char *name, const char *athtoc) {
     /* Step 2: Compile.  cwd = tests/ (runtime paths are relative to it). */
     /* ------------------------------------------------------------------ */
     if (win64) {
-        /* Cross-compile with mingw + vendored libffi; mirrors the bin-win64
-         * recipe.  Link order: object -> runtime .a -> libffi .a -> ws2_32. */
+        /* Cross-compile with mingw + vendored libffi; mirrors the bin-win64 recipe.  Link order: object -> runtime .a -> libffi .a -> ws2_32. */
         char runtime_inc[4096], ffi_inc[4096], runtime_lib[4096], ffi_lib[4096];
         snprintf(runtime_inc, sizeof runtime_inc, "-I%s/../runtime", tests_dir);
         snprintf(ffi_inc,     sizeof ffi_inc,     "-I%s/../vendor/win64/libffi/include", tests_dir);
@@ -328,9 +309,7 @@ long run_case(const char *name, const char *athtoc) {
             return 0;
         }
     } else if (wasm) {
-        /* Compile to a standalone WASI module against libath_runtime_wasm.a.
-         * Mirrors the bin-wasm recipe: sjlj lowering to modern exnref, -lsetjmp
-         * for the helpers, and a 256 MB linear-memory stack. */
+        /* Compile to a standalone WASI module against libath_runtime_wasm.a. Mirrors the bin-wasm recipe: sjlj lowering to modern exnref, -lsetjmp for the helpers, and a 256 MB linear-memory stack. */
         char runtime_inc[4096], runtime_lib[4096];
         snprintf(runtime_inc, sizeof runtime_inc, "-I%s/../runtime", tests_dir);
         snprintf(runtime_lib, sizeof runtime_lib, "%s/../libath_runtime_wasm.a", tests_dir);
@@ -380,8 +359,7 @@ long run_case(const char *name, const char *athtoc) {
         const char *stdin_path = path_exists(stdin_file) ? stdin_file : "/dev/null";
         char *native_argv[] = { bin_file, NULL };
         char *win64_argv[]  = { "wine", bin_file, NULL };
-        /* wasm: run under wasmtime, same --dir grant so a watcher entity can
-         * stat its module file at runtime. */
+        /* wasm: run under wasmtime, same --dir grant so a watcher entity can stat its module file at runtime. */
         char *wasm_argv[] = {
             (char *)wasmtime, "run",
             "-W", "exceptions=y", "-W", maxstack_flag,

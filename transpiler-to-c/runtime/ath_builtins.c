@@ -120,9 +120,7 @@ void ath_scope_define_builtins(AthScope *s) {
     }
 }
 
-/* Stack of currently-calling rites. ath_current_rite() returns the top; the
-   stack lets FFI rites that re-enter !~ATH (e.g., via destructors) recover
-   the correct caller on each frame. Single-threaded runtime. */
+/* Stack of currently-calling rites. ath_current_rite() returns the top; the stack lets FFI rites that re-enter !~ATH (e.g., via destructors) recover the correct caller on each frame. Single-threaded runtime. */
 static AthRite *_ath_calling_rite = NULL;
 
 AthRite *ath_current_rite(void) { return _ath_calling_rite; }
@@ -375,9 +373,7 @@ AthValue ath_builtin_BIN(AthScope *s, int argc, AthValue *argv) {
     REQUIRE_INT(argv[0], "BIN", "value");
     v = (unsigned long)argv[0].as.integer;
     if (v == 0) return ath_str_cstr("0");
-    /* Start from the top bit of unsigned long's actual width: 63 on LP64,
-     * 31 on Windows (LLP64). Shifting by >= the width is undefined, which
-     * previously produced garbage leading bits on Windows. */
+    /* Start from the top bit of unsigned long's actual width: 63 on LP64, 31 on Windows (LLP64). Shifting by >= the width is undefined, which previously produced garbage leading bits on Windows. */
     for (bit = (int)(sizeof(unsigned long) * 8) - 1; bit >= 0; bit--)
         if (v & (1UL << bit)) break;
     for (; bit >= 0; bit--)

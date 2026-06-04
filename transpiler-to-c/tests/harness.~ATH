@@ -19,8 +19,7 @@
 // that output against cases/<name>.expected and tallies the result. A
 // non-zero exit (via CONDEMN) signals any failure.
 //
-// Cases are run serially: the FFI call is synchronous, so each case fully
-// completes (transpile + compile + run) before the next begins.
+// Cases are run serially: the FFI call is synchronous, so each case fully completes (transpile + compile + run) before the next begins.
 
 // ---------------------------------------------------------------------------
 // Foreign session: per-case runner (transpile → compile → run).
@@ -31,18 +30,13 @@ import session RC("./work/libruncase.so") {
     TRANSCRIBE ath_target() -> STRING;
 };
 
-// The harness has no getenv, so it asks libruncase which target the run is for
-// ("native" or "win64"). Cases are filtered against this by their manifest
-// platform field (see appliesTo / manifest format in README.md).
+// The harness has no getenv, so it asks libruncase which target the run is for ("native" or "win64"). Cases are filtered against this by their manifest platform field (see appliesTo / manifest format in README.md).
 BIRTH target WITH RC.ath_target();
 
 // ---------------------------------------------------------------------------
 // Sorted-mode comparison.
 //
-// Bifurcated programs interleave their branches nondeterministically, so the
-// corpus stores their expected output line-sorted and the harness compares
-// line-sorted too. The sort is done by pouring the lines into a TREE and
-// ejecting the root: an in-order traversal of a BST is sorted output.
+// Bifurcated programs interleave their branches nondeterministically, so the corpus stores their expected output line-sorted and the harness compares line-sorted too. The sort is done by pouring the lines into a TREE and ejecting the root: an in-order traversal of a BST is sorted output.
 // ---------------------------------------------------------------------------
 
 RITE insertLines(t, parts, i, n) {
@@ -70,8 +64,7 @@ RITE matches(actual, expected, mode) {
 // ---------------------------------------------------------------------------
 // Platform filtering.
 //
-// A manifest line's optional 4th field is a comma-separated list of targets the
-// case applies to ("linux", "win64"). An empty/absent field means all targets.
+// A manifest line's optional 4th field is a comma-separated list of targets the case applies to ("linux", "win64"). An empty/absent field means all targets.
 // ---------------------------------------------------------------------------
 
 RITE inList(parts, i, n, want) {

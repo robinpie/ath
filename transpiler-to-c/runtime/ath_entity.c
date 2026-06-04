@@ -36,9 +36,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #elif defined(ATH_WASM)
-/* WASI: only the watcher entity (stat() polling) is supported. Process and
-   connection entities have no sockets/fork/exec, so their constructors stub
-   to a catchable runtime error and the poll switch omits their cases. */
+/* WASI: only the watcher entity (stat() polling) is supported. Process and connection entities have no sockets/fork/exec, so their constructors stub to a catchable runtime error and the poll switch omits their cases. */
 #else
 #include <dlfcn.h>
 #include <sys/select.h>
@@ -79,9 +77,7 @@ void ath_entity_poll_all(unsigned long now_ms) {
     }
 }
 
-/* Number of live process/connection/watcher entities still being polled.
-   The event loop must not terminate while this is non-zero, even when the
-   timer heap is empty. */
+/* Number of live process/connection/watcher entities still being polled. The event loop must not terminate while this is non-zero, even when the timer heap is empty. */
 int ath_entity_pending_count(void) {
     int i, n = 0;
     for (i = 0; i < _pollable_count; i++) {
@@ -126,11 +122,7 @@ void ath_entity_die(AthEntity *e) {
     AthWaiter *w;
     if (!e || e->is_dead) return;
 
-    /* Sessions defer their actual teardown to the event loop top: mark the
-       session dying (blocks new FFI calls) and schedule the teardown
-       continuation. The continuation walks destructors LIFO, dlcloses
-       (orderly only), marks is_dead, and fires waiters -- see
-       ath_session_schedule_teardown. */
+    /* Sessions defer their actual teardown to the event loop top: mark the session dying (blocks new FFI calls) and schedule the teardown continuation. The continuation walks destructors LIFO, dlcloses (orderly only), marks is_dead, and fires waiters -- see ath_session_schedule_teardown. */
     if (e->kind == ATH_ENTITY_SESSION && e->session) {
         if (!e->session->dying) {
             e->session->dying = 1;
@@ -331,9 +323,7 @@ void ath_banish_value(AthValue v) {
 /* ===== Session ===== */
 
 AthEntity *ath_entity_session_new(const char *name) {
-    /* The entity is just a death-target. The owning AthSession (built by
-       ath_session_create) holds the dlhandle, the rites map, and the relic
-       registry, and links itself back here via e->session. */
+    /* The entity is just a death-target. The owning AthSession (built by ath_session_create) holds the dlhandle, the rites map, and the relic registry, and links itself back here via e->session. */
     return ath_entity_alloc(ATH_ENTITY_SESSION, name);
 }
 

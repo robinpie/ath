@@ -13,8 +13,7 @@
 // main.~ATH -- QUIC Transport Behavior Simulation
 //
 // Architecture: single-threaded simulation loop.
-// Each cycle: send a burst of packets (instant delivery),
-// then wait 100ms (simulating RTT), then process ACK.
+// Each cycle: send a burst of packets (instant delivery), then wait 100ms (simulating RTT), then process ACK.
 // This avoids concurrent branch starvation issues.
 
 // Load modules

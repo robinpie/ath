@@ -13,18 +13,13 @@
  */
 
 /* ath_ffi.h -- libffi marshalling layer for foreign-session calls.
-   Each transcribed C function gets an AthFfiSig describing its libffi CIF
-   and a wrapping AthRite whose sync function is ath_ffi_invoke. The rite's
-   `data` slot points at the sig. */
+   Each transcribed C function gets an AthFfiSig describing its libffi CIF and a wrapping AthRite whose sync function is ath_ffi_invoke. The rite's `data` slot points at the sig. */
 #ifndef ATH_FFI_H
 #define ATH_FFI_H
 
 #include "ath_platform.h"
 #if defined(ATH_WASM)
-/* libffi is unavailable in the wasi sysroot. Provide stub types so the
-   AthFfiSig struct still compiles for the entity/death plumbing; ath_ffi.c
-   compiles as a stub TU whose entry points raise a catchable runtime error.
-   No FFI call is ever reached (foreign sessions cannot open under WASM). */
+/* libffi is unavailable in the wasi sysroot. Provide stub types so the AthFfiSig struct still compiles for the entity/death plumbing; ath_ffi.c compiles as a stub TU whose entry points raise a catchable runtime error. No FFI call is ever reached (foreign sessions cannot open under WASM). */
 typedef struct { int _unused; } ffi_cif;
 typedef struct ath_ffi_type_stub ffi_type;
 #else
@@ -45,9 +40,7 @@ typedef enum {
     ATH_FFI_CALLBACK = 7   /* callable parameter -- !~ATH rite wrapped as libffi closure */
 } AthFfiTypeTag;
 
-/* A single parameter (or the return) of a transcription. For simple types
-   `callback_sig` is NULL; for CALLBACK it points at a sub-sig that
-   describes the C signature of the callback. */
+/* A single parameter (or the return) of a transcription. For simple types `callback_sig` is NULL; for CALLBACK it points at a sub-sig that describes the C signature of the callback. */
 typedef struct AthFfiParam {
     AthFfiTypeTag     tag;
     struct AthFfiSig *callback_sig; /* non-NULL iff tag == ATH_FFI_CALLBACK */
@@ -69,8 +62,7 @@ typedef struct AthFfiSig {
 /* Returns one of the ATH_FFI_* tags, or -1 if name is unknown. */
 int ath_ffi_tag_from_name(const char *name);
 
-/* Build a sig from string type names. dlsyms the symbol, runs ffi_prep_cif.
-   On failure raises a runtime error and returns NULL. */
+/* Build a sig from string type names. dlsyms the symbol, runs ffi_prep_cif. On failure raises a runtime error and returns NULL. */
 AthFfiSig *ath_ffi_sig_create(struct AthSession *session,
                               const char *symbol_name,
                               const char *ret_type_name,
@@ -80,8 +72,7 @@ AthFfiSig *ath_ffi_sig_create(struct AthSession *session,
 
 void ath_ffi_sig_free(AthFfiSig *sig);
 
-/* AthRiteSyncFn shared by all FFI rites. Reads the sig from the current
-   rite's `data` slot, marshals args, calls ffi_call, marshals the return. */
+/* AthRiteSyncFn shared by all FFI rites. Reads the sig from the current rite's `data` slot, marshals args, calls ffi_call, marshals the return. */
 AthValue ath_ffi_invoke(struct AthScope *scope, int argc, AthValue *argv);
 
 #endif /* ATH_FFI_H */
