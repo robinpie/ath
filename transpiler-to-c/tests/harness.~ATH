@@ -134,6 +134,13 @@ RITE runCase(i, passed, failed, skipped, failures) {
         BEQUEATH VOID;
     }
 
+    // Skip blank lines and comments silently
+    BIRTH trimmed WITH TRIM(lines[i]);
+    SHOULD trimmed == "" OR SUBSTRING(trimmed, 0, 1) == "#" {
+        runCase(i + 1, passed, failed, skipped, failures);
+        BEQUEATH VOID;
+    }
+
     BIRTH fields WITH SPLIT(lines[i], "|");
     BIRTH name WITH fields[0];
     BIRTH mode WITH fields[1];
