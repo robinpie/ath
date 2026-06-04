@@ -169,8 +169,7 @@ RITE process_ack(ack) {
     }
 }
 
-// Transmit with deterministic tail loss
-// Drop the last TAIL_DROP_COUNT packets of each burst
+// Transmit with deterministic tail loss: drop the last TAIL_DROP_COUNT packets of each burst
 RITE transmit_packet(pkt) {
     BIRTH position WITH burst_pkt_count;
     burst_pkt_count = burst_pkt_count + 1;

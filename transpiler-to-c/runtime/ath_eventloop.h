@@ -19,8 +19,7 @@
 #include "ath_value.h"
 
 /* ===== Continuation type ===== */
-/* AthCont is the base for all continuation/frame structs.
-   Every generated frame struct has AthCont as its first member. */
+/* AthCont is the base for all continuation/frame structs. Every generated frame struct has AthCont as its first member. */
 
 typedef void (*AthContFn)(struct AthCont *self, AthValue result);
 
@@ -46,8 +45,7 @@ void          ath_eventloop_schedule(AthCont *cont, AthValue result);
 void          ath_eventloop_schedule_at(AthCont *cont, AthValue result,
                                          unsigned long abs_ms);
 
-/* Schedule an entity to fire (die) when its deadline passes;
-   used by timer entity creation */
+/* Schedule an entity to fire (die) when its deadline passes; used by timer entity creation */
 void          ath_eventloop_schedule_at_entity(struct AthEntity *e);
 
 /* Schedule an entity to die on the next event loop tick */
@@ -56,15 +54,10 @@ void          ath_eventloop_schedule_entity_die(struct AthEntity *e);
 /* Wall clock in milliseconds */
 unsigned long ath_eventloop_now_ms(void);
 
-/* Register the program's THIS entity. When THIS dies, the event loop exits
-   on its next iteration, regardless of pending timers. Per spec §"Program
-   Termination": "The program terminates when THIS.DIE() is called". */
+/* Register the program's THIS entity. When THIS dies, the event loop exits on its next iteration, regardless of pending timers. Per spec §"Program Termination": "The program terminates when THIS.DIE() is called". */
 void          ath_eventloop_set_this(struct AthEntity *e);
 
-/* Track the currently-executing bifurcate branch (or NULL outside any
-   branch). Used by JUJU sylladex operations to identify the active branch.
-   Generated branch-frame code is responsible for calling set on segment
-   entry and restoring on exit. */
+/* Track the currently-executing bifurcate branch (or NULL outside any branch). Used by JUJU sylladex operations to identify the active branch. Generated branch-frame code is responsible for calling set on segment entry and restoring on exit. */
 struct AthEntity *ath_eventloop_get_current_branch(void);
 void              ath_eventloop_set_current_branch(struct AthEntity *e);
 

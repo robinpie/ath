@@ -80,17 +80,13 @@ void ath_entity_on_death(AthEntity *e, struct AthCont *k);
 void ath_entity_incref(AthEntity *e);
 void ath_entity_decref(AthEntity *e);
 
-/* Universal DIE on an AthValue. Accepts ATH_ENTITY or ATH_SESSION (which
-   forwards to its underlying entity). Any other type is a runtime error. */
+/* Universal DIE on an AthValue. Accepts ATH_ENTITY or ATH_SESSION (which forwards to its underlying entity). Any other type is a runtime error. */
 void ath_die_value(AthValue v);
 
-/* Pull the underlying AthEntity from an AthValue. Used by entity-expression
-   codegen so identifiers bound to either ATH_ENTITY or ATH_SESSION resolve
-   to the same entity object. Raises a runtime error for other types. */
+/* Pull the underlying AthEntity from an AthValue. Used by entity-expression codegen so identifiers bound to either ATH_ENTITY or ATH_SESSION resolve to the same entity object. Raises a runtime error for other types. */
 struct AthEntity *ath_extract_entity(AthValue v);
 
-/* BANISH on a value. Handles ATH_RELIC (run destructor, clear pointer) and
-   ATH_BUFFER (release bytes). Any other type is a runtime error. */
+/* BANISH on a value. Handles ATH_RELIC (run destructor, clear pointer) and ATH_BUFFER (release bytes). Any other type is a runtime error. */
 void ath_banish_value(AthValue v);
 
 /* called by the event loop each tick to check process/connection/watcher */

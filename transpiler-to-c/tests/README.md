@@ -2,9 +2,10 @@
 From `transpiler-to-c/`:
 
 ```bash
-make test          # both platforms: Linux (native) then Windows (wine)
+make test          # every target: Linux (native), Windows (wine), WASM (wasmtime)
 make test-linux    # Linux only
 make test-win64    # Windows only, via wine + mingw (requires wine + mingw-w64-gcc)
+make test-wasm     # WebAssembly/WASI only, via wasmtime + wasi-sdk clang
 ```
 
 The harness prints a `pass`/`FAIL`/`skip` line per case and a summary, and exits
@@ -66,9 +67,16 @@ targets set (and which `libruncase` reads and reports back to the harness via
   `.exe` under wine. Requires `wine` and `mingw-w64-gcc`. The Windows runtime
   writes stdout in text mode (CRLF), so `libruncase` normalises the captured
   output to LF before comparing.
+- wasm (`make test-wasm`): transpiles with `../athtoc.wasm` under `wasmtime`,
+  compiles with the wasi-sdk clang against `libath_runtime_wasm.a` (built by
+  `make lib-wasm`), and runs the `.wasm` under `wasmtime`. Both wasmtime
+  invocations get a `--dir` grant on `cases/` (and on `work/` for the run step)
+  so `SCRY`/`INSCRIBE` and module-import watchers can reach the filesystem.
+  Tool paths come from the env (`WASMTIME`, `WASI_CLANG`, `WASI_SYSROOT`,
+  `WASM_STACK`), defaulted by the parent Makefile.
 
-`make test-win64` is much slower than `test-linux` (every case spawns wine twice
-plus a cross-compile).
+`make test-win64` and `make test-wasm` are much slower than `test-linux` (every
+case spawns the emulator/runtime twice plus a cross-compile).
 
 ## Manifest format
 
@@ -79,13 +87,21 @@ Each line of `manifest.txt` is `name|mode|stdin` and optionally `platforms`:
 | `name` | The case basename under `./cases/`. |
 | `mode` | `exact` (stdout must match `<name>.expected` byte-for-byte) or `sorted` (compare line-sorted; used for bifurcated programs whose branches interleave nondeterministically). |
 | `stdin` | `1` if a `<name>.stdin` file should be fed to the program, else `0`. |
-| `platforms` | Optional comma-separated list of targets the case applies to (`linux`, `win64`). Omitted/empty means **all** targets. A case not applicable to the current target is reported as `skip`. |
+| `platforms` | Optional comma-separated list of targets the case applies to (`linux`, `win64`, `wasm`). Omitted/empty means **all** targets. A case not applicable to the current target is reported as `skip`. |
 
 Use `linux` for cases that cannot run under wine (e.g. FFI sessions that
 `dlopen` a Linux `.so`, processes that spawn unix commands) and for cases whose
 output legitimately differs on Windows' 32-bit `long`. For the latter, add a
 parallel `win64`-tagged case asserting the Windows-correct output (see
 `*_large_integer_fits_in_long` / `*_large_integer_wraps_on_win64`).
+
+WASM has no FFI/sessions (those are already `linux`-only), and no `process` or
+`connection` entities; those last cases are tagged `linux,win64` so they skip on
+wasm. Everything else -- pure language, sylladices, buffers, timers, and
+module-import watchers -- runs on wasm.
+
+Blank lines and `#` comment lines in `manifest.txt` (e.g. the SPDX header) are
+skipped by the harness.
 
 
 ## Adding a test

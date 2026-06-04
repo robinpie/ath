@@ -28,8 +28,7 @@ typedef struct AthErrorFrame {
 
 extern AthErrorFrame *_ath_error_top;
 
-/* Install a new error frame. If setjmp returns 0, body runs.
-   If it returns 1, a CONDEMN was thrown and error_msg is set. */
+/* Install a new error frame. If setjmp returns 0, body runs. If it returns 1, a CONDEMN was thrown and error_msg is set. */
 #define ATH_ATTEMPT_BEGIN(frame) \
     do { \
         (frame).error_msg = NULL; \

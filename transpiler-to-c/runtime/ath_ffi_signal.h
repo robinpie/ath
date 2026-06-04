@@ -14,24 +14,20 @@
 
 /* ath_ffi_signal.h -- best-effort signal handling for foreign calls.
 
-   When a transcribed C call faults (SIGSEGV/SIGBUS/SIGFPE/SIGILL) the
-   handler marks the session faulted and longjmps out of ffi_call. The FFI
-   layer then turns the fault into a catchable runtime error and triggers
-   session death. UNSAFE sessions skip this protection entirely.
+   When a transcribed C call faults (SIGSEGV/SIGBUS/SIGFPE/SIGILL) the handler marks the session faulted and longjmps out of ffi_call. The FFI layer then turns the fault into a catchable runtime error and triggers session death. UNSAFE sessions skip this protection entirely.
 
-   This is best-effort, not isolation: the foreign code may have corrupted
-   the runtime before faulting. The conceit "another universe collapsed"
-   is a recovery convenience, not a safety boundary. */
+   This is best-effort, not isolation: the foreign code may have corrupted the runtime before faulting. The conceit "another universe collapsed" is a recovery convenience, not a safety boundary. */
 #ifndef ATH_FFI_SIGNAL_H
 #define ATH_FFI_SIGNAL_H
 
+#include "ath_platform.h"
 #include <setjmp.h>
 
 struct AthSession;
 
 extern struct AthSession *ath_ffi_active_session;  /* set around ffi_call */
-#ifdef _WIN32
-extern jmp_buf             ath_ffi_jmp;            /* not used on Windows */
+#if defined(_WIN32) || defined(ATH_WASM)
+extern jmp_buf             ath_ffi_jmp;            /* not used (no POSIX signals) */
 #else
 extern sigjmp_buf          ath_ffi_jmp;            /* current longjmp target */
 #endif

@@ -150,9 +150,7 @@ AthRite *ath_rite_new_ffi(struct AthScope *closure, AthRiteSyncFn fn, int arity,
 void     ath_rite_incref(AthRite *r);
 void     ath_rite_decref(AthRite *r);
 
-/* Set during ath_call_sync so the called rite can find its own AthRite (and
-   thus its `data` slot) without an explicit argument. Single-threaded
-   runtime, so a plain global is safe. */
+/* Set during ath_call_sync so the called rite can find its own AthRite (and thus its `data` slot) without an explicit argument. Single-threaded runtime, so a plain global is safe. */
 AthRite *ath_current_rite(void);
 
 /* ---- Value constructors ---- */
