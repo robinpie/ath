@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-2.0-only -->
-From `transpiler-to-c/`:
+From `ath/transpiler-to-c/`:
 
 ```bash
 make test          # every target: Linux (native), Windows (wine), WASM (wasmtime)
