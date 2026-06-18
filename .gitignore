@@ -1,6 +1,6 @@
 CLAUDE.md
 GEMINI.md
 .claude
-/deprecated/python-interpreter/__pycache__/
+/ath/deprecated/python-interpreter/__pycache__/
 *.py[cod]
-athapps/quicproject/cwnd_log.csv
+ath/apps/quicproject/cwnd_log.csv
