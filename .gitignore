@@ -4,3 +4,4 @@ GEMINI.md
 /ath/deprecated/python-interpreter/__pycache__/
 *.py[cod]
 ath/apps/quicproject/cwnd_log.csv
+*.kate-swp
