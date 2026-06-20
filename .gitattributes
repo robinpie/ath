@@ -1,2 +1,2 @@
-deprecated/** linguist-vendored
-transpiler-to-c/vendor/** linguist-vendored
+ath/deprecated/** linguist-vendored
+ath/transpiler-to-c/vendor/** linguist-vendored

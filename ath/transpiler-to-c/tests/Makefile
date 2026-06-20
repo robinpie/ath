@@ -29,7 +29,7 @@ work/libruncase.so: libruncase.c | work
 work/harness.c: harness.~ATH $(ATHTOC_STABLE) | work
 	@test -x $(ATHTOC_STABLE) || { \
 	  echo "ERROR: $(ATHTOC_STABLE) not found."; \
-	  echo "       Run 'cp ../athtoc-bin tests/athtoc-stable' from transpiler-to-c/."; \
+	  echo "       Run 'cp ../athtoc-bin tests/athtoc-stable' from ath/transpiler-to-c/."; \
 	  exit 1; }
 	$(ATHTOC_STABLE) < harness.~ATH > $@
 

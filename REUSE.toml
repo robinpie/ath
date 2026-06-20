@@ -10,7 +10,7 @@ SPDX-FileCopyrightText = "2025-2026 robinpie"
 SPDX-License-Identifier = "GPL-2.0-only"
 
 [[annotations]]
-path = "athapps/golf/**"
+path = "ath/apps/golf/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025-2026 robinpie"
 SPDX-License-Identifier = "CC-BY-SA-4.0"

@@ -5,6 +5,8 @@
 
 **!~ATH** (pronounced "until death") is an esoteric programming language where all control flow is predicated on waiting for things to die. Inspired by the fictional ~ATH language from Homestuck. Loops wait for entitites to die, then computation happens in death callbacks. The language is deliberately inconvenient. 
 
+This repository houses two Homestuck-inspired languages: !~ATH (everything under `ath/`, and the bulk of this README) and !^CAKE, a baking-themed schema definition language in early design (see `cake/`).
+
 ## Implementation
 
 The primary implementation of !~ATH is a transpiler to C89 that compiles via CPS transform. It is self-hosting, the transpiler itself is written in !~ATH. See the *Usage* section for how to compile your code.
@@ -15,7 +17,7 @@ The JavaScript interpreter powers [a Web playground for !~ATH 1.3](https://robin
 
 ## Spec and Reference
 
-The full !~ATH spec is located at ./athSpec.md, but a quick reference is located below.
+The full !~ATH spec is located at ./ath/athSpec.md, but a quick reference is located below.
 
 ### Quick Reference
 
@@ -253,7 +255,7 @@ Lc.DIE();
 THIS.DIE();
 ```
 
-Type tags: `INTEGER`, `FLOAT`, `BOOLEAN`, `STRING`, `VOID`, `RELIC` (opaque `void*`), `BUFFER` (mutable byte array), and `CALLBACK(types) -> type` for C-calls-into-!~ATH closures. `DROPS` attaches a destructor that runs in LIFO order at orderly death. A foreign fault (`SIGSEGV` / `SIGBUS` / `SIGFPE` / `SIGILL`) becomes a catchable runtime error and triggers session death (best-effort, not isolation; add `UNSAFE` after `session` to disable for debugging). See `athSpec.md` for the full semantics.
+Type tags: `INTEGER`, `FLOAT`, `BOOLEAN`, `STRING`, `VOID`, `RELIC` (opaque `void*`), `BUFFER` (mutable byte array), and `CALLBACK(types) -> type` for C-calls-into-!~ATH closures. `DROPS` attaches a destructor that runs in LIFO order at orderly death. A foreign fault (`SIGSEGV` / `SIGBUS` / `SIGFPE` / `SIGILL`) becomes a catchable runtime error and triggers session death (best-effort, not isolation; add `UNSAFE` after `session` to disable for debugging). See `ath/athSpec.md` for the full semantics.
 
 #### BUILT-IN RITES
 
@@ -327,7 +329,7 @@ BANISH x;                 // FFI: free a RELIC (run destructor) or BUFFER
 
 ## Usage
 
-All commands run from `transpiler-to-c/`:
+All commands run from `ath/transpiler-to-c/`:
 
 ```bash
 # Transpile stdin → C89 stdout
@@ -386,7 +388,7 @@ Current limitations of the implementation (may be worked around in the future):
 - Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
 - Sync rites recurse on the C call stack; deep recursion will stack-overflow
 - The FFI supports at most 16 parameters per transcription; `BUFFER` and `CALLBACK` as return types are not supported
-- On Windows: FFI INTEGER maps to C `long` (4 bytes, not pointer-sized); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.). See `athapps/winbox/winBoxDemo.~ATH` for a wrapper pattern.
+- On Windows: FFI INTEGER maps to C `long` (4 bytes, not pointer-sized); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.). See `ath/apps/winbox/winBoxDemo.~ATH` for a wrapper pattern.
 - On WASM: no FFI/sessions, no `process`/`connection` entities, and `watcher` is limited to `--dir`-granted paths
 
 ### Windows
@@ -394,13 +396,13 @@ Current limitations of the implementation (may be worked around in the future):
 You can (cross-)compile programs with the MinGW-w64 toolchai:
 
 ```cygwin or other Windows bash environment
-transpiler-to-c/athtoc-bin-win64.exe < program.~ATH > program.c
+ath/transpiler-to-c/athtoc-bin-win64.exe < program.~ATH > program.c
 
 x86_64-w64-mingw32-gcc -std=c89 -O2 program.c \
-    $(ls transpiler-to-c/runtime/*.c | grep -v test_runtime) \
-    -Itranspiler-to-c/runtime \
-    -Itranspiler-to-c/vendor/win64/libffi/include \
-    -Wl,-Bstatic transpiler-to-c/vendor/win64/libffi/lib/libffi.a \
+    $(ls ath/transpiler-to-c/runtime/*.c | grep -v test_runtime) \
+    -Iath/transpiler-to-c/runtime \
+    -Iath/transpiler-to-c/vendor/win64/libffi/include \
+    -Wl,-Bstatic ath/transpiler-to-c/vendor/win64/libffi/lib/libffi.a \
     -Wl,-Bdynamic -lws2_32 -static-libgcc \
     -o program.exe
 
@@ -414,10 +416,10 @@ Session imports on Windows use `LoadLibraryA`/`GetProcAddress` instead of `dlope
 `athtoc.wasm` is a WASI module that reads `.~ATH` on stdin and emits C89 on stdout just like the native binaries. Transpiled programs compile to standalone `.wasm` against `libath_runtime_wasm.a`. You need a wasi-sdk clang and [`wasmtime`](https://wasmtime.dev/) (Arch: `pacman -S wasi-libc wasi-compiler-rt wasi-libc++ wasi-libc++abi wasmtime`; or a monolithic [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) via `WASI_SDK=/opt/wasi-sdk`).
 
 ```bash
-wasmtime run -W exceptions=y transpiler-to-c/athtoc.wasm < program.~ATH > program.c # (-W exceptions=y is required: setjmp/longjmp lower to the wasm exception-handling proposal)
+wasmtime run -W exceptions=y ath/transpiler-to-c/athtoc.wasm < program.~ATH > program.c # (-W exceptions=y is required: setjmp/longjmp lower to the wasm exception-handling proposal)
 
 # Compile + run
-cd transpiler-to-c && make lib-wasm
+cd ath/transpiler-to-c && make lib-wasm
 clang --target=wasm32-wasi --sysroot=/usr/share/wasi-sysroot -std=c89 -O2 \
     -mllvm -wasm-enable-sjlj -mllvm -wasm-use-legacy-eh=false \
     program.c -Iruntime libath_runtime_wasm.a \
@@ -430,7 +432,7 @@ On WASM, foreign sessions (FFI) and `process`/`connection` entities are unavaila
 ### Test suite
 
 ```bash
-cd transpiler-to-c
+cd ath/transpiler-to-c
 make test        # runs the harness over all cases on every target
 make test-linux  # Linux/native only
 make test-win64  # Windows only, via wine + mingw (requires wine + mingw-w64-gcc)
@@ -444,7 +446,7 @@ The test harness is itself an !~ATH program (`tests/harness.~ATH`).
 
 No specialized tools beyond existing C debugging tools exist for !~ATH.
 
-The deprecated Python interpreter at `deprecated/python-interpreter/` includes a stepping debugger (`--step`), TUI debugger (`--tui`), and non-interactive JSON trace mode (`--trace`). These are useful for debugging !~ATH 1.3 logic. Run from that directory with `python3 untildeath.py --help`.
+The deprecated Python interpreter at `ath/deprecated/python-interpreter/` includes a stepping debugger (`--step`), TUI debugger (`--tui`), and non-interactive JSON trace mode (`--trace`). These are useful for debugging !~ATH 1.3 logic. Run from that directory with `python3 untildeath.py --help`.
 
 ---
 
