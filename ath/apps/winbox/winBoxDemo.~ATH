@@ -12,20 +12,29 @@
 
 // winBoxDemo.~ATH -- opens a Windows MessageBox via the C FFI.
 //
-// This demo shows !~ATH calling into a native Windows DLL through the
-// Foreign Session mechanism.  The session loads winbox_wrapper.dll (a thin shim around user32 MessageBoxA) and invokes show_messagebox with two strings and a button flag.
+// This demo shows !~ATH calling straight into user32.dll through the
+// Foreign Session mechanism -- no C wrapper.  The session loads user32
+// and invokes MessageBoxA directly:
 //
-// ── Build instructions for cross-compiling from Linux) ────────────────────
+//     int MessageBoxA(HWND hWnd, LPCSTR text, LPCSTR caption, UINT type);
 //
-//   1. Build the wrapper DLL:
-//      x86_64-w64-mingw32-gcc -shared -O2 ath/apps/winbox/winbox_wrapper.c \
-//          -o ath/apps/winbox/winbox_wrapper.dll -luser32
+// The catch is HWND: it is pointer-sized (8 bytes on win64), but !~ATH's
+// FFI INTEGER maps to C `long`, which is only 32 bits on win64 (LLP64).
+// We need a pointer-sized NULL, and a plain INTEGER cannot carry one.
 //
-//   2. Transpile this file to C89:
+// !^CAKE supplies it.  winbox.^CAKE declares a one-field recipe whose
+// ingredient is a RELIC (a void*).  BAKE zeroes it; SCOOP reads the
+// pointer field back as a loose RELIC holding NULL -- the NULL HWND that
+// MessageBoxA expects, with no shim DLL in between.  (Earlier this demo
+// needed winbox_wrapper.dll purely to inject that NULL from the C side.)
+//
+// ── Build instructions for cross-compiling from Linux ─────────────────────
+//
+//   1. Transpile this file to C89:
 //      wine ath/transpiler-to-c/athtoc-bin-win64.exe \
 //          < ath/apps/winbox/winBoxDemo.~ATH > /tmp/winBoxDemo.c
 //
-//   3. Compile the C89 output:
+//   2. Compile the C89 output:
 //      x86_64-w64-mingw32-gcc -std=c89 -O2 /tmp/winBoxDemo.c \
 //          ath/transpiler-to-c/runtime/*.c \
 //          -Iath/transpiler-to-c/runtime \
@@ -34,8 +43,9 @@
 //          -Wl,-Bdynamic -lws2_32 -static-libgcc \
 //          -o /tmp/winBoxDemo.exe
 //
-//   4. Run under Wine (DLL must be in the same directory as the exe):
-//      cp ath/apps/winbox/winbox_wrapper.dll /tmp/
+//   3. Run under Wine (winbox.^CAKE must sit alongside the exe so the
+//      watcher import can find it):
+//      cp ath/apps/winbox/winbox.^CAKE /tmp/
 //      wine /tmp/winBoxDemo.exe
 //
 // ── Button flag constants (MB_* from winuser.h) ───────────────────────────
@@ -49,12 +59,17 @@
 // MB_OK | MB_ICONINFORMATION
 ENTOMB MB_OK_INFO WITH 64;
 
-import session Lib("winbox_wrapper.dll") {
-    TRANSCRIBE show_messagebox(STRING, STRING, INTEGER) -> INTEGER;
+// A NULL HWND, manufactured from a zeroed RELIC ingredient.
+import watcher Schema("winbox.^CAKE");
+BIRTH nullHwnd WITH SCOOP(BAKE(Schema.Hwnd), Schema.Hwnd, "null");
+
+import session Lib("user32.dll") {
+    TRANSCRIBE MessageBoxA(RELIC, STRING, STRING, INTEGER) -> INTEGER;
 }
 
-BIRTH result WITH Lib.show_messagebox(
-    "Hello from !~ATH running on Windows!\n\nThe foreign session called MessageBoxA via winbox_wrapper.dll.",
+BIRTH result WITH Lib.MessageBoxA(
+    nullHwnd,
+    "Hello from !~ATH running on Windows!\n\nThe foreign session called MessageBoxA in user32.dll directly -- no wrapper.",
     "!~ATH Windows Demo",
     MB_OK_INFO
 );
