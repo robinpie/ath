@@ -2,7 +2,7 @@
 
 # !^CAKE Language Specification
 
-Version 0.1.0 (draft)
+Version 0.1.0
 
 ## Overview
 
