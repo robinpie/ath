@@ -58,7 +58,7 @@ DENSE IMPERIAL RISE TO OF CRUST
 PINCH DASH SPOON CUP DROP DOLLOP SIGNED
 
 // scalar ingredient types (native / FFI)
-INTEGER FLOAT BOOLEAN STRING RELIC
+INTEGER BOOLEAN STRING RELIC
 
 // implicit union field
 FLAVOR
@@ -78,7 +78,7 @@ Decimal digits, optionally prefixed with `-`. Used for array counts, alignments,
 -1
 ```
 
-Negative integers are only meaningful as `MEASURE` values; array counts and alignments must be non-negative (and alignments must be powers of two).
+Array counts and alignments must be non-negative, and alignments must be powers of two. Negative integers are therefore never usable as layout inputs; they are legal only as `MEASURE` values, which are general integer constants (a measure may be exported and read from !~ATH as a plain integer -- see *Modules and !~ATH Integration*).
 
 #### Strings
 
@@ -144,7 +144,7 @@ An ingredient's type is one of: a scalar, a nested recipe (by value), a crust (a
 
 ### Scalar ingredients
 
-There are two families of scalar. Fixed-width scalars have the same size and byte order on every platform and are what you want for anything that crosses a wire. Native scalars match the !~ATH FFI marshalling table exactly (so a recipe field and an FFI parameter speak the same language), at the cost of platform-dependent width.
+There are two families of scalar. Fixed-width scalars have the same size and byte order on every platform and are what you want for anything that crosses a wire. Native scalars mirror the !~ATH FFI marshalling table (so a recipe field and an FFI parameter largely speak the same language), at the cost of platform-dependent width. The one deliberate divergence is `BOOLEAN`: a recipe stores it as a 1-byte `_Bool` (the width a C `struct` actually uses for a `bool` member), whereas a scalar FFI `BOOLEAN` *parameter* widens to `int` -- the same keyword in two contexts.
 
 #### Fixed-width scalars
 
@@ -161,6 +161,8 @@ Integers are unsigned by default (an ingredient is an amount, and you cannot hav
 
 `SIGNED` is only valid on the integer measures (`PINCH`, `DASH`, `SPOON`, `CUP`). `SIGNED DROP` and `SIGNED DOLLOP` are a compile error (floats are always signed).
 
+The alignments in this table are **mandated by !^CAKE**, not inherited from the host C ABI. In particular `CUP` and `DOLLOP` are 8-aligned on every target -- including i386, where C aligns an 8-byte scalar to 4. This is precisely what lets a fixed-width recipe produce the same layout (and therefore the same captchalogue code) everywhere. The trade-off is that a non-`DENSE` fixed-width recipe may not match a native i386 `struct`; when host-ABI match is what you need, use native scalars.
+
 ```
 INGREDIENT age:      PINCH;          // uint8_t
 INGREDIENT delta:    SIGNED SPOON;   // int32_t
@@ -169,19 +171,18 @@ INGREDIENT velocity: DROP;           // float
 
 #### Native scalars
 
-These match the FFI table. Their size and/or byte order are **platform-dependent** and so they may only appear in recipes intended for same-machine FFI, never in a portable wire format:
+These mirror the FFI table (with the `BOOLEAN` caveat noted above). Their size and/or byte order are **platform-dependent** and so they belong in recipes intended for same-machine FFI, not in a portable wire format:
 
 | keyword   | C type        | notes                                                         |
 |-----------|---------------|---------------------------------------------------------------|
 | `INTEGER` | `long`        | 8 bytes on LP64; 4 bytes on LLP64 (Windows) and LP32 (wasm).  |
-| `FLOAT`   | `double`      | Synonym for `DOLLOP`. 8 bytes everywhere.                     |
 | `BOOLEAN` | `_Bool`       | 1 byte, value 0 or 1.                                         |
 | `STRING`  | `const char*` | A pointer. Pointer-sized. Not owned by the buffer.            |
 | `RELIC`   | `void*`       | A pointer. Pointer-sized. The opaque-pointer type from !~ATH. |
 
 `STRING` in a recipe is a *pointer*, exactly as in the FFI table -- the bytes live elsewhere and the recipe stores only the address. A recipe is a fixed layout; it cannot embed a variable-length string inline. For inline text, use an array of `PINCH`.
 
-`VOID` is **not** an ingredient type. A recipe always describes storage; nothing has zero size except the empty recipe as a whole.
+`VOID` is **not** an ingredient type. A recipe always describes storage; no *scalar* ingredient has zero size. (A zero-size *ingredient* is still possible -- via a zero-count array or an embedded empty recipe -- so the empty recipe is not the only thing in the language with size 0.)
 
 ### Nested recipes (by value)
 
@@ -273,7 +274,7 @@ This is the standard rule used by the System V and Windows x64 ABIs; a recipe of
 
 ### Native widths by platform
 
-Fixed-width scalars are identical everywhere. Native scalars vary. For example:
+Fixed-width scalars are identical everywhere (their alignments are mandated by !^CAKE, not derived from the host ABI; see *Fixed-width scalars*). Only some native scalars vary. For example:
 
 | platform                 | `INTEGER` (`long`) | pointer (`STRING`/`RELIC`/crust) |
 |--------------------------|--------------------|----------------------------------|
@@ -282,7 +283,7 @@ Fixed-width scalars are identical everywhere. Native scalars vary. For example:
 | LP32 (wasm32-wasi)       | 4 bytes, align 4   | 4 bytes, align 4                 |
 | ILP32 (i686 Linux)       | 4 bytes, align 4   | 4 bytes, align 4                 |
 
-A recipe that uses native scalars therefore has a platform-dependent layout (and, by design, a platform-dependent captchalogue code (sizes feed the hash; see below)). Two machines with different `long` widths compute different codes for the same source and so their handshake fails loudly (`STALE`) instead of silently corrupting data. A recipe built entirely from fixed-width scalars has the same code on every platform.
+A recipe that uses `INTEGER`, a pointer-typed native scalar (`STRING` or `RELIC`), or a crust therefore has a platform-dependent layout -- and, by design, a platform-dependent captchalogue code (sizes feed the hash; see below). Two machines with different `long` or pointer widths compute different codes for the same source, so their handshake fails loudly (`STALE`) instead of silently corrupting data. A recipe whose only native scalar is `BOOLEAN` (1 byte everywhere) is *not* affected, and a recipe built entirely from fixed-width scalars has the same code on every platform -- because !^CAKE mandates those types' alignments rather than deferring to the host ABI.
 
 ---
 
@@ -337,12 +338,11 @@ RECIPE Shape = Circle || Box;
 `&&` binds tighter than `||`. Parenthesize to override. Mixing without parentheses is legal but discouraged in schemas meant to be read by humans:
 
 ```
-RECIPE R = A && B || C;     // == (A && B) || C
-RECIPE S = A && (B || C);   // a struct whose layout embeds a marble cake? -- no:
-                            // || yields a recipe; A && (that union) merges fields. See note.
+RECIPE R = A && B || C;     // == (A && B) || C  (&& binds tighter)
+RECIPE S = A && (B || C);   // compile error: a union may not be an && operand
 ```
 
-To be clear, `&&` merges *struct* recipes. Applying `&&` with a union operand merges the union's single implicit `FLAVOR` field plus its arms' names as a nested marble-cake ingredient; the precise rule is that a union, when an `&&` operand, contributes one ingredient named after the union binding. Prefer embedding a named union as an explicit `INGREDIENT` instead of `&&`-ing it, for clarity.
+`&&` merges *struct* recipes only. **Both operands must be struct recipes; using a union (a `||` result) as an `&&` operand is a compile error.** To put a marble cake inside a struct, embed it as an ordinary ingredient of a named union type (`INGREDIENT shape: Shape;`), whose `rec(<code>)` descriptor already covers unions -- there is no `&&` form for it, and none is needed.
 
 ---
 
@@ -401,18 +401,18 @@ The `<typedesc>` for each ingredient type:
 | `SPOON` / `SIGNED SPOON`  | `u32` / `i32`                               |
 | `CUP`   / `SIGNED CUP`    | `u64` / `i64`                               |
 | `DROP`                    | `f32`                                       |
-| `DOLLOP` / `FLOAT`        | `f64`                                       |
+| `DOLLOP`                  | `f64`                                       |
 | `BOOLEAN`                 | `bool`                                      |
 | `INTEGER`                 | `long` (its `+<fieldsize>` carries width)   |
 | `STRING` / `RELIC`        | `ptr` (its `+<fieldsize>` carries width)    |
-| `CRUST OF Name`           | `ptr->Name`                                 |
+| `CRUST OF Name`           | `ptr` (target not encoded; see below)       |
 | nested recipe `R`         | `rec(<R's 8-char code>)`                     |
 | array `n OF T`            | `[<n>]<T's typedesc>`                        |
 
 Two consequences worth stating:
 
 - A nested by-value recipe contributes its own captchalogue code, so hashing is compositional and changing a nested recipe ripples outward into every code that embeds it.
-- A crust contributes only the pointee's *name* (`ptr->Name`), never the pointee's code. This is deliberate: it keeps a crust's contribution independent of the pointee's full layout, which both matches reality (a pointer's representation does not depend on what it points at) and breaks the hash cycle that recursive recipes (`Node` with `CRUST OF Node`) would otherwise create.
+- A crust contributes only `ptr`; the pointee is **not** encoded at all -- neither its code nor its name. A pointer's representation does not depend on what it points at, so this matches reality, keeps the code independent of the pointee's name (renaming a recipe never changes the code of anything that merely points at it, mirroring the rule for a recipe's own binding name), and breaks at the pointer the hash cycle that a recursive recipe (`Node` with `CRUST OF Node`) would otherwise create. The cost is that two crusts of different recipes are indistinguishable in the hash; since a crust crosses neither a wire nor an ABI boundary as anything but an address, this is intended.
 
 Because `<offset>`, `+<fieldsize>`, `a`, and `z` are all in the descriptor, *any* layout difference -- a platform's wider `long`, an inserted `RISE TO`, a `DENSE` modifier -- changes the code.
 
@@ -501,14 +501,16 @@ Once imported, a recipe is a first-class !~ATH value (like a rite reference: pas
 | `CAPTCHA(recipe)`                     | STRING | the 8-character captchalogue code.                                     |
 | `SIZEOF(recipe)`                      | INTEGER| byte size of a baked instance.                                        |
 | `BAKE(recipe)`                        | BUFFER | a fresh zeroed buffer of `SIZEOF(recipe)` bytes.                       |
-| `SPRINKLE(buf, recipe, path, value)` | VOID   | write a scalar field; mutates `buf` in place.                         |
-| `SCOOP(buf, recipe, path)`           | value  | read a field; a scalar, or a fresh BUFFER copy for a nested recipe.   |
+| `SPRINKLE(buf, recipe, path, value)` | VOID   | write a field (see *Field value types*); mutates `buf` in place.       |
+| `SCOOP(buf, recipe, path)`           | value  | read a field (see *Field value types* for the returned type).         |
 | `FLAVOR(buf, recipe)`                | INTEGER| active flavor index of a union buffer (reads the tag).                |
 | `PLATE(buf, recipe)`                 | BUFFER | a wire envelope: the 8 code bytes followed by `buf`'s bytes.          |
 | `TASTE(plated)`                      | STRING | the leading 8 bytes of a plated buffer as a code string (cheap peek). |
 | `UNPLATE(plated, recipe)`            | BUFFER | verify the leading code matches; return the struct bytes (code stripped).|
 
 **Paths:** `path` is a string naming a field, dotted for nesting and numeric-indexed for arrays: `"x"`, `"origin.x"`, `"verts.2"`, `"verts.2.y"`. For a union buffer, the first path segment is the arm name: `"Circle.r"`. The implicit union tag is the path `"FLAVOR"`; `SPRINKLE(buf, U, "FLAVOR", 1)` sets the active flavor, and `SCOOP(buf, U, "FLAVOR")` reads it (equivalently `FLAVOR(buf, U)`).
+
+**Field value types:** an integer field (`PINCH`..`CUP`, `INTEGER`, `BOOLEAN`) reads and writes as an !~ATH `INTEGER` (`BOOLEAN` as `0`/`1`); `DROP`/`DOLLOP` as a `FLOAT`. A pointer-typed field (`STRING`, `RELIC`, or a crust) reads as a **loose `RELIC`** -- the raw stored address, with no owning session -- and writes from a `RELIC`; `SCOOP` does **not** dereference it (the buffer does not own what the pointer points at, so chasing it is the caller's responsibility). A nested-recipe field reads as a fresh `BUFFER` copy of that sub-region and writes by `memcpy` from a `BUFFER` of the matching size (`RAW` on a size mismatch). The reserved ingredient `_` is inaccessible to both `SCOOP` and `SPRINKLE` (`RAW`).
 
 **Endianness:** `SPRINKLE`/`SCOOP` honor the recipe's byte order: writing to an `IMPERIAL` field stores big-endian and reading reconstructs the host integer, transparently.
 
@@ -611,7 +613,7 @@ crust_type      = "CRUST" "OF" IDENTIFIER ;
 scalar_type     = fixed_int | fixed_float | native_scalar ;
 fixed_int       = [ "SIGNED" ] ( "PINCH" | "DASH" | "SPOON" | "CUP" ) ;
 fixed_float     = "DROP" | "DOLLOP" ;
-native_scalar   = "INTEGER" | "FLOAT" | "BOOLEAN" | "STRING" | "RELIC" ;
+native_scalar   = "INTEGER" | "BOOLEAN" | "STRING" | "RELIC" ;
 
 // && binds tighter than || ; both are left-associative.
 alchemy_expr    = union_expr ;
@@ -634,6 +636,7 @@ The grammar is permissive; the following are enforced semantically:
 6. A nested-recipe `IDENTIFIER` and a crust's `IDENTIFIER` must resolve to a recipe already defined in the file or imported; a by-value cycle is `COLLAPSED SOUFFLÉ`.
 7. Reserved keywords (the scalar type names, `CRUST`, `FLAVOR`, etc.) cannot be used as recipe, ingredient, or measure names.
 8. A union (`||` result) has at most 256 arms.
+9. Both operands of `&&` must be struct recipes; a union (`||` result) as an `&&` operand is a compile error.
 
 ---
 
@@ -734,10 +737,10 @@ RECIPE Entity = Named && Placed;
 These are scoped out of the first version and may be added later:
 
 - No bitfields. Sub-byte packing is not expressible; the smallest ingredient is one byte (`PINCH`).
-- No schema evolution / optional fields.** Any change to a recipe is a new cake with a new code. This is what keeps the hash model clean; versioning, when it comes, will be a marble cake of `v1 || v2`.
-- No variable-length inline data.** A recipe is a fixed layout. Variable-length text or arrays live behind a `STRING`/`RELIC`/crust pointer, not inline (use a fixed `n OF PINCH` for bounded text).
+- No schema evolution / optional fields. Any change to a recipe is a new cake with a new code. This is what keeps the hash model clean; versioning, when it comes, will be a marble cake of `v1 || v2`.
+- No variable-length inline data. A recipe is a fixed layout. Variable-length text or arrays live behind a `STRING`/`RELIC`/crust pointer, not inline (use a fixed `n OF PINCH` for bounded text).
 - No expression language. `MEASURE` values and array counts are integer literals or measure references; there is no arithmetic.
-- Native-scalar recipes are platform-specific** by design (and so are their codes); use fixed-width scalars for anything portable.
+- Recipes using `INTEGER` or pointer types (`STRING`/`RELIC`/crust) are platform-specific by design (and so are their codes); use fixed-width scalars for anything portable.
 - No mortal recipes. Recipes are not entities; you cannot `~ATH` a recipe. Schemas are eternal.
 
 ---
