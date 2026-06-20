@@ -28,5 +28,6 @@
 #include "ath_buffer.h"
 #include "ath_session.h"
 #include "ath_ffi.h"
+#include "ath_cake.h"
 
 #endif /* ATH_RUNTIME_H */

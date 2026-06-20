@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
+ATTEMPT {
+    import watcher Bad("./cake_curdled.^CAKE");
+    UTTER("unreachable");
+} SALVAGE err {
+    UTTER("caught CURDLED");
+}
+THIS.DIE();

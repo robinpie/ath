@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// A recipe whose PUNCHED assertion matches its real code loads without error.
+import watcher M("./cake_punched.^CAKE");
+UTTER(CAPTCHA(M.Point));
+THIS.DIE();

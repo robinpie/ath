@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher Geo("./cake_div.^CAKE");
+import watcher P("./cake_point.^CAKE");
+import session Lib("../work/libcakegeo.so") {
+    TRANSCRIBE translate(P.Point, INTEGER, INTEGER) -> P.Point;
+    TRANSCRIBE dist2(P.Point) -> INTEGER;
+}
+BIRTH p WITH BAKE(P.Point);
+SPRINKLE(p, P.Point, "x", 3);
+SPRINKLE(p, P.Point, "y", 4);
+UTTER(Lib.dist2(p));
+BIRTH moved WITH Lib.translate(p, 10, 20);
+UTTER(SCOOP(moved, P.Point, "x"), SCOOP(moved, P.Point, "y"));
+Lib.DIE();
+THIS.DIE();

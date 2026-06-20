@@ -1,0 +1,32 @@
+// Extra recipes for the additional cake__ test cases: every scalar family, a
+// packed (DENSE) recipe, an alignment-raised recipe, and a crust (pointer)
+// recipe. Fixed-width scalars keep these layouts platform-stable.
+
+RECIPE Scalars {
+    INGREDIENT a: PINCH;     // u8  @0
+    INGREDIENT b: DASH;      // u16 @2
+    INGREDIENT c: SPOON;     // u32 @4
+    INGREDIENT d: CUP;       // u64 @8
+    INGREDIENT e: DROP;      // f32 @16
+    INGREDIENT f: DOLLOP;    // f64 @24
+    INGREDIENT g: BOOLEAN;   // _Bool @32
+}
+// align 8, size 40
+
+DENSE RECIPE Packed {
+    INGREDIENT tag:  PINCH;  // @0
+    INGREDIENT data: CUP;    // @1 (packed: no padding)
+}
+// align 1, size 9
+
+RECIPE Risen {
+    INGREDIENT x: SPOON;     // @0
+    RISE TO 16;
+}
+// align 16, size 16
+
+RECIPE Node {
+    INGREDIENT value: SIGNED CUP;   // @0
+    INGREDIENT next:  CRUST OF Node; // pointer; breaks the souffle
+}
+// align 8, size 16

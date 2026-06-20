@@ -1,0 +1,6 @@
+// A mis-PUNCHED recipe: "00000000" is the reserved empty-recipe code, so a
+// non-empty recipe asserting it is STALE at load time.
+RECIPE Point PUNCHED "00000000" {
+    INGREDIENT x: SIGNED SPOON;
+    INGREDIENT y: SIGNED SPOON;
+}

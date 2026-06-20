@@ -23,7 +23,9 @@ ENTOMB BUILTINS WITH {
     "KEYS":ALIVE,"VALUES":ALIVE,"HAS":ALIVE,"SET":ALIVE,"DELETE":ALIVE,
     "SPLIT":ALIVE,"JOIN":ALIVE,"SUBSTRING":ALIVE,"UPPERCASE":ALIVE,
     "LOWERCASE":ALIVE,"TRIM":ALIVE,"REPLACE":ALIVE,
-    "RANDOM":ALIVE,"RANDOM_INT":ALIVE,"TIME":ALIVE
+    "RANDOM":ALIVE,"RANDOM_INT":ALIVE,"TIME":ALIVE,
+    "CAPTCHA":ALIVE,"SIZEOF":ALIVE,"BAKE":ALIVE,"SPRINKLE":ALIVE,"SCOOP":ALIVE,
+    "FLAVOR":ALIVE,"PLATE":ALIVE,"TASTE":ALIVE,"UNPLATE":ALIVE
 };
 
 ENTOMB EJECT_MODS WITH {
@@ -110,6 +112,19 @@ RITE isModuleImport(s) {
             BIRTH path WITH s.args[0].v;
             BIRTH len WITH LENGTH(path);
             SHOULD len >= 5 AND SUBSTRING(path, len-5, len) == ".~ATH" { BEQUEATH ALIVE; }
+        }
+    }
+    BEQUEATH DEAD;
+}
+
+// A watcher whose path ends in .^CAKE is a declarative schema-module import:
+// loaded at runtime via ath_cake_load, binding the name to a module of recipes.
+RITE isCakeImport(s) {
+    SHOULD s.t == "Import" AND s.etype == "watcher" {
+        SHOULD s.args[0].t == "Lit" AND s.args[0].vt == "STR" {
+            BIRTH path WITH s.args[0].v;
+            BIRTH len WITH LENGTH(path);
+            SHOULD len >= 6 AND SUBSTRING(path, len-6, len) == ".^CAKE" { BEQUEATH ALIVE; }
         }
     }
     BEQUEATH DEAD;
@@ -635,6 +650,16 @@ RITE genSyncImport(stmt, depth, ctx) {
 
     SHOULD et == "watcher" {
         BIRTH rp WITH genExpr(stmt.args[0], ctx); ctx = rp.ctx;
+        // A .^CAKE path loads a declarative recipe module at runtime; the name
+        // binds the module (so M.Recipe resolves), like a .~ATH module import.
+        SHOULD isCakeImport(stmt) {
+            BIRTH cs WITH p+"{ "+rp.stmts+
+                "{ char *_fp=ath_stringify("+rp.t+");\n"+
+                p+"  AthValue _ck=ath_cake_load(_fp); free(_fp);\n"+
+                p+"  ath_scope_define("+sv+",\""+name+"\",_ck,0);\n"+
+                p+"  ath_value_decref(_ck); } }\n";
+            BEQUEATH {ctx:ctx, s:cs};
+        }
         BIRTH s WITH p+"{ "+rp.stmts+
             "{ char *_fp=ath_stringify("+rp.t+");\n"+
             p+"  AthEntity *_e=ath_entity_watcher_new(\""+name+"\",_fp); free(_fp);\n"+
@@ -712,7 +737,9 @@ RITE buildParamList(params, i, acc) {
     BEQUEATH buildParamList(params, i+1, acc+sep+"\""+ts+"\"");
 }
 
-RITE genTranscription(tr, p) {
+// The scope variable is threaded into ath_session_transcribe so dotted recipe
+// type names (Geo.Point) can be resolved to AthRecipe values at transcribe time.
+RITE genTranscription(tr, p, sv) {
     BIRTH np WITH LENGTH(tr.params);
     BIRTH ret WITH typeToString(tr.ret);
     BIRTH nm WITH tr.name;
@@ -722,15 +749,15 @@ RITE genTranscription(tr, p) {
     SHOULD np > 0 {
         BIRTH pl WITH buildParamList(tr.params, 0, "");
         BEQUEATH p+"  { static const char *_p[]={"+pl+"};\n"+
-            p+"    ath_session_transcribe(_sess,\""+nm+"\",\""+ret+"\","+
+            p+"    ath_session_transcribe_scoped(_sess,"+sv+",\""+nm+"\",\""+ret+"\","+
             STRING(np)+",_p,"+dropsC+"); }\n";
     }
-    BEQUEATH p+"  ath_session_transcribe(_sess,\""+nm+"\",\""+ret+"\",0,NULL,"+dropsC+");\n";
+    BEQUEATH p+"  ath_session_transcribe_scoped(_sess,"+sv+",\""+nm+"\",\""+ret+"\",0,NULL,"+dropsC+");\n";
 }
 
-RITE genTranscriptions(trs, i, p) {
+RITE genTranscriptions(trs, i, p, sv) {
     SHOULD i >= LENGTH(trs) { BEQUEATH ""; }
-    BEQUEATH genTranscription(trs[i], p) + genTranscriptions(trs, i+1, p);
+    BEQUEATH genTranscription(trs[i], p, sv) + genTranscriptions(trs, i+1, p, sv);
 }
 
 RITE genSessionImport(stmt, depth, ctx) {
@@ -744,7 +771,7 @@ RITE genSessionImport(stmt, depth, ctx) {
         p+"  char *_libpath=ath_stringify("+rp.t+");\n"+
         p+"  AthSession *_sess=ath_session_create(\""+name+"\",_libpath,"+unsafeC+");\n"+
         p+"  free(_libpath);\n"+
-        genTranscriptions(stmt.transcriptions, 0, p)+
+        genTranscriptions(stmt.transcriptions, 0, p, sv)+
         p+"  ath_scope_define("+sv+",\""+name+"\",ath_session_val(_sess),0);\n"+
         p+"  ath_session_decref(_sess);\n"+
         p+"}\n";

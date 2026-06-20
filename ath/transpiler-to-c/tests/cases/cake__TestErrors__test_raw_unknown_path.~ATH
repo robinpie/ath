@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_schema.^CAKE");
+BIRTH p WITH BAKE(M.Point);
+ATTEMPT {
+    BIRTH bad WITH SCOOP(p, M.Point, "z");
+    UTTER("unreachable");
+} SALVAGE err {
+    UTTER("caught RAW path");
+}
+THIS.DIE();

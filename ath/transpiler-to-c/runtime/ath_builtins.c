@@ -100,6 +100,15 @@ static struct { const char *name; AthBuiltinFn fn; } _builtins[] = {
     {"SET_BYTE",          ath_builtin_SET_BYTE},
     {"BUFFER_TO_STRING",  ath_builtin_BUFFER_TO_STRING},
     {"STRING_TO_BUFFER",  ath_builtin_STRING_TO_BUFFER},
+    {"CAPTCHA",           ath_builtin_CAPTCHA},
+    {"SIZEOF",            ath_builtin_SIZEOF},
+    {"BAKE",              ath_builtin_BAKE},
+    {"SPRINKLE",          ath_builtin_SPRINKLE},
+    {"SCOOP",             ath_builtin_SCOOP},
+    {"FLAVOR",            ath_builtin_FLAVOR},
+    {"PLATE",             ath_builtin_PLATE},
+    {"TASTE",             ath_builtin_TASTE},
+    {"UNPLATE",           ath_builtin_UNPLATE},
     {NULL, NULL}
 };
 

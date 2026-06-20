@@ -26,6 +26,12 @@ work:
 work/libruncase.so: libruncase.c | work
 	gcc -shared -fPIC -std=c99 $< -o $@
 
+# Fixture shared library for the ffi__TestRecipe by-value struct cases (native
+# Linux only; the cases are linux-tagged in manifest.txt). Cases open it as
+# ../work/libcakegeo.so relative to tests/cases.
+work/libcakegeo.so: cakegeo.c | work
+	gcc -shared -fPIC -std=c89 $< -o $@
+
 work/harness.c: harness.~ATH $(ATHTOC_STABLE) | work
 	@test -x $(ATHTOC_STABLE) || { \
 	  echo "ERROR: $(ATHTOC_STABLE) not found."; \
@@ -37,7 +43,7 @@ work/harness: work/harness.c work/libruncase.so ../libath_runtime.a
 	gcc -std=c89 -pedantic -Wno-unused-variable -Wno-declaration-after-statement \
 	    $< -I$(RUNTIME) -L.. -lath_runtime -ldl -lffi -o $@
 
-run: work/harness
+run: work/harness work/libcakegeo.so
 	./work/harness
 
 clean:

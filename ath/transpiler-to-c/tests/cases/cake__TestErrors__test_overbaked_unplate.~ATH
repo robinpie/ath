@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Hand-build a plated buffer with the right code prefix but a body longer than
+// the recipe: the code matches (no STALE) but the trailing bytes are OVERBAKED.
+import watcher M("./cake_schema.^CAKE");
+BIRTH code WITH CAPTCHA(M.Point);
+BIRTH big WITH BUFFER(SIZEOF(M.Point) + 9);
+SET_BYTE(big, 0, CODE(SUBSTRING(code, 0, 1)));
+SET_BYTE(big, 1, CODE(SUBSTRING(code, 1, 2)));
+SET_BYTE(big, 2, CODE(SUBSTRING(code, 2, 3)));
+SET_BYTE(big, 3, CODE(SUBSTRING(code, 3, 4)));
+SET_BYTE(big, 4, CODE(SUBSTRING(code, 4, 5)));
+SET_BYTE(big, 5, CODE(SUBSTRING(code, 5, 6)));
+SET_BYTE(big, 6, CODE(SUBSTRING(code, 6, 7)));
+SET_BYTE(big, 7, CODE(SUBSTRING(code, 7, 8)));
+ATTEMPT {
+    BIRTH body WITH UNPLATE(big, M.Point);
+    UTTER("unreachable");
+} SALVAGE err {
+    UTTER("caught OVERBAKED");
+}
+THIS.DIE();

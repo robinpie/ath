@@ -26,6 +26,7 @@ typedef struct ath_ffi_type_stub ffi_type;
 #include <ffi.h>
 #endif
 #include "ath_value.h"
+#include "ath_scope.h"
 
 struct AthSession;
 
@@ -37,13 +38,18 @@ typedef enum {
     ATH_FFI_VOID     = 4,
     ATH_FFI_RELIC    = 5,
     ATH_FFI_BUFFER   = 6,
-    ATH_FFI_CALLBACK = 7   /* callable parameter -- !~ATH rite wrapped as libffi closure */
+    ATH_FFI_CALLBACK = 7,  /* callable parameter -- !~ATH rite wrapped as libffi closure */
+    ATH_FFI_RECIPE   = 8   /* !^CAKE recipe passed/returned by value as a C struct */
 } AthFfiTypeTag;
 
-/* A single parameter (or the return) of a transcription. For simple types `callback_sig` is NULL; for CALLBACK it points at a sub-sig that describes the C signature of the callback. */
+struct AthRecipe;
+
+/* A single parameter (or the return) of a transcription. For simple types `callback_sig` is NULL; for CALLBACK it points at a sub-sig that describes the C signature of the callback; for RECIPE `recipe` points at the AthRecipe describing the struct layout. */
 typedef struct AthFfiParam {
     AthFfiTypeTag     tag;
     struct AthFfiSig *callback_sig; /* non-NULL iff tag == ATH_FFI_CALLBACK */
+    struct AthRecipe *recipe;       /* non-NULL iff tag == ATH_FFI_RECIPE (strong ref) */
+    ffi_type         *struct_type;  /* owned aggregate ffi_type for RECIPE; NULL otherwise */
 } AthFfiParam;
 
 typedef struct AthFfiSig {
@@ -62,8 +68,12 @@ typedef struct AthFfiSig {
 /* Returns one of the ATH_FFI_* tags, or -1 if name is unknown. */
 int ath_ffi_tag_from_name(const char *name);
 
-/* Build a sig from string type names. dlsyms the symbol, runs ffi_prep_cif. On failure raises a runtime error and returns NULL. */
+/* Build a sig from string type names. dlsyms the symbol, runs ffi_prep_cif. A
+   type name that is not a builtin FFI keyword is resolved against `scope` as a
+   !^CAKE recipe (dotted: Geo.Point), enabling by-value struct params/returns.
+   On failure raises a runtime error and returns NULL. */
 AthFfiSig *ath_ffi_sig_create(struct AthSession *session,
+                              AthScope *scope,
                               const char *symbol_name,
                               const char *ret_type_name,
                               int nparams,

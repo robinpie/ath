@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_schema.^CAKE");
+BIRTH pk WITH BAKE(M.Packet);
+SPRINKLE(pk, M.Packet, "magic", 305419896);
+// 0x12345678 big-endian: byte 0 is the most significant (0x12 = 18)
+UTTER(BYTE_AT(pk, 0), BYTE_AT(pk, 3));
+UTTER(SCOOP(pk, M.Packet, "magic"));
+THIS.DIE();

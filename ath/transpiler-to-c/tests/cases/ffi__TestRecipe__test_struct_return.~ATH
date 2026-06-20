@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher C("./cake_div.^CAKE");
+import session L("libc.so.6") {
+    TRANSCRIBE div(INTEGER, INTEGER) -> C.DivT;
+}
+BIRTH d WITH L.div(17, 5);
+UTTER(SCOOP(d, C.DivT, "quot"), SCOOP(d, C.DivT, "rem"));
+L.DIE();
+THIS.DIE();

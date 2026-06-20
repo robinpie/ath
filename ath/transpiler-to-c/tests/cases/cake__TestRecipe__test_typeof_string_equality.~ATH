@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_schema.^CAKE");
+UTTER(TYPEOF(M.Point));
+UTTER(TYPEOF(M));
+UTTER(STRING(M.Point));
+// Recipes compare equal by captchalogue code.
+UTTER(M.Point == M.Point);
+UTTER(M.Point == M.Segment);
+THIS.DIE();

@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_more.^CAKE");
+// A crust is pointer-sized; Node is value(8) + pointer, rounded to 16.
+UTTER(SIZEOF(M.Node));
+BIRTH n WITH BAKE(M.Node);
+SPRINKLE(n, M.Node, "value", -42);
+UTTER(SCOOP(n, M.Node, "value"));
+// A crust field reads back as a (loose) RELIC -- the raw stored address.
+UTTER(TYPEOF(SCOOP(n, M.Node, "next")));
+THIS.DIE();

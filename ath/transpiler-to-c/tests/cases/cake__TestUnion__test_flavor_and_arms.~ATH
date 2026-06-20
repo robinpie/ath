@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_schema.^CAKE");
+BIRTH sh WITH BAKE(M.Shape);
+SPRINKLE(sh, M.Shape, "FLAVOR", 1);
+SPRINKLE(sh, M.Shape, "Rect.w", 30);
+SPRINKLE(sh, M.Shape, "Rect.h", 20);
+UTTER(FLAVOR(sh, M.Shape));
+UTTER(SCOOP(sh, M.Shape, "Rect.w") * SCOOP(sh, M.Shape, "Rect.h"));
+THIS.DIE();

@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// A PUNCHED assertion that disagrees with the computed code is STALE at load.
+ATTEMPT {
+    import watcher Bad("./cake_punchbad.^CAKE");
+    UTTER("unreachable");
+} SALVAGE err {
+    UTTER("caught STALE punch");
+}
+THIS.DIE();

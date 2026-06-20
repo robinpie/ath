@@ -27,6 +27,8 @@
 #include "ath_relic.h"
 #include "ath_buffer.h"
 #include "ath_error.h"
+#include "ath_cake.h"      /* AthRecipe, recipe-typed by-value structs */
+#include "ath_scope.h"     /* ath_scope_get for dotted recipe resolution */
 #include "ath_builtins.h"  /* ath_call_sync (for callback trampoline) */
 #include <stdlib.h>
 #include <string.h>
@@ -103,8 +105,120 @@ static ffi_type *libffi_type_for(AthFfiTypeTag tag) {
     case ATH_FFI_RELIC:    return &ffi_type_pointer;
     case ATH_FFI_BUFFER:   return &ffi_type_pointer;
     case ATH_FFI_CALLBACK: return &ffi_type_pointer;
+    case ATH_FFI_RECIPE:   return &ffi_type_void; /* replaced by struct_type */
     }
     return &ffi_type_void;
+}
+
+/* ===== Recipe (by-value struct) -> libffi aggregate ffi_type =====
+
+   A recipe lays out like a C aggregate. libffi has no array or union type, so
+   we expand arrays into repeated elements and represent nested recipes as
+   nested FFI_TYPE_STRUCT ffi_types (preserving their tail padding). The host
+   ABI must reproduce the recipe's mandated layout; ath_ffi_sig_create asserts
+   the libffi-computed size equals recipe->size and rejects mismatches. */
+
+static ffi_type *ck_leaf_ffi(CkType *t) {
+    switch (t->tag) {
+    case CK_T_PINCH:   return t->is_signed ? &ffi_type_sint8  : &ffi_type_uint8;
+    case CK_T_DASH:    return t->is_signed ? &ffi_type_sint16 : &ffi_type_uint16;
+    case CK_T_SPOON:   return t->is_signed ? &ffi_type_sint32 : &ffi_type_uint32;
+    case CK_T_CUP:     return t->is_signed ? &ffi_type_sint64 : &ffi_type_uint64;
+    case CK_T_DROP:    return &ffi_type_float;
+    case CK_T_DOLLOP:  return &ffi_type_double;
+    case CK_T_INTEGER: return &ffi_type_slong;
+    case CK_T_BOOLEAN: return &ffi_type_uint8;
+    case CK_T_STRING:
+    case CK_T_RELIC:
+    case CK_T_CRUST:   return &ffi_type_pointer;
+    default:           return NULL;
+    }
+}
+
+static ffi_type *ck_build_ffi_type(AthRecipe *r, int *ok);
+
+/* Number of libffi element slots contributed by one ingredient type. */
+static int ck_type_elem_count(CkType *t) {
+    if (t->tag == CK_T_ARRAY) return (int)t->array_count * ck_type_elem_count(t->elem);
+    return 1; /* scalar, crust, or nested (a single nested struct ffi_type) */
+}
+
+/* Append the ffi_type element(s) for one type into elems[*idx]. Returns 0 ok. */
+static int ck_fill_type(CkType *t, ffi_type **elems, int *idx) {
+    if (t->tag == CK_T_ARRAY) {
+        int k;
+        for (k = 0; k < t->array_count; k++)
+            if (ck_fill_type(t->elem, elems, idx) != 0) return -1;
+        return 0;
+    }
+    if (t->tag == CK_T_NESTED) {
+        int ok = 1;
+        ffi_type *st = ck_build_ffi_type(t->nested, &ok);
+        if (!ok) return -1;
+        elems[(*idx)++] = st;
+        return 0;
+    }
+    {
+        ffi_type *p = ck_leaf_ffi(t);
+        if (!p) return -1;
+        elems[(*idx)++] = p;
+        return 0;
+    }
+}
+
+/* Recursively build a heap FFI_TYPE_STRUCT for a struct recipe. *ok is set to 0
+   on any unrepresentable feature (union, IMPERIAL, empty, bad leaf). */
+static ffi_type *ck_build_ffi_type(AthRecipe *r, int *ok) {
+    int total = 0, i, idx = 0;
+    ffi_type *t;
+    ffi_type **elems;
+    if (r->kind != CK_KIND_STRUCT || r->imperial) { *ok = 0; return NULL; }
+    for (i = 0; i < r->n_ingredients; i++)
+        total += ck_type_elem_count(r->ingredients[i].type);
+    if (total <= 0) { *ok = 0; return NULL; }
+    elems = (ffi_type **)calloc((size_t)total + 1, sizeof(ffi_type *));
+    if (!elems) ath_fatal("out of memory");
+    for (i = 0; i < r->n_ingredients; i++) {
+        if (ck_fill_type(r->ingredients[i].type, elems, &idx) != 0) {
+            free(elems); *ok = 0; return NULL;
+        }
+    }
+    elems[total] = NULL;
+    t = (ffi_type *)calloc(1, sizeof(ffi_type));
+    if (!t) ath_fatal("out of memory");
+    t->type = FFI_TYPE_STRUCT;
+    t->elements = elems;
+    return t;
+}
+
+/* Free a heap struct ffi_type (and nested ones); leaves static primitives. */
+static void ck_free_ffi_type(ffi_type *t) {
+    int i;
+    if (!t || t->type != FFI_TYPE_STRUCT || !t->elements) return;
+    for (i = 0; t->elements[i]; i++) ck_free_ffi_type(t->elements[i]);
+    free(t->elements);
+    free(t);
+}
+
+/* Resolve a transcription type name to a recipe via the scope.
+   Accepts "Recipe" or "Module.Recipe". Returns NULL if not a recipe. */
+static AthRecipe *ck_resolve_recipe_name(AthScope *scope, const char *name) {
+    const char *dot;
+    AthValue v;
+    if (!scope || !name) return NULL;
+    dot = strchr(name, '.');
+    if (dot) {
+        char mod[128];
+        size_t n = (size_t)(dot - name);
+        if (n == 0 || n >= sizeof(mod)) return NULL;
+        memcpy(mod, name, n); mod[n] = '\0';
+        v = ath_scope_get(scope, mod);
+        if (v.type != ATH_MODULE && v.type != ATH_MAP) return NULL;
+        v = ath_map_get(v.as.map, dot + 1);
+    } else {
+        v = ath_scope_get(scope, name);
+    }
+    return (v.type == ATH_RECIPE) ? v.as.recipe : NULL;
 }
 
 /* ===== Nested type-spec parser =====
@@ -165,6 +279,8 @@ static int _parse_callback(const char **cur, AthFfiParam *out) {
 
 static int _parse_type(const char **cur, AthFfiParam *out) {
     out->callback_sig = NULL;
+    out->recipe = NULL;
+    out->struct_type = NULL;
     if (_match_keyword(cur, "INTEGER")) { out->tag = ATH_FFI_INTEGER; return 0; }
     if (_match_keyword(cur, "FLOAT"))   { out->tag = ATH_FFI_FLOAT;   return 0; }
     if (_match_keyword(cur, "BOOLEAN")) { out->tag = ATH_FFI_BOOLEAN; return 0; }
@@ -197,16 +313,43 @@ static void _sig_finalize_cif(AthFfiSig *sig) {
     }
 }
 
+static void _free_param_contents(AthFfiParam *p) {
+    if (p->callback_sig) ath_ffi_sig_free(p->callback_sig);
+    if (p->struct_type) ck_free_ffi_type(p->struct_type);
+    if (p->recipe) ath_recipe_decref(p->recipe);
+}
+
 static void _free_params(AthFfiParam *params, int n) {
     int i;
     if (!params) return;
-    for (i = 0; i < n; i++) {
-        if (params[i].callback_sig) ath_ffi_sig_free(params[i].callback_sig);
-    }
+    for (i = 0; i < n; i++) _free_param_contents(&params[i]);
     free(params);
 }
 
+/* Resolve one type name into a param: try the FFI keyword grammar first, then
+   fall back to a !^CAKE recipe lookup (by-value struct). Returns 0 ok, -1 on
+   unparseable, -2 on recipe that cannot be a host-ABI FFI type. */
+static int _resolve_param(AthScope *scope, const char *type_name,
+                          AthFfiParam *out, int is_return) {
+    const char *cur = type_name ? type_name : "";
+    AthRecipe *rec;
+    int ok = 1;
+    if (_parse_type(&cur, out) == 0 && *cur == '\0') return 0;
+    /* not a keyword type -- try a recipe */
+    rec = ck_resolve_recipe_name(scope, type_name);
+    if (!rec) return -1;
+    out->callback_sig = NULL;
+    out->tag = ATH_FFI_RECIPE;
+    out->recipe = rec;
+    ath_recipe_incref(rec);
+    out->struct_type = ck_build_ffi_type(rec, &ok);
+    if (!ok) { ath_recipe_decref(rec); out->recipe = NULL; return -2; }
+    (void)is_return;
+    return 0;
+}
+
 AthFfiSig *ath_ffi_sig_create(AthSession *session,
+                              AthScope *scope,
                               const char *symbol_name,
                               const char *ret_type_name,
                               int nparams,
@@ -216,7 +359,7 @@ AthFfiSig *ath_ffi_sig_create(AthSession *session,
     void *sym;
     int i;
     AthFfiParam ret_param;
-    const char *cur;
+    int rr;
 #ifndef _WIN32
     char *err;
 #endif
@@ -249,8 +392,13 @@ AthFfiSig *ath_ffi_sig_create(AthSession *session,
     }
 #endif
 
-    cur = ret_type_name ? ret_type_name : "";
-    if (_parse_type(&cur, &ret_param) < 0 || *cur != '\0') {
+    rr = _resolve_param(scope, ret_type_name, &ret_param, 1);
+    if (rr == -2) {
+        ath_runtime_error_fmt("session: recipe return type '%s' is not a valid FFI type (%s)",
+                              ret_type_name, symbol_name);
+        return NULL;
+    }
+    if (rr < 0) {
         ath_runtime_error_fmt("session: unparseable return type '%s' for %s",
                               ret_type_name, symbol_name);
         return NULL;
@@ -280,31 +428,58 @@ AthFfiSig *ath_ffi_sig_create(AthSession *session,
         if (!sig->params || !sig->arg_types) ath_fatal("out of memory");
         for (i = 0; i < nparams; i++) {
             AthFfiParam p;
-            cur = param_type_names[i] ? param_type_names[i] : "";
-            if (_parse_type(&cur, &p) < 0 || *cur != '\0') {
+            int pr = _resolve_param(scope, param_type_names[i], &p, 0);
+            if (pr == -2) {
+                ath_ffi_sig_free(sig);
+                ath_runtime_error_fmt("session: recipe param type '%s' is not a valid FFI type (%s)",
+                                      param_type_names[i], symbol_name);
+                return NULL;
+            }
+            if (pr < 0) {
                 ath_ffi_sig_free(sig);
                 ath_runtime_error_fmt("session: unparseable param type '%s' for %s",
                                       param_type_names[i], symbol_name);
                 return NULL;
             }
             if (p.tag == ATH_FFI_VOID) {
-                if (p.callback_sig) ath_ffi_sig_free(p.callback_sig);
+                _free_param_contents(&p);
                 ath_ffi_sig_free(sig);
                 ath_runtime_error_fmt("session: VOID is not a valid parameter type (%s)",
                                       symbol_name);
                 return NULL;
             }
             sig->params[i] = p;
-            sig->arg_types[i] = libffi_type_for(p.tag);
+            sig->arg_types[i] = (p.tag == ATH_FFI_RECIPE)
+                                ? p.struct_type : libffi_type_for(p.tag);
         }
     }
-    sig->ret_type = libffi_type_for(sig->ret.tag);
+    sig->ret_type = (sig->ret.tag == ATH_FFI_RECIPE)
+                    ? sig->ret.struct_type : libffi_type_for(sig->ret.tag);
     if (ffi_prep_cif(&sig->cif, FFI_DEFAULT_ABI,
                      (unsigned int)nparams,
                      sig->ret_type, sig->arg_types) != FFI_OK) {
         ath_ffi_sig_free(sig);
         ath_runtime_error_fmt("session: ffi_prep_cif failed for %s", symbol_name);
         return NULL;
+    }
+    /* ffi_prep_cif has now filled in each struct ffi_type's size. The host ABI
+       must reproduce the recipe's mandated layout, or the struct cannot cross
+       the boundary intact. */
+    if (sig->ret.tag == ATH_FFI_RECIPE &&
+        (int)sig->ret.struct_type->size != sig->ret.recipe->size) {
+        ath_ffi_sig_free(sig);
+        ath_runtime_error_fmt("session: recipe return layout does not match host ABI (%s)",
+                              symbol_name);
+        return NULL;
+    }
+    for (i = 0; i < nparams; i++) {
+        if (sig->params[i].tag == ATH_FFI_RECIPE &&
+            (int)sig->params[i].struct_type->size != sig->params[i].recipe->size) {
+            ath_ffi_sig_free(sig);
+            ath_runtime_error_fmt("session: recipe param layout does not match host ABI (%s)",
+                                  symbol_name);
+            return NULL;
+        }
     }
     return sig;
 }
@@ -314,7 +489,7 @@ void ath_ffi_sig_free(AthFfiSig *sig) {
     if (--sig->refcount > 0) return;
     _free_params(sig->params, sig->nparams);
     if (sig->arg_types) free(sig->arg_types);
-    if (sig->ret.callback_sig) ath_ffi_sig_free(sig->ret.callback_sig);
+    _free_param_contents(&sig->ret);
     if (sig->drops_name) free(sig->drops_name);
     free(sig);
 }
@@ -575,6 +750,23 @@ AthValue ath_ffi_invoke(struct AthScope *scope, int argc, AthValue *argv) {
             arg_ptrs[i] = &raw[i].p;
             nclosures++;
             break;
+        case ATH_FFI_RECIPE:
+            if (v.type != ATH_BUFFER) {
+                int j; for (j = 0; j < nclosures; j++) _ath_ffi_free_closure(&closures[j]);
+                ath_runtime_error_fmt("FFI arg %d: expected a baked BUFFER, got %s",
+                                      i, ath_typeof_str(v));
+                return ath_void();
+            }
+            if (!v.as.buffer || v.as.buffer->length != sig->params[i].recipe->size) {
+                int j; for (j = 0; j < nclosures; j++) _ath_ffi_free_closure(&closures[j]);
+                ath_runtime_error_fmt("RAW: FFI arg %d: buffer size %d does not match recipe size %d",
+                                      i, v.as.buffer ? v.as.buffer->length : 0,
+                                      sig->params[i].recipe->size);
+                return ath_void();
+            }
+            /* libffi reads the struct's bytes through the arg pointer. */
+            arg_ptrs[i] = (void *)v.as.buffer->bytes;
+            break;
         case ATH_FFI_VOID:
             { int j; for (j = 0; j < nclosures; j++) _ath_ffi_free_closure(&closures[j]); }
             ath_runtime_error_fmt("FFI arg %d: VOID is not a valid argument", i);
@@ -582,19 +774,40 @@ AthValue ath_ffi_invoke(struct AthScope *scope, int argc, AthValue *argv) {
         }
     }
 
+    /* A by-value struct return needs storage at least the struct's size; the
+       small AthFfiRaw union cannot hold it. Use a scratch allocation. */
     {
-        int fault = _ath_ffi_call_protected(sig, &retbuf, arg_ptrs);
+        void *retptr;
+        void *ret_scratch = NULL;
+        int fault;
+        if (sig->ret.tag == ATH_FFI_RECIPE) {
+            int rsz = sig->ret.recipe->size;
+            size_t alloc = (size_t)(rsz > (int)sizeof(AthFfiRaw) ? rsz : (int)sizeof(AthFfiRaw));
+            ret_scratch = malloc(alloc);
+            if (!ret_scratch) ath_fatal("out of memory");
+            retptr = ret_scratch;
+        } else {
+            retptr = &retbuf;
+        }
+        fault = _ath_ffi_call_protected(sig, retptr, arg_ptrs);
         if (fault != 0) {
             /* The signal handler set session->faulted. Trigger the death path so the teardown continuation runs the fault branch (curse relics, skip dlclose, leak the mapping). Closures leak here too -- the universe is gone. */
+            if (ret_scratch) free(ret_scratch);
             if (sig->session->entity) ath_entity_die(sig->session->entity);
             ath_runtime_error_fmt(
                 "foreign universe collapsed: signal %d", fault);
             return ath_void();
         }
+        /* Free callback closures now that the call has returned. */
+        for (i = 0; i < nclosures; i++) _ath_ffi_free_closure(&closures[i]);
+        if (sig->ret.tag == ATH_FFI_RECIPE) {
+            AthBuffer *out = ath_buffer_new(sig->ret.recipe->size);
+            if (sig->ret.recipe->size > 0)
+                memcpy(out->bytes, ret_scratch, (size_t)sig->ret.recipe->size);
+            free(ret_scratch);
+            return ath_buffer_val(out);
+        }
     }
-
-    /* Free callback closures now that the call has returned. */
-    for (i = 0; i < nclosures; i++) _ath_ffi_free_closure(&closures[i]);
 
     switch (sig->ret.tag) {
     case ATH_FFI_INTEGER: result = ath_int(retbuf.i); break;
@@ -623,6 +836,7 @@ AthValue ath_ffi_invoke(struct AthScope *scope, int argc, AthValue *argv) {
     case ATH_FFI_CALLBACK:
         ath_runtime_error("FFI: CALLBACK return type not supported", 0, 0);
         return ath_void();
+    case ATH_FFI_RECIPE:   /* handled before this switch via early return */
     default:
         result = ath_void();
     }
@@ -645,12 +859,13 @@ int ath_ffi_tag_from_name(const char *name) {
 }
 
 AthFfiSig *ath_ffi_sig_create(struct AthSession *session,
+                              AthScope *scope,
                               const char *symbol_name,
                               const char *ret_type_name,
                               int nparams,
                               const char **param_type_names,
                               const char *drops_name_or_null) {
-    (void)session; (void)symbol_name; (void)ret_type_name;
+    (void)session; (void)scope; (void)symbol_name; (void)ret_type_name;
     (void)nparams; (void)param_type_names; (void)drops_name_or_null;
     ath_runtime_error("FFI: foreign sessions are not supported in WASM", 0, 0);
     return NULL;
