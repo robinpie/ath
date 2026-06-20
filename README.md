@@ -5,7 +5,7 @@
 
 **!~ATH** (pronounced "until death") is an esoteric programming language where all control flow is predicated on waiting for things to die. Inspired by the fictional ~ATH language from Homestuck. Loops wait for entitites to die, then computation happens in death callbacks. The language is deliberately inconvenient. 
 
-This repository houses two Homestuck-inspired languages: !~ATH (everything under `ath/`, and the bulk of this README) and !^CAKE, a baking-themed schema definition language in early design (see `cake/`).
+This repository houses two Homestuck-inspired languages: !~ATH (everything under `ath/`, and the bulk of this README) and !^CAKE, a baking-themed schema definition language (see `cake/`).
 
 ## Implementation
 
@@ -15,7 +15,7 @@ There is also a deprecated Python interpreter for !~ATH 1.3, and a partial depre
 
 The JavaScript interpreter powers [a Web playground for !~ATH 1.3](https://robinpie.neocities.org/ath/).
 
-## Spec and Reference
+## !~ATH Spec and Reference
 
 The full !~ATH spec is located at ./ath/athSpec.md, but a quick reference is located below.
 
