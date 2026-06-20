@@ -18,24 +18,24 @@
 // ── Build instructions for cross-compiling from Linux) ────────────────────
 //
 //   1. Build the wrapper DLL:
-//      x86_64-w64-mingw32-gcc -shared -O2 athapps/winbox_wrapper.c \
-//          -o athapps/winbox_wrapper.dll -luser32
+//      x86_64-w64-mingw32-gcc -shared -O2 ath/apps/winbox/winbox_wrapper.c \
+//          -o ath/apps/winbox/winbox_wrapper.dll -luser32
 //
 //   2. Transpile this file to C89:
-//      wine transpiler-to-c/athtoc-bin-win64.exe \
-//          < athapps/winBoxDemo.~ATH > /tmp/winBoxDemo.c
+//      wine ath/transpiler-to-c/athtoc-bin-win64.exe \
+//          < ath/apps/winbox/winBoxDemo.~ATH > /tmp/winBoxDemo.c
 //
 //   3. Compile the C89 output:
 //      x86_64-w64-mingw32-gcc -std=c89 -O2 /tmp/winBoxDemo.c \
-//          transpiler-to-c/runtime/*.c \
-//          -Itranspiler-to-c/runtime \
-//          -Itranspiler-to-c/vendor/win64/libffi/include \
-//          -Wl,-Bstatic transpiler-to-c/vendor/win64/libffi/lib/libffi.a \
+//          ath/transpiler-to-c/runtime/*.c \
+//          -Iath/transpiler-to-c/runtime \
+//          -Iath/transpiler-to-c/vendor/win64/libffi/include \
+//          -Wl,-Bstatic ath/transpiler-to-c/vendor/win64/libffi/lib/libffi.a \
 //          -Wl,-Bdynamic -lws2_32 -static-libgcc \
 //          -o /tmp/winBoxDemo.exe
 //
 //   4. Run under Wine (DLL must be in the same directory as the exe):
-//      cp athapps/winbox_wrapper.dll /tmp/
+//      cp ath/apps/winbox/winbox_wrapper.dll /tmp/
 //      wine /tmp/winBoxDemo.exe
 //
 // ── Button flag constants (MB_* from winuser.h) ───────────────────────────

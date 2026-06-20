@@ -1824,7 +1824,7 @@ import session UNSAFE M("./libfoo.so") { ... }
 ### Limitations (current - may be improved in the future)
 
 - `session` (FFI) works on POSIX (via `dlopen`) and Windows (via `LoadLibraryA`); it requires `libffi` on both.
-- On Windows: `INTEGER` FFI parameters map to C `long` (4 bytes); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.) -- see `athapps/winbox/winBoxDemo.~ATH` for the wrapper-DLL pattern.
+- On Windows: `INTEGER` FFI parameters map to C `long` (4 bytes); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.) -- see `apps/winbox/winBoxDemo.~ATH` for the wrapper-DLL pattern.
 - On Windows: foreign-fault recovery is not available (sessions behave as `UNSAFE`).
 - At most 16 parameters per transcription.
 - `BUFFER` and `CALLBACK` as return types are not supported.
