@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_schema.^CAKE");
+BIRTH s WITH BAKE(M.Segment);
+SPRINKLE(s, M.Segment, "start.x", 1);
+SPRINKLE(s, M.Segment, "start.y", 2);
+SPRINKLE(s, M.Segment, "end.x", 3);
+SPRINKLE(s, M.Segment, "end.y", 4);
+UTTER(SCOOP(s, M.Segment, "start.x"), SCOOP(s, M.Segment, "start.y"));
+UTTER(SCOOP(s, M.Segment, "end.x"), SCOOP(s, M.Segment, "end.y"));
+BIRTH e WITH BAKE(M.Entity);
+SPRINKLE(e, M.Entity, "at.0", -5);
+SPRINKLE(e, M.Entity, "at.1", 9);
+UTTER(SCOOP(e, M.Entity, "at.0"), SCOOP(e, M.Entity, "at.1"));
+THIS.DIE();

@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_schema.^CAKE");
+UTTER(CAPTCHA(M.Point), SIZEOF(M.Point));
+UTTER(CAPTCHA(M.Segment), SIZEOF(M.Segment));
+UTTER(CAPTCHA(M.Packet), SIZEOF(M.Packet));
+UTTER(CAPTCHA(M.Shape), SIZEOF(M.Shape));
+UTTER(CAPTCHA(M.Entity), SIZEOF(M.Entity));
+UTTER(CAPTCHA(M.Generic), SIZEOF(M.Generic));
+THIS.DIE();

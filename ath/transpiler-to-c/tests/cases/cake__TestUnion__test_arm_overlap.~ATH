@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Union arms share one payload region: Circle.r and Rect.w both sit at the
+// payload offset, so writing one is visible through the other.
+import watcher M("./cake_schema.^CAKE");
+BIRTH sh WITH BAKE(M.Shape);
+SPRINKLE(sh, M.Shape, "Circle.r", 7);
+UTTER(SCOOP(sh, M.Shape, "Rect.w"));
+THIS.DIE();

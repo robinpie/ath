@@ -82,4 +82,15 @@ AthValue ath_builtin_SET_BYTE(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_BUFFER_TO_STRING(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_STRING_TO_BUFFER(AthScope *s, int argc, AthValue *argv);
 
+/* !^CAKE schema rites (operate on RECIPE values and baked BUFFERs) */
+AthValue ath_builtin_CAPTCHA(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_SIZEOF(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_BAKE(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_SPRINKLE(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_SCOOP(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_FLAVOR(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_PLATE(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_TASTE(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_UNPLATE(AthScope *s, int argc, AthValue *argv);
+
 #endif /* ATH_BUILTINS_H */

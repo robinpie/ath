@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_schema.^CAKE");
+UTTER(M.NAME_LEN);
+THIS.DIE();

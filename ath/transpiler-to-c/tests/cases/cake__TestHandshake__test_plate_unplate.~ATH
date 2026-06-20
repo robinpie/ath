@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_schema.^CAKE");
+BIRTH p WITH BAKE(M.Point);
+SPRINKLE(p, M.Point, "x", 42);
+BIRTH framed WITH PLATE(p, M.Point);
+UTTER(TASTE(framed));
+BIRTH body WITH UNPLATE(framed, M.Point);
+UTTER(SCOOP(body, M.Point, "x"));
+THIS.DIE();

@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_more.^CAKE");
+// DENSE: no padding, so a CUP sits unaligned right after a PINCH.
+UTTER(SIZEOF(M.Packed));
+BIRTH p WITH BAKE(M.Packed);
+SPRINKLE(p, M.Packed, "tag", 255);
+SPRINKLE(p, M.Packed, "data", 1);
+// tag @0 -> byte 0; data @1 little-endian -> byte 1 is the low byte.
+UTTER(BYTE_AT(p, 0), BYTE_AT(p, 1));
+// RISE TO 16 raises alignment (and tail frosting) to 16 bytes.
+UTTER(SIZEOF(M.Risen));
+THIS.DIE();

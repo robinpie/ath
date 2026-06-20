@@ -21,6 +21,7 @@
 #include "ath_relic.h"
 #include "ath_buffer.h"
 #include "ath_session.h"
+#include "ath_cake.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -469,6 +470,13 @@ AthValue ath_session_val(struct AthSession *s) {
     return v;
 }
 
+AthValue ath_recipe_val(struct AthRecipe *r) {
+    AthValue v;
+    v.type = ATH_RECIPE;
+    v.as.recipe = r;
+    return v;
+}
+
 /* ===== Refcount ===== */
 
 void ath_value_incref(AthValue v) {
@@ -482,6 +490,7 @@ void ath_value_incref(AthValue v) {
     case ATH_RELIC:    ath_relic_incref(v.as.relic);    break;
     case ATH_BUFFER:   ath_buffer_incref(v.as.buffer);  break;
     case ATH_SESSION:  ath_session_incref(v.as.session); break;
+    case ATH_RECIPE:   ath_recipe_incref(v.as.recipe);  break;
     default: break;
     }
 }
@@ -497,6 +506,7 @@ void ath_value_decref(AthValue v) {
     case ATH_RELIC:    ath_relic_decref(v.as.relic);    break;
     case ATH_BUFFER:   ath_buffer_decref(v.as.buffer);  break;
     case ATH_SESSION:  ath_session_decref(v.as.session); break;
+    case ATH_RECIPE:   ath_recipe_decref(v.as.recipe);  break;
     default: break;
     }
 }
@@ -522,6 +532,7 @@ AthValue ath_value_copy(AthValue v) {
     case ATH_RELIC: ath_relic_incref(v.as.relic); return v;
     case ATH_BUFFER: ath_buffer_incref(v.as.buffer); return v;
     case ATH_SESSION: ath_session_incref(v.as.session); return v;
+    case ATH_RECIPE: ath_recipe_incref(v.as.recipe); return v;
     default: return v;
     }
 }
@@ -549,6 +560,7 @@ int ath_is_truthy(AthValue v) {
     }
     case ATH_SESSION: return v.as.session && v.as.session->entity &&
                              !v.as.session->entity->is_dead;
+    case ATH_RECIPE:  return 1;
     default:          return 1;
     }
 }
@@ -569,6 +581,7 @@ const char *ath_typeof_str(AthValue v) {
     case ATH_RELIC:   return "RELIC";
     case ATH_BUFFER:  return "BUFFER";
     case ATH_SESSION: return "SESSION";
+    case ATH_RECIPE:  return "RECIPE";
     default:          return "UNKNOWN";
     }
 }
@@ -627,6 +640,12 @@ char *ath_stringify(AthValue v) {
                            ? v.as.session->entity->name : "?";
         buf = (char*)malloc(strlen(name) + 12);
         sprintf(buf, "<session:%s>", name);
+        return buf;
+    }
+    case ATH_RECIPE: {
+        const char *code = v.as.recipe ? v.as.recipe->code : "????????";
+        buf = (char*)malloc(strlen(code) + 10);
+        sprintf(buf, "RECIPE[%s]", code);
         return buf;
     }
     default:
@@ -839,6 +858,10 @@ static int ath_values_equal(AthValue a, AthValue b) {
         if (a.as.buffer->length == 0) return 1;
         return memcmp(a.as.buffer->bytes, b.as.buffer->bytes,
                       a.as.buffer->length) == 0;
+    case ATH_RECIPE:
+        if (a.as.recipe == b.as.recipe) return 1;
+        if (!a.as.recipe || !b.as.recipe) return 0;
+        return strcmp(a.as.recipe->code, b.as.recipe->code) == 0;
     default: return 0;
     }
 }

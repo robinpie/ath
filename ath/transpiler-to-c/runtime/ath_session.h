@@ -20,6 +20,7 @@
 struct AthEntity;
 struct AthMap;
 struct AthRelic;
+struct AthScope;
 
 typedef struct AthSession {
     int                refcount;
@@ -42,8 +43,17 @@ void        ath_session_decref(AthSession *s);
 /* High-level constructor: dlopen the library, build the entity + session, and link them. Returns NULL on dlopen failure (entity is not created). The returned AthSession has refcount 1; the caller is the sole owner. */
 AthSession *ath_session_create(const char *name, const char *libpath, int unsafe);
 
-/* Resolve `symbol_name` in the session's library, build a libffi sig, wrap it as an AthRite, and store under `symbol_name` in session->rites. All type names are bare strings ("INTEGER", "STRING", "RELIC", ...). On failure raises a runtime error. */
+/* Resolve `symbol_name` in the session's library, build a libffi sig, wrap it as an AthRite, and store under `symbol_name` in session->rites. All type names are bare strings ("INTEGER", "STRING", "RELIC", ...). On failure raises a runtime error. Recipe-typed params/returns are not resolvable through this entry point (no scope); use ath_session_transcribe_scoped. Kept for ABI compatibility with transpiler bootstrap artifacts. */
 void ath_session_transcribe(AthSession *s,
+                            const char *symbol_name,
+                            const char *ret_type_name,
+                            int nparams,
+                            const char **param_type_names,
+                            const char *drops_name_or_null);
+
+/* As ath_session_transcribe, but a type name that is not a builtin FFI keyword is resolved against `scope` as a !^CAKE recipe (dotted: Geo.Point), enabling by-value struct params/returns. This is what current codegen emits. */
+void ath_session_transcribe_scoped(AthSession *s,
+                            struct AthScope *scope,
                             const char *symbol_name,
                             const char *ret_type_name,
                             int nparams,

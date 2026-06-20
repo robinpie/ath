@@ -217,7 +217,8 @@ void ath_session_schedule_teardown(AthSession *s) {
     ath_eventloop_schedule((AthCont *)c, ath_void());
 }
 
-void ath_session_transcribe(AthSession *s,
+void ath_session_transcribe_scoped(AthSession *s,
+                            struct AthScope *scope,
                             const char *symbol_name,
                             const char *ret_type_name,
                             int nparams,
@@ -230,7 +231,7 @@ void ath_session_transcribe(AthSession *s,
         ath_runtime_error("session: transcribe on NULL session", 0, 0);
         return;
     }
-    sig = ath_ffi_sig_create(s, symbol_name, ret_type_name,
+    sig = ath_ffi_sig_create(s, scope, symbol_name, ret_type_name,
                              nparams, param_type_names, drops_name_or_null);
     if (!sig) return; /* runtime error already raised */
     rite = ath_rite_new_ffi(NULL, ath_ffi_invoke, nparams,
@@ -238,6 +239,16 @@ void ath_session_transcribe(AthSession *s,
     v = ath_rite_val(rite);
     ath_map_set(s->rites, symbol_name, v);
     ath_rite_decref(rite); /* map now holds the ref */
+}
+
+void ath_session_transcribe(AthSession *s,
+                            const char *symbol_name,
+                            const char *ret_type_name,
+                            int nparams,
+                            const char **param_type_names,
+                            const char *drops_name_or_null) {
+    ath_session_transcribe_scoped(s, NULL, symbol_name, ret_type_name,
+                                  nparams, param_type_names, drops_name_or_null);
 }
 
 AthSession *ath_session_create(const char *name, const char *libpath, int unsafe) {

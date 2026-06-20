@@ -1,0 +1,31 @@
+// Shared !^CAKE schema for the cake__* test cases. Fixed-width recipes have
+// platform-stable captchalogue codes, so the golden codes below hold on every
+// target (the cases are linux-tagged, but the codes are not host-dependent).
+RECIPE Point {
+    INGREDIENT x: SIGNED SPOON;
+    INGREDIENT y: SIGNED SPOON;
+}
+
+RECIPE Segment {
+    INGREDIENT start: Point;
+    INGREDIENT end:   Point;
+}
+
+DENSE IMPERIAL RECIPE Packet {
+    INGREDIENT magic:   SPOON;
+    INGREDIENT version: PINCH;
+    INGREDIENT _:       PINCH;
+    INGREDIENT seq:     DASH;
+}
+
+RECIPE Named  { INGREDIENT id: SPOON; INGREDIENT name: 16 OF PINCH; }
+RECIPE Placed { INGREDIENT id: SPOON; INGREDIENT at:   2 OF SIGNED SPOON; }
+RECIPE Entity = Named && Placed;
+
+RECIPE Circle { INGREDIENT r: SPOON; }
+RECIPE Rect   { INGREDIENT w: SPOON; INGREDIENT h: SPOON; }
+RECIPE Shape = Circle || Rect;
+
+RECIPE Generic {}
+
+MEASURE NAME_LEN = 16;

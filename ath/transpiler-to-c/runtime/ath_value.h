@@ -30,6 +30,7 @@ struct AthSylladex;
 struct AthRelic;
 struct AthBuffer;
 struct AthSession;
+struct AthRecipe;
 
 typedef enum {
     ATH_VOID     = 0,
@@ -45,7 +46,8 @@ typedef enum {
     ATH_SYLLADEX = 10, /* sylladex (kind tag carried internally) */
     ATH_RELIC    = 11, /* opaque void* from a foreign session */
     ATH_BUFFER   = 12, /* mutable byte buffer for C out-params */
-    ATH_SESSION  = 13  /* loaded shared library + transcribed rites */
+    ATH_SESSION  = 13, /* loaded shared library + transcribed rites */
+    ATH_RECIPE   = 14  /* !^CAKE schema recipe (C struct layout descriptor) */
 } AthType;
 
 typedef struct AthValue {
@@ -62,6 +64,7 @@ typedef struct AthValue {
         struct AthRelic  *relic;
         struct AthBuffer *buffer;
         struct AthSession *session;
+        struct AthRecipe *recipe;
     } as;
 } AthValue;
 
@@ -174,6 +177,7 @@ AthValue ath_sylladex_val(struct AthSylladex *s);
 AthValue ath_relic_val(struct AthRelic *r);
 AthValue ath_buffer_val(struct AthBuffer *b);
 AthValue ath_session_val(struct AthSession *s);
+AthValue ath_recipe_val(struct AthRecipe *r);
 
 /* ---- Refcount management ---- */
 void ath_value_incref(AthValue v);

@@ -1,0 +1,6 @@
+// A correctly-PUNCHED recipe: the asserted code is Point's real captchalogue
+// code, so this file loads cleanly.
+RECIPE Point PUNCHED "?4mjYn0W" {
+    INGREDIENT x: SIGNED SPOON;
+    INGREDIENT y: SIGNED SPOON;
+}

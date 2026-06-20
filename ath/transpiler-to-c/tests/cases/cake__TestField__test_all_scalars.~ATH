@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0-only
+import watcher M("./cake_more.^CAKE");
+UTTER(SIZEOF(M.Scalars));
+BIRTH s WITH BAKE(M.Scalars);
+SPRINKLE(s, M.Scalars, "a", 200);
+SPRINKLE(s, M.Scalars, "b", 50000);
+SPRINKLE(s, M.Scalars, "c", 3000000000);
+SPRINKLE(s, M.Scalars, "d", 1234567890123);
+SPRINKLE(s, M.Scalars, "e", 1.5);
+SPRINKLE(s, M.Scalars, "f", 2.5);
+SPRINKLE(s, M.Scalars, "g", 1);
+UTTER(SCOOP(s, M.Scalars, "a"), SCOOP(s, M.Scalars, "b"), SCOOP(s, M.Scalars, "c"));
+UTTER(SCOOP(s, M.Scalars, "d"));
+UTTER(SCOOP(s, M.Scalars, "e"), SCOOP(s, M.Scalars, "f"));
+UTTER(SCOOP(s, M.Scalars, "g"));
+THIS.DIE();

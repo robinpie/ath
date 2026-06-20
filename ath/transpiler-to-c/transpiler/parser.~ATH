@@ -261,7 +261,17 @@ RITE parseTypeSpec(toks, pos) {
         BEQUEATH {node: {t:"Type",n:"CALLBACK",params:pl.list,ret:rt.node,l:l},
                   pos: rt.pos};
     }
-    BEQUEATH {node: {t:"Type",n:name,l:l}, pos: pos};
+    // A dotted name (e.g. Geo.Point) references a !^CAKE recipe imported as a
+    // module; resolved to an AthRecipe at transcribe time for by-value structs.
+    BIRTH dt WITH parseDottedTail(toks, pos, name);
+    BEQUEATH {node: {t:"Type",n:dt.name,l:l}, pos: dt.pos};
+}
+
+RITE parseDottedTail(toks, pos, name) {
+    SHOULD toks[pos].t == "." AND toks[pos+1].t == "ID" {
+        BEQUEATH parseDottedTail(toks, pos+2, name + "." + toks[pos+1].v);
+    }
+    BEQUEATH {name: name, pos: pos};
 }
 
 // --- BANISH ---

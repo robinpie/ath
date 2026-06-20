@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-2.0-only -->
 # !~ATH Language Specification
 
-Version 2.1.1
+Version 3.0.0
 
 ## Overview
 
@@ -334,6 +334,23 @@ THIS.DIE();
 **Re-importing**: Importing the same file again re-executes it and refreshes exports (the old watcher entity is killed and replaced, as with all entity re-imports).
 
 **Non-`.~ATH` files**: Watcher entities for non-`.~ATH` files behave as before. No module loading, not accessible as values in expressions.
+
+#### `.^CAKE` Schema Modules
+
+When the watcher's filepath ends in `.^CAKE`, the file is loaded as a declarative **!^CAKE schema module**. !^CAKE is a companion schema-definition language describing C-compatible memory layouts; it fills the pass-by-value-struct gap in the foreign-session FFI. See `cake/cakeSpec.md` for the full language.
+
+```
+import watcher Geo("./shapes.^CAKE");
+
+UTTER(CAPTCHA(Geo.Point));   // the recipe's 8-char captchalogue code
+UTTER(SIZEOF(Geo.Point));    // its byte size
+```
+
+**Schema-module semantics**:
+- The file is parsed and laid out at import time. Unlike a `.~ATH` module it is *declarative*: it has no `THIS` and needs no `THIS.DIE()`.
+- Each top-level `RECIPE` becomes an export of type `RECIPE` (a first-class, inert value, like a rite reference); each `MEASURE` becomes an `INTEGER` export. Both are reached via `ModuleName.Name`.
+- `TYPEOF(Geo.Point)` returns `"RECIPE"`.
+- A parse or semantic error in the schema (`CURDLED`, `COLLAPSED SOUFFLÉ`, `STALE`, ...) raises a catchable runtime error at import time.
 
 ### Entity Operations
 
@@ -1069,6 +1086,36 @@ TIME() -- Current Unix timestamp in milliseconds
 BIRTH now WITH TIME();
 ```
 
+#### !^CAKE Schema Rites
+
+These operate on `RECIPE` values imported from a `.^CAKE` schema module (see *`.^CAKE` Schema Modules* above) and on the `BUFFER`s baked from them. A baked recipe instance is a `BUFFER` -- an exactly-sized, header-less C struct ready for the FFI. Full path syntax (`"origin.x"`, `"verts.2.y"`, the union arm `"Circle.r"`, the tag `"FLAVOR"`) and field-type rules are in `cake/cakeSpec.md`.
+
+CAPTCHA(recipe) -- the recipe's 8-character captchalogue code (a STRING).
+
+SIZEOF(recipe) -- byte size of a baked instance (an INTEGER).
+
+BAKE(recipe) -- a fresh zeroed BUFFER of `SIZEOF(recipe)` bytes.
+
+SPRINKLE(buf, recipe, path, value) -- write a field of `buf` in place (VOID). Integer fields take an INTEGER, `DROP`/`DOLLOP` a FLOAT, pointer fields a RELIC, nested fields a BUFFER.
+
+SCOOP(buf, recipe, path) -- read a field of `buf` (returns the field's value per the rules above).
+
+FLAVOR(buf, recipe) -- active flavor index of a union buffer (an INTEGER).
+
+PLATE(buf, recipe) -- a wire envelope BUFFER: the 8 code bytes followed by `buf`.
+
+TASTE(plated) -- the leading 8 bytes of a plated buffer, as a code STRING.
+
+UNPLATE(plated, recipe) -- verify the leading code matches `recipe` (else `STALE`) and return the struct bytes with the code stripped.
+
+```
+import watcher Geo("./shapes.^CAKE");
+
+BIRTH p WITH BAKE(Geo.Point);
+SPRINKLE(p, Geo.Point, "x", 3);
+UTTER(SCOOP(p, Geo.Point, "x"));   // 3
+```
+
 ---
 
 ## Sylladices
@@ -1715,8 +1762,11 @@ TRANSCRIBE <name>(<type>, <type>, ...) -> <type> [DROPS <destructor>] ;
 | `RELIC`   | `void*`      | See *Relics* below.                                         |
 | `BUFFER`  | `void*`      | See *Buffers* below.                                        |
 | `CALLBACK(types) -> type` | C function pointer | See *Callbacks*.                              |
+| recipe (e.g. `Geo.Point`) | `struct ...` by value | A `.^CAKE` recipe; the argument is a baked `BUFFER`, the return a fresh `BUFFER`. See below. |
 
-Pass-by-value structs, variadics, and pointers to non-`RELIC`/`BUFFER` arrays are not supported.
+A transcription parameter or return may name an imported recipe (dotted, e.g. `Geo.Point`); the runtime builds the libffi struct descriptor from the recipe layout so a C `struct` crosses the boundary by value with no wrapper shim. A recipe parameter expects a `BUFFER` baked from that exact recipe (size mismatch is a catchable `RAW` error); a recipe return yields a fresh `BUFFER` of `SIZEOF(recipe)`. The recipe must use a layout the host C ABI reproduces -- `IMPERIAL` (big-endian) recipes and recipes whose mandated alignments diverge from the host ABI are rejected as FFI types. See `cake/cakeSpec.md`.
+
+Variadics and pointers to non-`RELIC`/`BUFFER` arrays are not supported.
 
 ### Relics
 
