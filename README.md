@@ -388,7 +388,7 @@ Current limitations of the implementation (may be worked around in the future):
 - Strings are byte arrays; `LENGTH` and `SUBSTRING` operate on bytes, not Unicode codepoints
 - Sync rites recurse on the C call stack; deep recursion will stack-overflow
 - The FFI supports at most 16 parameters per transcription; `BUFFER` and `CALLBACK` as return types are not supported
-- On Windows: FFI INTEGER maps to C `long` (4 bytes, not pointer-sized); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.). See `ath/apps/winbox/winBoxDemo.~ATH` for a wrapper pattern.
+- On Windows: FFI INTEGER maps to C `long` (4 bytes, not pointer-sized); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.), and `SCOOP` a zeroed `RELIC` field out of a baked !^CAKE recipe when you need a NULL pointer. See `ath/apps/winbox/winBoxDemo.~ATH`, which calls `user32.dll`'s `MessageBoxA` directly with no wrapper.
 - On WASM: no FFI/sessions, no `process`/`connection` entities, and `watcher` is limited to `--dir`-granted paths
 
 ### Windows

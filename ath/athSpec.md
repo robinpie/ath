@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-2.0-only -->
 # !~ATH Language Specification
 
-Version 3.0.0
+Version 3.0.1
 
 ## Overview
 
@@ -1874,7 +1874,7 @@ import session UNSAFE M("./libfoo.so") { ... }
 ### Limitations (current - may be improved in the future)
 
 - `session` (FFI) works on POSIX (via `dlopen`) and Windows (via `LoadLibraryA`); it requires `libffi` on both.
-- On Windows: `INTEGER` FFI parameters map to C `long` (4 bytes); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.) -- see `apps/winbox/winBoxDemo.~ATH` for the wrapper-DLL pattern.
+- On Windows: `INTEGER` FFI parameters map to C `long` (4 bytes); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.). A NULL pointer argument can be spelled by `SCOOP`-ing a zeroed `RELIC` field out of a baked !^CAKE recipe -- see `apps/winbox/winBoxDemo.~ATH`, which calls `user32.dll`'s `MessageBoxA` directly this way.
 - On Windows: foreign-fault recovery is not available (sessions behave as `UNSAFE`).
 - At most 16 parameters per transcription.
 - `BUFFER` and `CALLBACK` as return types are not supported.

@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+
+// winbox.^CAKE -- the schema that lets winBoxDemo.~ATH call MessageBoxA
+// with no C wrapper.
+//
+// MessageBoxA's first argument is an HWND -- a pointer (8 bytes on win64).
+// !~ATH's FFI INTEGER maps to C `long`, which is only 32 bits on win64
+// (LLP64), so it cannot carry a pointer-sized NULL.  RELIC is the
+// pointer-sized type, but !~ATH had no way to spell a *NULL* relic: relics
+// only ever came back from foreign calls.
+//
+// !^CAKE closes that gap.  A RELIC ingredient bakes to zero, and SCOOP
+// reads a pointer field back as a loose RELIC holding that raw address --
+// here, NULL.  That loose relic is exactly the NULL HWND MessageBoxA wants.
+RECIPE Hwnd {
+    INGREDIENT null: RELIC;
+}
