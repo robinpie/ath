@@ -6,13 +6,13 @@ Version 0.1.0 (draft)
 
 ## Overview
 
-!^CAKE (the `^` is silent; the name parallels !~ATH and means nothing on its own) is a schema definition language inspired by the fictional ^CAKE language from Homestuck. Where !~ATH is about death, !^CAKE is about baking. A **recipe** describes the exact byte layout of a C-compatible value; recipes are combined with the **alchemization operators** `&&` and `||`; and every recipe deterministically reduces to an 8-character **captchalogue code** that two peers can compare, over a wire, before they ever exchange a single byte of data.
+!^CAKE (pronounced un-carrot cake (deliberately meaningless)) is a schema definition language inspired by the fictional ^CAKE language from Homestuck. !^CAKE is about baking. A recipe describes the exact byte layout of a C-compatible value; recipes are combined with the alchemization operators `&&` and `||`; and every recipe deterministically reduces to an 8-character captchalogue code that two peers can compare, over a wire, before exchanging payload data.
 
 !^CAKE exists to fill a specific hole in !~ATH. The !~ATH foreign-session FFI marshals scalars and pointers but cannot describe an aggregate, so it cannot pass or return a `struct` by value. A recipe is exactly the missing description: feed one to a `TRANSCRIBE` and the runtime can build the `ffi_type` element array that lets a struct cross the universe boundary intact.
 
-!^CAKE is purely declarative. A `.^CAKE` file contains recipes and nothing that executes -- no control flow, no I/O, no `THIS`. Nothing dies. Recipes are *eternal*: the one immortal thing in a project otherwise obsessed with mortality. The verbs that actually bake, fill, and read a buffer (`BAKE`, `SPRINKLE`, `SCOOP`, ...) live on the !~ATH side, as built-in rites that operate on a recipe once a `.^CAKE` file has been imported as a module.
+!^CAKE is purely declarative. A `.^CAKE` file contains recipes. `.^CAKE` files do not contain anything that executes. Recipes are eternal, unlike the mortality theme of !~ATH. The verbs that actually bake, fill, and read a buffer (`BAKE`, `SPRINKLE`, `SCOOP`, ...) live on the !~ATH side, as built-in rites that operate on a recipe once a `.^CAKE` file has been imported as a module.
 
-> **Status:** nothing is implemented yet. This document specifies the language; the two things it pins down exactly -- the **layout algorithm** and the **captchalogue-code canonicalization** -- are the parts that every implementation must reproduce bit-for-bit, because a code is only useful if two independent implementations agree on it.
+> Status: nothing is implemented yet. This document specifies the language; the two things it pins down exactly -- the layout algorithm and the captchalogue-code canonicalization -- are the parts that every implementation must reproduce bit-for-bit, because a code is only useful if two independent implementations agree on it.
 
 ---
 
@@ -41,7 +41,7 @@ _reserved
 field2
 ```
 
-The bare identifier `_` (a single underscore) is special: it names a **reserved ingredient** (padding) that occupies space but cannot be read or written. See *Reserved Ingredients*.
+The bare identifier `_` (a single underscore) is special: it names a reserved ingredient (padding) that occupies space but cannot be read or written. See *Reserved Ingredients*.
 
 ### Keywords
 
@@ -94,11 +94,11 @@ There are no float, boolean, array, or map literals in !^CAKE -- it describes la
 
 ## Recipes
 
-A **recipe** is the unit of schema. It is one of:
+A recipe is the unit of schema. It is one of:
 
-1. A **struct recipe** -- an ordered list of named ingredients, laid out in memory like a C `struct`.
-2. A **union recipe** -- a tagged union ("a marble cake") produced by the `||` operator.
-3. An **alchemized recipe** -- the result of `&&` or `||` applied to other recipes, bound to a name.
+1. A struct recipe: an ordered list of named ingredients, laid out in memory like a C `struct`.
+2. A union recipe: a tagged union ("a marble cake") produced by the `||` operator.
+3. An alchemized recipe: the result of `&&` or `||` applied to other recipes, bound to a name.
 
 ### Struct declaration
 
@@ -117,7 +117,7 @@ Each ingredient has a name and a type:
 INGREDIENT <name>: <ingredient-type>;
 ```
 
-Ingredient names must be unique within a recipe. Ingredients are laid out in **declaration order**; order is significant and is part of the recipe's identity (see *Captchalogue Codes*).
+Ingredient names must be unique within a recipe. Ingredients are laid out in declaration order; order is significant and is part of the recipe's identity (see *Captchalogue Codes*).
 
 An empty recipe is legal:
 
@@ -125,7 +125,7 @@ An empty recipe is legal:
 RECIPE Generic {}
 ```
 
-The empty recipe is the **perfectly generic object**: it has size 0, alignment 1, and the reserved captchalogue code `00000000` (see *Reserved code*).
+The empty recipe is the perfectly generic object. It has size 0, alignment 1, and the reserved captchalogue code `00000000` (see *Reserved code*).
 
 ### Named alchemized declaration
 
@@ -134,21 +134,21 @@ RECIPE Sprite = Salamander && Cake;
 RECIPE Shape  = Circle || Square || Triangle;
 ```
 
-The right-hand side is an *alchemy expression* (see *Alchemization*). The result is a new recipe bound to the name. The trailing `;` is required for this form.
+The right-hand side is an alchemy expression (see *Alchemization*). The result is a new recipe bound to the name. The trailing `;` is required for this form.
 
 ---
 
 ## Ingredient Types
 
-An ingredient's type is one of: a **scalar**, a **nested recipe** (by value), a **crust** (a pointer to a recipe), or an **array** of any of these.
+An ingredient's type is one of: a scalar, a nested recipe (by value), a crust (a pointer to a recipe), or an array of any of these.
 
 ### Scalar ingredients
 
-There are two families of scalar. **Fixed-width** scalars have the same size and byte order on every platform and are what you want for anything that crosses a wire. **Native** scalars match the !~ATH FFI marshalling table exactly (so a recipe field and an FFI parameter speak the same language), at the cost of platform-dependent width.
+There are two families of scalar. Fixed-width scalars have the same size and byte order on every platform and are what you want for anything that crosses a wire. Native scalars match the !~ATH FFI marshalling table exactly (so a recipe field and an FFI parameter speak the same language), at the cost of platform-dependent width.
 
 #### Fixed-width scalars
 
-Integers are **unsigned by default** -- an ingredient is an amount, and you cannot have negative flour. Prefix with `SIGNED` for a two's-complement signed integer. Widths are named for baking measures, ascending:
+Integers are unsigned by default (an ingredient is an amount, and you cannot have negative flour!) Prefix with `SIGNED` for a two's-complement signed integer. Widths are named for baking measures, ascending:
 
 | keyword         | C type (unsigned / `SIGNED`)   | bytes | alignment |
 |-----------------|--------------------------------|-------|-----------|
@@ -194,7 +194,7 @@ RECIPE Segment {
 }
 ```
 
-The nested recipe must already be defined (or imported). Embedding contributes the nested recipe's size and alignment. A recipe that embeds itself by value, directly or through a cycle of by-value embeddings, is a **COLLAPSED SOUFFLÉ** error (it would have infinite size). Break the cycle with a crust.
+The nested recipe must already be defined (or imported). Embedding contributes the nested recipe's size and alignment. A recipe that embeds itself by value, directly or through a cycle of by-value embeddings, is a COLLAPSED SOUFFLÉ error (it would have infinite size). Break the cycle with a crust.
 
 ### Crusts (pointers to recipes)
 
@@ -223,7 +223,7 @@ An array has the alignment of its element and a size of `count × stride`, where
 
 ### Reserved ingredients (padding)
 
-An ingredient named `_` is **reserved**: it occupies space and participates in layout exactly like any other ingredient, but it is inaccessible to `SCOOP`/`SPRINKLE` and is excluded from no part of the captchalogue code (its name `_` is hashed like any other). Use it for explicit padding or wire-format reserved fields:
+An ingredient named `_` is reserved: it occupies space and participates in layout exactly like any other ingredient, but it is inaccessible to `SCOOP`/`SPRINKLE` and is excluded from no part of the captchalogue code (its name `_` is hashed like any other). Use it for explicit padding or wire-format reserved fields:
 
 ```
 RECIPE Header {
@@ -250,7 +250,7 @@ Let the recipe's running offset start at 0 and its alignment start at 1.
    - Place the ingredient at that offset. Advance the running offset by `s`.
    - Set the recipe alignment to `max(recipe alignment, a)`.
 2. After all ingredients, apply `RISE TO n` if present: recipe alignment becomes `max(recipe alignment, n)`.
-3. The recipe's **size** is the final running offset rounded *up* to the recipe alignment. The bytes added by this final rounding are **frosting** (tail padding).
+3. The recipe's size is the final running offset rounded *up* to the recipe alignment. The bytes added by this final rounding are frosting (tail padding).
 
 This is the standard rule used by the System V and Windows x64 ABIs; a recipe of native C types matches the C compiler's `struct` byte-for-byte.
 
@@ -273,7 +273,7 @@ This is the standard rule used by the System V and Windows x64 ABIs; a recipe of
 
 ### Native widths by platform
 
-Fixed-width scalars are identical everywhere. Native scalars vary:
+Fixed-width scalars are identical everywhere. Native scalars vary. For example:
 
 | platform                 | `INTEGER` (`long`) | pointer (`STRING`/`RELIC`/crust) |
 |--------------------------|--------------------|----------------------------------|
@@ -282,7 +282,7 @@ Fixed-width scalars are identical everywhere. Native scalars vary:
 | LP32 (wasm32-wasi)       | 4 bytes, align 4   | 4 bytes, align 4                 |
 | ILP32 (i686 Linux)       | 4 bytes, align 4   | 4 bytes, align 4                 |
 
-A recipe that uses native scalars therefore has a **platform-dependent layout** -- and, by design, a **platform-dependent captchalogue code** (sizes feed the hash; see below). Two machines with different `long` widths compute different codes for the same source and so their handshake *fails loudly* (`STALE`) instead of silently corrupting data. A recipe built entirely from fixed-width scalars has the same code on every platform.
+A recipe that uses native scalars therefore has a platform-dependent layout (and, by design, a platform-dependent captchalogue code (sizes feed the hash; see below)). Two machines with different `long` widths compute different codes for the same source and so their handshake fails loudly (`STALE`) instead of silently corrupting data. A recipe built entirely from fixed-width scalars has the same code on every platform.
 
 ---
 
@@ -292,12 +292,12 @@ Recipes compose through the two alchemization operators from Homestuck's alchemy
 
 ### `&&` -- combine (merge)
 
-`A && B` produces a struct recipe containing **all of A's ingredients, in order, followed by each of B's ingredients that A does not already have**. "Already have" means same name:
+`A && B` produces a struct recipe containing all of A's ingredients, in order, followed by each of B's ingredients that A does not already have. "Already have" means same name:
 
-- Same name **and** identical resolved type: the ingredients are the same; B's is dropped (A's position and type win). The field is not duplicated.
-- Same name, **different** type: a **CURDLED** error. The cake has split; you cannot merge `x: SPOON` with `x: DOLLOP`.
+- Same name and identical resolved type: the ingredients are the same; B's is dropped (A's position and type win). The field is not duplicated.
+- Same name, different type: a CURDLED error. The cake has split; you cannot merge `x: SPOON` with `x: DOLLOP`.
 
-`&&` is associative but **not commutative** -- `A && B` orders A's fields first, `B && A` orders B's first, and the two generally have different layouts and different codes. (Alchemy has always cared about which item you `&&` onto which.)
+`&&` is associative but **not** commutative -- `A && B` orders A's fields first, `B && A` orders B's first, and the two generally have different layouts and different codes. (Alchemy has always cared about which item you `&&` onto which.)
 
 ```
 RECIPE Named    { INGREDIENT id: SPOON; INGREDIENT name: 16 OF PINCH; }
@@ -309,16 +309,16 @@ RECIPE Entity = Named && Located;
 
 ### `||` -- marble cake (tagged union)
 
-`A || B` produces a **union recipe**: a one-byte **flavor** tag followed by a payload large enough for either arm. Reading it requires first asking which flavor you are looking at -- pleasingly inconvenient, and faithful to a fetch modus.
+`A || B` produces a union recipe: a one-byte flavor tag followed by a payload large enough for either arm. Reading it requires first asking which flavor you are looking at -- pleasingly inconvenient, and faithful to a fetch modus.
 
 Layout of a union of arms `A_0 .. A_{k-1}`:
 
 - An implicit `FLAVOR` tag occupies offset 0. It is a `PINCH` (`uint8_t`), so a union may have at most 256 arms (more is a compile error).
-- The **payload** begins at `align_up(1, P)`, where `P = max` alignment over all arms.
+- The payload begins at `align_up(1, P)`, where `P = max` alignment over all arms.
 - The payload size is `max` size over all arms. Each arm's own struct layout sits at the payload offset; an arm field `f` of arm `Arm` lives at `payloadOffset + offsetof(Arm, f)`.
 - The union's alignment is `max(P, RISE TO n if any)` (and `1` under `DENSE`, which forces `P = 1`). Its size is `align_up(payloadOffset + payloadSize, alignment)`.
 
-**Flavor assignment is by sorted code, which makes `||` commutative.** The arms are sorted by their captchalogue code (lexicographically, under the code alphabet's ordering); the arm with the smallest code is `FLAVOR` 0, the next is 1, and so on. Therefore `A || B` and `B || A` are the *same* union, with the same layout and the same code. Two arms that are the same recipe (equal codes) collapse to a single flavor.
+Flavor assignment is by sorted code, which makes `||` commutative. The arms are sorted by their captchalogue code (lexicographically, under the code alphabet's ordering); the arm with the smallest code is `FLAVOR` 0, the next is 1, and so on. Therefore `A || B` and `B || A` are the same union, with the same layout and the same code. Two arms that are the same recipe (equal codes) collapse to a single flavor.
 
 Each arm is named by the recipe that produced it; that name is how you path into it from !~ATH (`SCOOP(buf, U, "Circle.radius")`). Arms in a chained `A || B || C` are flattened: it is a single 3-arm union, not a union containing a union.
 
@@ -342,17 +342,17 @@ RECIPE S = A && (B || C);   // a struct whose layout embeds a marble cake? -- no
                             // || yields a recipe; A && (that union) merges fields. See note.
 ```
 
-> **Note.** `&&` merges *struct* recipes. Applying `&&` with a union operand merges the union's single implicit `FLAVOR` field plus its arms' names as a nested marble-cake ingredient; the precise rule is that a union, when an `&&` operand, contributes one ingredient named after the union binding. Prefer embedding a named union as an explicit `INGREDIENT` instead of `&&`-ing it, for clarity.
+To be clear, `&&` merges *struct* recipes. Applying `&&` with a union operand merges the union's single implicit `FLAVOR` field plus its arms' names as a nested marble-cake ingredient; the precise rule is that a union, when an `&&` operand, contributes one ingredient named after the union binding. Prefer embedding a named union as an explicit `INGREDIENT` instead of `&&`-ing it, for clarity.
 
 ---
 
 ## Captchalogue Codes
 
-Every recipe reduces to an 8-character **captchalogue code** -- the code you would punch into a card on the Punch Designix to reproduce it. The code is a hash of the recipe's *fully resolved canonical form*. It is an **integrity check, not a security boundary**: 48 bits is plenty to catch an accidental schema drift between two peers and nowhere near enough to resist a deliberate collision. Do not use it as one.
+Every recipe reduces to an 8-character captchalogue code. The code is a hash of the recipe's fully resolved canonical form. It is an **integrity check, not a security boundary**: 48 bits is plenty to catch an accidental schema drift between two peers and nowhere near enough to resist a deliberate collision. Do not use it as one.
 
 ### Alphabet
 
-The code uses Homestuck's 64-character captcha alphabet. The character at index `i` (0-63) is:
+The code uses Homestuck's 64-character captchalogue code alphabet. The character at index `i` (0-63) is:
 
 | index range | characters          |
 |-------------|---------------------|
@@ -366,9 +366,9 @@ Eight characters at 6 bits each encode a 48-bit hash. Code strings are compared 
 
 ### Canonical form
 
-The code hashes a **canonical descriptor string**: a deterministic, single-line UTF-8 serialization of the recipe's resolved layout. The descriptor includes everything that affects meaning or layout and excludes everything that does not. In particular it **includes ingredient names** (the hash is *nominal*: two recipes with identical layout but different field names get different codes, because "same bytes, different meaning" is exactly the bug a code should catch) and **excludes the recipe's own binding name** (renaming the type alias does not change the wire format).
+The code hashes a canonical descriptor string: a deterministic, single-line UTF-8 serialization of the recipe's resolved layout. The descriptor includes everything that affects meaning or layout and excludes everything that does not. In particular it includes ingredient names (the hash is nominal: two recipes with identical layout but different field names get different codes, because "same bytes, different meaning" is exactly the bug a code should catch) and excludes the recipe's own binding name (renaming the type alias does not change the wire format).
 
-A **struct** recipe serializes as:
+A struct recipe serializes as:
 
 ```
 S(e=<H|B>,p=<0|1>,a=<align>,z=<size>){<field>;<field>;...}
@@ -380,7 +380,7 @@ where `e` is endianness (`H` host / `B` big-endian under `IMPERIAL`), `p` is 1 u
 <name>:<typedesc>@<offset>+<fieldsize>
 ```
 
-A **union** recipe serializes as:
+A union recipe serializes as:
 
 ```
 U(e=...,p=...,a=...,z=...){<flavor>;<flavor>;...}
@@ -411,8 +411,8 @@ The `<typedesc>` for each ingredient type:
 
 Two consequences worth stating:
 
-- A nested by-value recipe contributes its **own captchalogue code**, so hashing is compositional and changing a nested recipe ripples outward into every code that embeds it.
-- A **crust** contributes only the pointee's *name* (`ptr->Name`), never the pointee's code. This is deliberate: it keeps a crust's contribution independent of the pointee's full layout, which both matches reality (a pointer's representation does not depend on what it points at) and breaks the hash cycle that recursive recipes (`Node` with `CRUST OF Node`) would otherwise create.
+- A nested by-value recipe contributes its own captchalogue code, so hashing is compositional and changing a nested recipe ripples outward into every code that embeds it.
+- A crust contributes only the pointee's *name* (`ptr->Name`), never the pointee's code. This is deliberate: it keeps a crust's contribution independent of the pointee's full layout, which both matches reality (a pointer's representation does not depend on what it points at) and breaks the hash cycle that recursive recipes (`Node` with `CRUST OF Node`) would otherwise create.
 
 Because `<offset>`, `+<fieldsize>`, `a`, and `z` are all in the descriptor, *any* layout difference -- a platform's wider `long`, an inserted `RISE TO`, a `DENSE` modifier -- changes the code.
 
@@ -508,11 +508,11 @@ Once imported, a recipe is a first-class !~ATH value (like a rite reference: pas
 | `TASTE(plated)`                      | STRING | the leading 8 bytes of a plated buffer as a code string (cheap peek). |
 | `UNPLATE(plated, recipe)`            | BUFFER | verify the leading code matches; return the struct bytes (code stripped).|
 
-**Paths.** `path` is a string naming a field, dotted for nesting and numeric-indexed for arrays: `"x"`, `"origin.x"`, `"verts.2"`, `"verts.2.y"`. For a union buffer, the first path segment is the arm name: `"Circle.r"`. The implicit union tag is the path `"FLAVOR"`; `SPRINKLE(buf, U, "FLAVOR", 1)` sets the active flavor, and `SCOOP(buf, U, "FLAVOR")` reads it (equivalently `FLAVOR(buf, U)`).
+**Paths:** `path` is a string naming a field, dotted for nesting and numeric-indexed for arrays: `"x"`, `"origin.x"`, `"verts.2"`, `"verts.2.y"`. For a union buffer, the first path segment is the arm name: `"Circle.r"`. The implicit union tag is the path `"FLAVOR"`; `SPRINKLE(buf, U, "FLAVOR", 1)` sets the active flavor, and `SCOOP(buf, U, "FLAVOR")` reads it (equivalently `FLAVOR(buf, U)`).
 
-**Endianness.** `SPRINKLE`/`SCOOP` honor the recipe's byte order: writing to an `IMPERIAL` field stores big-endian and reading reconstructs the host integer, transparently.
+**Endianness:** `SPRINKLE`/`SCOOP` honor the recipe's byte order: writing to an `IMPERIAL` field stores big-endian and reading reconstructs the host integer, transparently.
 
-**The handshake.** The whole point. Before exchanging data, two peers compare codes:
+**The handshake:** Before exchanging data, two peers compare codes:
 
 ```
 import watcher Wire("./wire.^CAKE");
@@ -535,7 +535,7 @@ ATTEMPT {
 
 ### Foreign sessions: structs by value
 
-This is the gap !^CAKE was built to close. A `TRANSCRIBE` may name a recipe (in scope, possibly dotted through a module) as a parameter or return type. The runtime builds the `ffi_type` element array from the recipe descriptor, so the struct passes **by value** with no wrapper shim:
+This is the gap !^CAKE was built to close. A `TRANSCRIBE` may name a recipe (in scope, possibly dotted through a module) as a parameter or return type. The runtime builds the `ffi_type` element array from the recipe descriptor, so the struct passes by value with no wrapper shim:
 
 ```
 import watcher Geo("./geo.^CAKE");
@@ -555,8 +555,8 @@ UTTER(SCOOP(moved, Geo.Point, "x"));           // 13
 
 Marshalling rules for recipe-typed transcriptions:
 
-- A recipe **parameter** expects a `BUFFER` baked from that exact recipe. A buffer of the wrong size is a `RAW` error (catchable).
-- A recipe **return** yields a fresh `BUFFER` of `SIZEOF(recipe)`.
+- A recipe parameter expects a `BUFFER` baked from that exact recipe. A buffer of the wrong size is a `RAW` error (catchable).
+- A recipe return yields a fresh `BUFFER` of `SIZEOF(recipe)`.
 - The recipe must use native scalar widths (or fixed-width scalars whose layout the host C ABI also produces) for the struct to match the C side; an `IMPERIAL` recipe is not a valid FFI type (its byte order is not the host's). Recipe-typed parameters count toward the FFI's per-transcription parameter limit as a single parameter.
 
 ---
@@ -626,13 +626,13 @@ int_value       = INTEGER | IDENTIFIER ;    // IDENTIFIER = a MEASURE reference
 
 The grammar is permissive; the following are enforced semantically:
 
-1. **Alignment values** (`RISE TO`, and any `MEASURE` used as one) must be positive powers of two.
-2. **Array counts** must be non-negative integers (a `MEASURE` used as a count must be non-negative).
-3. **`SIGNED`** is valid only on `PINCH`/`DASH`/`SPOON`/`CUP`, never on floats or native scalars.
-4. **`IMPERIAL`** recipes may contain only fixed-width scalars, `IMPERIAL` nested recipes, and arrays of those -- no native scalars, no crusts.
-5. **Ingredient names** are unique within a recipe, except `_`, which may repeat.
+1. Alignment values (`RISE TO`, and any `MEASURE` used as one) must be positive powers of two.
+2. Array counts must be non-negative integers (a `MEASURE` used as a count must be non-negative).
+3. `SIGNED` is valid only on `PINCH`/`DASH`/`SPOON`/`CUP`, never on floats or native scalars.
+4. `IMPERIAL` recipes may contain only fixed-width scalars, `IMPERIAL` nested recipes, and arrays of those -- no native scalars, no crusts.
+5. Ingredient names are unique within a recipe, except `_`, which may repeat.
 6. A nested-recipe `IDENTIFIER` and a crust's `IDENTIFIER` must resolve to a recipe already defined in the file or imported; a by-value cycle is `COLLAPSED SOUFFLÉ`.
-7. **Reserved keywords** (the scalar type names, `CRUST`, `FLAVOR`, etc.) cannot be used as recipe, ingredient, or measure names.
+7. Reserved keywords (the scalar type names, `CRUST`, `FLAVOR`, etc.) cannot be used as recipe, ingredient, or measure names.
 8. A union (`||` result) has at most 256 arms.
 
 ---
@@ -733,12 +733,12 @@ RECIPE Entity = Named && Placed;
 
 These are scoped out of the first version and may be added later:
 
-- **No bitfields.** Sub-byte packing is not expressible; the smallest ingredient is one byte (`PINCH`).
-- **No schema evolution / optional fields.** Any change to a recipe is a new cake with a new code. This is what keeps the hash model clean; versioning, when it comes, will be a marble cake of `v1 || v2`.
-- **No variable-length inline data.** A recipe is a fixed layout. Variable-length text or arrays live behind a `STRING`/`RELIC`/crust pointer, not inline (use a fixed `n OF PINCH` for bounded text).
-- **No expression language.** `MEASURE` values and array counts are integer literals or measure references; there is no arithmetic.
-- **Native-scalar recipes are platform-specific** by design (and so are their codes); use fixed-width scalars for anything portable.
-- **No mortal recipes.** Recipes are not entities; you cannot `~ATH` a recipe. Schemas are eternal.
+- No bitfields. Sub-byte packing is not expressible; the smallest ingredient is one byte (`PINCH`).
+- No schema evolution / optional fields.** Any change to a recipe is a new cake with a new code. This is what keeps the hash model clean; versioning, when it comes, will be a marble cake of `v1 || v2`.
+- No variable-length inline data.** A recipe is a fixed layout. Variable-length text or arrays live behind a `STRING`/`RELIC`/crust pointer, not inline (use a fixed `n OF PINCH` for bounded text).
+- No expression language. `MEASURE` values and array counts are integer literals or measure references; there is no arithmetic.
+- Native-scalar recipes are platform-specific** by design (and so are their codes); use fixed-width scalars for anything portable.
+- No mortal recipes. Recipes are not entities; you cannot `~ATH` a recipe. Schemas are eternal.
 
 ---
 
