@@ -1,0 +1,22 @@
+// ===========================================================================
+// 70_main : entry point. Reads all of stdin, sets up the system, and runs the
+//           outer interpreter to completion. The lone main() call must remain
+//           the last statement in the concatenated program.
+// ===========================================================================
+
+RITE init_system() {
+    store(SYSV_BASE, 10);
+    store(SYSV_STATE, 0);
+    store(SYSV_TOIN, 0);
+    store(SYSV_SRCLEN, 0);
+    register_prims();
+}
+
+RITE main() {
+    BIRTH src WITH SCRY(VOID);
+    G_LINES = SPLIT(src, "\n");
+    init_system();
+    driver();
+}
+
+main();

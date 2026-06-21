@@ -1,0 +1,61 @@
+// ===========================================================================
+// 20_stack : the data stack and return stack.
+//
+// Both are !~ATH arrays of signed 32-bit cell values (top == last element).
+// All cell access goes through push/pop so the representation can be swapped
+// for a faster one later without touching the primitives.
+// ===========================================================================
+
+BIRTH G_DS WITH [];        // data stack
+BIRTH G_RS WITH [];        // return stack
+
+RITE ds_depth() { BEQUEATH LENGTH(G_DS); }
+
+RITE push(x) {
+    G_DS = APPEND(G_DS, s32(x));
+}
+RITE pop() {
+    BIRTH n WITH LENGTH(G_DS);
+    SHOULD n <= 0 { CONDEMN "stack underflow"; }
+    BIRTH v WITH G_DS[n - 1];
+    G_DS = SLICE(G_DS, 0, n - 1);
+    BEQUEATH v;
+}
+RITE peek() {
+    BIRTH n WITH LENGTH(G_DS);
+    SHOULD n <= 0 { CONDEMN "stack underflow"; }
+    BEQUEATH G_DS[n - 1];
+}
+// peek at depth d below top (0 == top)
+RITE pick(d) {
+    BIRTH n WITH LENGTH(G_DS);
+    SHOULD d >= n { CONDEMN "stack underflow"; }
+    BEQUEATH G_DS[n - 1 - d];
+}
+
+RITE rpush(x) {
+    G_RS = APPEND(G_RS, s32(x));
+}
+RITE rpop() {
+    BIRTH n WITH LENGTH(G_RS);
+    SHOULD n <= 0 { CONDEMN "return stack underflow"; }
+    BIRTH v WITH G_RS[n - 1];
+    G_RS = SLICE(G_RS, 0, n - 1);
+    BEQUEATH v;
+}
+RITE rpeek() {
+    BIRTH n WITH LENGTH(G_RS);
+    SHOULD n <= 0 { CONDEMN "return stack underflow"; }
+    BEQUEATH G_RS[n - 1];
+}
+// peek at depth d below return-stack top (0 == top)
+RITE rpick(d) {
+    BIRTH n WITH LENGTH(G_RS);
+    SHOULD d >= n { CONDEMN "return stack underflow"; }
+    BEQUEATH G_RS[n - 1 - d];
+}
+
+RITE clear_stacks() {
+    G_DS = [];
+    G_RS = [];
+}

@@ -1,0 +1,481 @@
+// ===========================================================================
+// 40_prims : primitive word implementations + registration.
+//
+// Forth flags: true is -1 (all bits set), false is 0.
+// Division is FLOORED (the suite adapts via IFFLOORED).
+// run_prim(sel) executes a primitive by selector; control-flow / compiling
+// words are NOT here -- they are handled by the compiler/VM modules.
+// ===========================================================================
+
+ENTOMB FTRUE WITH -1;
+ENTOMB FFALSE WITH 0;
+
+RITE flag(b) {
+    SHOULD b { BEQUEATH FTRUE; }
+    BEQUEATH FFALSE;
+}
+
+// floored division: returns {q, r} with q = floor(a/b), r = a - q*b.
+RITE fdivmod(a, b) {
+    SHOULD b == 0 { CONDEMN "division by zero"; }
+    BIRTH q WITH a / b;             // !~ATH integer division (trunc toward 0)
+    BIRTH r WITH a - q * b;
+    SHOULD r != 0 {
+        BIRTH rn WITH r < 0;
+        BIRTH bn WITH b < 0;
+        SHOULD rn != bn {
+            q = q - 1;
+            r = r + b;
+        }
+    }
+    BEQUEATH {q: q, r: r};
+}
+
+// --- number formatting (signed/unsigned) in a given base -------------------
+RITE digit_char(d) {
+    SHOULD d < 10 { BEQUEATH CHAR(48 + d); }
+    BEQUEATH CHAR(55 + d);          // 'A'..'Z' for 10..35
+}
+RITE fmt_unsigned(u, base) {
+    SHOULD u == 0 { BEQUEATH "0"; }
+    BEQUEATH fmt_u_loop(u, base, "");
+}
+RITE fmt_u_loop(u, base, acc) {
+    SHOULD u == 0 { BEQUEATH acc; }
+    BIRTH d WITH u % base;
+    BEQUEATH fmt_u_loop(u / base, base, digit_char(d) + acc);
+}
+RITE fmt_signed(n, base) {
+    SHOULD n < 0 { BEQUEATH "-" + fmt_unsigned(0 - n, base); }
+    BEQUEATH fmt_unsigned(n, base);
+}
+RITE cur_base() {
+    BIRTH b WITH fetch(SYSV_BASE);
+    SHOULD b < 2 { BEQUEATH 10; }
+    BEQUEATH b;
+}
+
+// --- the dispatch -----------------------------------------------------------
+RITE run_prim(sel) {
+    // ---- stack ----
+    SHOULD sel == "DUP" { push(peek()); BEQUEATH VOID; }
+    SHOULD sel == "DROP" { pop(); BEQUEATH VOID; }
+    SHOULD sel == "SWAP" {
+        BIRTH b WITH pop(); BIRTH a WITH pop(); push(b); push(a); BEQUEATH VOID;
+    }
+    SHOULD sel == "OVER" { push(pick(1)); BEQUEATH VOID; }
+    SHOULD sel == "ROT" {
+        BIRTH c WITH pop(); BIRTH b WITH pop(); BIRTH a WITH pop();
+        push(b); push(c); push(a); BEQUEATH VOID;
+    }
+    SHOULD sel == "?DUP" {
+        BIRTH t WITH peek();
+        SHOULD t != 0 { push(t); }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "DEPTH" { push(ds_depth()); BEQUEATH VOID; }
+    SHOULD sel == "2DROP" { pop(); pop(); BEQUEATH VOID; }
+    SHOULD sel == "2DUP" {
+        BIRTH b WITH pick(0); BIRTH a WITH pick(1); push(a); push(b); BEQUEATH VOID;
+    }
+    SHOULD sel == "2SWAP" {
+        BIRTH d WITH pop(); BIRTH c WITH pop(); BIRTH b WITH pop(); BIRTH a WITH pop();
+        push(c); push(d); push(a); push(b); BEQUEATH VOID;
+    }
+    SHOULD sel == "2OVER" {
+        BIRTH a WITH pick(3); BIRTH b WITH pick(2); push(a); push(b); BEQUEATH VOID;
+    }
+
+    // ---- arithmetic ----
+    SHOULD sel == "+" { BIRTH b WITH pop(); push(s32(pop() + b)); BEQUEATH VOID; }
+    SHOULD sel == "-" { BIRTH b WITH pop(); push(s32(pop() - b)); BEQUEATH VOID; }
+    SHOULD sel == "*" { BIRTH b WITH pop(); push(s32(pop() * b)); BEQUEATH VOID; }
+    SHOULD sel == "/" {
+        BIRTH b WITH pop(); BIRTH a WITH pop(); push(s32(fdivmod(a, b).q)); BEQUEATH VOID;
+    }
+    SHOULD sel == "MOD" {
+        BIRTH b WITH pop(); BIRTH a WITH pop(); push(s32(fdivmod(a, b).r)); BEQUEATH VOID;
+    }
+    SHOULD sel == "/MOD" {
+        BIRTH b WITH pop(); BIRTH a WITH pop(); BIRTH r WITH fdivmod(a, b);
+        push(s32(r.r)); push(s32(r.q)); BEQUEATH VOID;
+    }
+    SHOULD sel == "*/" {
+        BIRTH c WITH pop(); BIRTH b WITH pop(); BIRTH a WITH pop();
+        push(s32(fdivmod(a * b, c).q)); BEQUEATH VOID;
+    }
+    SHOULD sel == "*/MOD" {
+        BIRTH c WITH pop(); BIRTH b WITH pop(); BIRTH a WITH pop();
+        BIRTH r WITH fdivmod(a * b, c); push(s32(r.r)); push(s32(r.q)); BEQUEATH VOID;
+    }
+    SHOULD sel == "NEGATE" { push(s32(0 - pop())); BEQUEATH VOID; }
+    SHOULD sel == "ABS" { BIRTH n WITH pop(); SHOULD n < 0 { n = 0 - n; } push(s32(n)); BEQUEATH VOID; }
+    SHOULD sel == "1+" { push(s32(pop() + 1)); BEQUEATH VOID; }
+    SHOULD sel == "1-" { push(s32(pop() - 1)); BEQUEATH VOID; }
+    SHOULD sel == "2*" { push(s32(mask32(pop()) << 1)); BEQUEATH VOID; }
+    SHOULD sel == "2/" { push(s32(pop() >> 1)); BEQUEATH VOID; }
+    SHOULD sel == "MIN" {
+        BIRTH b WITH pop(); BIRTH a WITH pop(); SHOULD a < b { push(a); } LEST { push(b); } BEQUEATH VOID;
+    }
+    SHOULD sel == "MAX" {
+        BIRTH b WITH pop(); BIRTH a WITH pop(); SHOULD a > b { push(a); } LEST { push(b); } BEQUEATH VOID;
+    }
+    SHOULD sel == "S>D" {
+        BIRTH n WITH peek(); SHOULD n < 0 { push(-1); } LEST { push(0); } BEQUEATH VOID;
+    }
+
+    // ---- comparison ----
+    SHOULD sel == "=" { BIRTH b WITH pop(); push(flag(pop() == b)); BEQUEATH VOID; }
+    SHOULD sel == "<" { BIRTH b WITH pop(); push(flag(pop() < b)); BEQUEATH VOID; }
+    SHOULD sel == ">" { BIRTH b WITH pop(); push(flag(pop() > b)); BEQUEATH VOID; }
+    SHOULD sel == "0=" { push(flag(pop() == 0)); BEQUEATH VOID; }
+    SHOULD sel == "0<" { push(flag(pop() < 0)); BEQUEATH VOID; }
+    SHOULD sel == "0>" { push(flag(pop() > 0)); BEQUEATH VOID; }
+    SHOULD sel == "U<" {
+        BIRTH b WITH mask32(pop()); BIRTH a WITH mask32(pop()); push(flag(a < b)); BEQUEATH VOID;
+    }
+    SHOULD sel == "U>" {
+        BIRTH b WITH mask32(pop()); BIRTH a WITH mask32(pop()); push(flag(a > b)); BEQUEATH VOID;
+    }
+
+    // ---- bitwise ----
+    SHOULD sel == "AND" { BIRTH b WITH pop(); push(s32(pop() & b)); BEQUEATH VOID; }
+    SHOULD sel == "OR" { BIRTH b WITH pop(); push(s32(pop() | b)); BEQUEATH VOID; }
+    SHOULD sel == "XOR" { BIRTH b WITH pop(); push(s32(pop() ^ b)); BEQUEATH VOID; }
+    SHOULD sel == "INVERT" { push(s32((~pop()) & U32MASK)); BEQUEATH VOID; }
+    SHOULD sel == "LSHIFT" {
+        BIRTH u WITH pop(); BIRTH n WITH mask32(pop());
+        SHOULD u >= 32 { push(0); } LEST { push(s32((n << u) & U32MASK)); } BEQUEATH VOID;
+    }
+    SHOULD sel == "RSHIFT" {
+        BIRTH u WITH pop(); BIRTH n WITH mask32(pop());
+        SHOULD u >= 32 { push(0); } LEST { push(s32(n >> u)); } BEQUEATH VOID;
+    }
+
+    // ---- memory ----
+    SHOULD sel == "@" { push(fetch(pop())); BEQUEATH VOID; }
+    SHOULD sel == "!" { BIRTH a WITH pop(); BIRTH v WITH pop(); store(a, v); BEQUEATH VOID; }
+    SHOULD sel == "C@" { push(c_fetch(pop())); BEQUEATH VOID; }
+    SHOULD sel == "C!" { BIRTH a WITH pop(); BIRTH v WITH pop(); c_store(a, v); BEQUEATH VOID; }
+    SHOULD sel == "+!" { BIRTH a WITH pop(); BIRTH v WITH pop(); store(a, s32(fetch(a) + v)); BEQUEATH VOID; }
+    SHOULD sel == "2@" {
+        BIRTH a WITH pop(); push(fetch(a + CELL)); push(fetch(a)); BEQUEATH VOID;
+    }
+    SHOULD sel == "2!" {
+        BIRTH a WITH pop(); BIRTH hi WITH pop(); BIRTH lo WITH pop();
+        store(a, hi); store(a + CELL, lo); BEQUEATH VOID;
+    }
+    SHOULD sel == "," { comma(pop()); BEQUEATH VOID; }
+    SHOULD sel == "C," { c_comma(pop()); BEQUEATH VOID; }
+    SHOULD sel == "HERE" { push(here()); BEQUEATH VOID; }
+    SHOULD sel == "ALLOT" { allot(pop()); BEQUEATH VOID; }
+    SHOULD sel == "CELL+" { push(s32(pop() + CELL)); BEQUEATH VOID; }
+    SHOULD sel == "CELLS" { push(s32(pop() * CELL)); BEQUEATH VOID; }
+    SHOULD sel == "CHAR+" { push(s32(pop() + 1)); BEQUEATH VOID; }
+    SHOULD sel == "CHARS" { BEQUEATH VOID; }            // 1 char = 1 byte
+    SHOULD sel == "ALIGN" { BEQUEATH VOID; }            // byte-addressed, no-op
+    SHOULD sel == "ALIGNED" { BEQUEATH VOID; }          // no-op
+    SHOULD sel == "FILL" {
+        BIRTH ch WITH pop(); BIRTH u WITH pop(); BIRTH a WITH pop(); fill_mem(a, u, ch); BEQUEATH VOID;
+    }
+    SHOULD sel == "MOVE" {
+        BIRTH u WITH pop(); BIRTH d WITH pop(); BIRTH s WITH pop(); move_mem(s, d, u); BEQUEATH VOID;
+    }
+
+    // ---- I/O ----
+    SHOULD sel == "." {
+        emit_str(fmt_signed(pop(), cur_base()) + " "); BEQUEATH VOID;
+    }
+    SHOULD sel == "U." {
+        emit_str(fmt_unsigned(mask32(pop()), cur_base()) + " "); BEQUEATH VOID;
+    }
+    SHOULD sel == "EMIT" { emit_char(pop()); BEQUEATH VOID; }
+    SHOULD sel == "CR" { emit_str("\n"); BEQUEATH VOID; }
+    SHOULD sel == "SPACE" { emit_str(" "); BEQUEATH VOID; }
+    SHOULD sel == "SPACES" { BIRTH n WITH pop(); emit_spaces(n); BEQUEATH VOID; }
+    SHOULD sel == "BL" { push(32); BEQUEATH VOID; }
+    SHOULD sel == "TYPE" {
+        BIRTH u WITH pop(); BIRTH a WITH pop(); emit_str(mem_to_str(a, u)); BEQUEATH VOID;
+    }
+
+    // ---- system variables / base ----
+    SHOULD sel == "BASE" { push(SYSV_BASE); BEQUEATH VOID; }
+    SHOULD sel == "STATE" { push(SYSV_STATE); BEQUEATH VOID; }
+    SHOULD sel == "HEX" { store(SYSV_BASE, 16); BEQUEATH VOID; }
+    SHOULD sel == "DECIMAL" { store(SYSV_BASE, 10); BEQUEATH VOID; }
+    SHOULD sel == ">IN" { push(SYSV_TOIN); BEQUEATH VOID; }
+    SHOULD sel == "SOURCE" { push(G_SRC_ADDR); push(srclen()); BEQUEATH VOID; }
+
+    // ---- defining / executing ----
+    SHOULD sel == ":" { begin_def(); BEQUEATH VOID; }
+    SHOULD sel == ";" { end_def(); BEQUEATH VOID; }            // immediate
+    SHOULD sel == "EXECUTE" { vm_enter(pop()); BEQUEATH VOID; }
+    SHOULD sel == "EXIT" { vm_exit(); BEQUEATH VOID; }
+    SHOULD sel == "RECURSE" {                                   // immediate
+        ccompile({op: "call", xt: G_CURRENT_XT}); BEQUEATH VOID;
+    }
+    SHOULD sel == "'" {
+        BIRTH t WITH parse_name(); BIRTH x WITH find(t);
+        SHOULD x == 0 { CONDEMN t + " ?"; } push(x); BEQUEATH VOID;
+    }
+    SHOULD sel == "[']" {                                       // immediate
+        BIRTH t WITH parse_name(); BIRTH x WITH find(t);
+        SHOULD x == 0 { CONDEMN t + " ?"; } compile_literal(x); BEQUEATH VOID;
+    }
+
+    // ---- control flow: compile-time (immediate) ----
+    SHOULD sel == "IF" { c_if(); BEQUEATH VOID; }
+    SHOULD sel == "ELSE" { c_else(); BEQUEATH VOID; }
+    SHOULD sel == "THEN" { c_then(); BEQUEATH VOID; }
+    SHOULD sel == "BEGIN" { c_begin(); BEQUEATH VOID; }
+    SHOULD sel == "UNTIL" { c_until(); BEQUEATH VOID; }
+    SHOULD sel == "AGAIN" { c_again(); BEQUEATH VOID; }
+    SHOULD sel == "WHILE" { c_while(); BEQUEATH VOID; }
+    SHOULD sel == "REPEAT" { c_repeat(); BEQUEATH VOID; }
+    SHOULD sel == "DO" { c_do(); BEQUEATH VOID; }
+    SHOULD sel == "?DO" { c_qdo(); BEQUEATH VOID; }
+    SHOULD sel == "LOOP" { c_loop(); BEQUEATH VOID; }
+    SHOULD sel == "+LOOP" { c_ploop(); BEQUEATH VOID; }
+    SHOULD sel == "LEAVE" { c_leave(); BEQUEATH VOID; }
+
+    // ---- return stack / loop index (runtime) ----
+    SHOULD sel == ">R" { rpush(pop()); BEQUEATH VOID; }
+    SHOULD sel == "R>" { push(rpop()); BEQUEATH VOID; }
+    SHOULD sel == "R@" { push(rpeek()); BEQUEATH VOID; }
+    SHOULD sel == "I" { push(rpeek()); BEQUEATH VOID; }
+    SHOULD sel == "J" { push(rpick(3)); BEQUEATH VOID; }
+    SHOULD sel == "UNLOOP" { rpop(); rpop(); rpop(); BEQUEATH VOID; }
+
+    // ---- flags ----
+    SHOULD sel == "TRUE" { push(-1); BEQUEATH VOID; }
+    SHOULD sel == "FALSE" { push(0); BEQUEATH VOID; }
+
+    // ---- strings ----
+    SHOULD sel == "S\"" {                                       // immediate
+        BIRTH text WITH parse_string_arg(34);
+        SHOULD compiling() {
+            BIRTH a WITH here(); str_to_mem(a, text); allot(LENGTH(text));
+            ccompile({op: "slit", addr: a, len: LENGTH(text)});
+        } LEST {
+            str_to_mem(SSCRATCH, text); push(SSCRATCH); push(LENGTH(text));
+        }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == ".\"" {                                       // immediate
+        BIRTH text WITH parse_string_arg(34);
+        SHOULD compiling() {
+            BIRTH a WITH here(); str_to_mem(a, text); allot(LENGTH(text));
+            ccompile({op: "sprint", addr: a, len: LENGTH(text)});
+        } LEST { emit_str(text); }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == ".(" { emit_str(parse_string_arg(41)); BEQUEATH VOID; }  // immediate
+    SHOULD sel == "CHAR" {
+        BIRTH t WITH parse_name(); push(CODE(t[0])); BEQUEATH VOID;
+    }
+    SHOULD sel == "[CHAR]" {                                    // immediate
+        BIRTH t WITH parse_name(); compile_literal(CODE(t[0])); BEQUEATH VOID;
+    }
+    SHOULD sel == "WORD" {
+        BIRTH delim WITH pop();
+        BIRTH len WITH srclen();
+        BIRTH i WITH wskip(toin(), len, delim);
+        BIRTH start WITH i;
+        BIRTH e WITH scan_until(i, len, delim);
+        BIRTH text WITH SUBSTRING(G_CURLINE, start, e);
+        SHOULD e < len { set_toin(e + 1); } LEST { set_toin(len); }
+        c_store(WORDBUF, LENGTH(text));
+        str_to_mem(WORDBUF + 1, text);
+        c_store(WORDBUF + 1 + LENGTH(text), 32);
+        push(WORDBUF);
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "COUNT" {
+        BIRTH a WITH pop(); push(a + 1); push(c_fetch(a)); BEQUEATH VOID;
+    }
+    SHOULD sel == "FIND" {
+        BIRTH a WITH pop();
+        BIRTH nm WITH mem_to_str(a + 1, c_fetch(a));
+        BIRTH x WITH find(nm);
+        SHOULD x == 0 { push(a); push(0); }
+        LEST {
+            push(x);
+            SHOULD is_immediate(x) { push(1); } LEST { push(-1); }
+        }
+        BEQUEATH VOID;
+    }
+
+    // ---- pictured numeric output ----
+    SHOULD sel == "<#" { G_HP = HOLD_END; BEQUEATH VOID; }
+    SHOULD sel == "HOLD" { hold_char(pop()); BEQUEATH VOID; }
+    SHOULD sel == "#" {
+        BIRTH hi WITH pop(); BIRTH lo WITH pop();
+        BIRTH t WITH do_hash(lo, hi); push(t.lo); push(t.hi); BEQUEATH VOID;
+    }
+    SHOULD sel == "#S" {
+        BIRTH hi WITH pop(); BIRTH lo WITH pop();
+        do_hash_s(lo, hi); push(0); push(0); BEQUEATH VOID;
+    }
+    SHOULD sel == "#>" {
+        pop(); pop(); push(G_HP); push(HOLD_END - G_HP); BEQUEATH VOID;
+    }
+    SHOULD sel == "SIGN" {
+        SHOULD pop() < 0 { hold_char(45); } BEQUEATH VOID;
+    }
+    SHOULD sel == ">NUMBER" {
+        BIRTH u WITH pop(); BIRTH addr WITH pop();
+        BIRTH hi WITH pop(); BIRTH lo WITH pop();
+        BIRTH r WITH to_number(lo, hi, addr, u);
+        push(r.lo); push(r.hi); push(r.addr); push(r.u); BEQUEATH VOID;
+    }
+
+    // ---- double-cell arithmetic ----
+    SHOULD sel == "M*" {
+        BIRTH n2 WITH pop(); BIRTH n1 WITH pop(); BIRTH p WITH n1 * n2;
+        push(s32(p & U32MASK)); push(s32(p >> 32)); BEQUEATH VOID;
+    }
+    SHOULD sel == "UM*" {
+        BIRTH b WITH mask32(pop()); BIRTH a WITH mask32(pop());
+        BIRTH cross WITH (a >> 16) * (b & 65535) + (a & 65535) * (b >> 16);
+        BIRTH lopre WITH (a & 65535) * (b & 65535) + ((cross & 65535) << 16);
+        BIRTH lo WITH lopre & U32MASK;
+        BIRTH carry WITH lopre >> 32;
+        BIRTH hi WITH ((a >> 16) * (b >> 16) + (cross >> 16) + carry) & U32MASK;
+        push(s32(lo)); push(s32(hi)); BEQUEATH VOID;
+    }
+    SHOULD sel == "UM/MOD" {
+        BIRTH d WITH pop(); BIRTH hi WITH pop(); BIRTH lo WITH pop();
+        BIRTH r WITH um_divmod(lo, hi, d);
+        push(s32(r.r)); push(s32(r.q)); BEQUEATH VOID;
+    }
+    SHOULD sel == "SM/REM" {
+        BIRTH n WITH pop(); BIRTH hi WITH pop(); BIRTH lo WITH pop();
+        BIRTH dv WITH dval(lo, hi);
+        BIRTH q WITH dv / n; BIRTH r WITH dv - q * n;
+        push(s32(r)); push(s32(q)); BEQUEATH VOID;
+    }
+    SHOULD sel == "FM/MOD" {
+        BIRTH n WITH pop(); BIRTH hi WITH pop(); BIRTH lo WITH pop();
+        BIRTH dv WITH dval(lo, hi);
+        BIRTH q WITH dv / n; BIRTH r WITH dv - q * n;
+        SHOULD r != 0 {
+            SHOULD (r < 0) != (n < 0) { q = q - 1; r = r + n; }
+        }
+        push(s32(r)); push(s32(q)); BEQUEATH VOID;
+    }
+    SHOULD sel == "EVALUATE" {
+        BIRTH u WITH pop(); BIRTH a WITH pop();
+        do_evaluate(a, u); BEQUEATH VOID;
+    }
+    SHOULD sel == "ACCEPT" {
+        // Interactive input; in batch mode there is none -> accept 0 chars.
+        pop(); pop(); push(0); BEQUEATH VOID;
+    }
+
+    // ---- defining words ----
+    SHOULD sel == "CREATE" {
+        BIRTH nm WITH parse_name();
+        BIRTH bd WITH here();
+        BIRTH x WITH dict_add({name: nm, imm: 0, kind: "create", prim: "",
+                               code: [], body: bd, does: VOID, hidden: 0});
+        G_LAST_CREATED = x;
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "VARIABLE" {
+        BIRTH nm WITH parse_name();
+        BIRTH bd WITH here();
+        allot(CELL);
+        dict_add({name: nm, imm: 0, kind: "var", prim: "",
+                  code: [], body: bd, does: VOID, hidden: 0});
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "CONSTANT" {
+        BIRTH nm WITH parse_name();
+        BIRTH v WITH pop();
+        dict_add({name: nm, imm: 0, kind: "const", prim: "",
+                  code: [], body: v, does: VOID, hidden: 0});
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "DOES>" { ccompile({op: "does"}); BEQUEATH VOID; }    // immediate
+    SHOULD sel == ">BODY" { push(entry(pop()).body); BEQUEATH VOID; }
+    SHOULD sel == "IMMEDIATE" { make_immediate(G_LAST_DEF); BEQUEATH VOID; }
+    SHOULD sel == "[" { store(SYSV_STATE, 0); BEQUEATH VOID; }          // immediate
+    SHOULD sel == "]" { store(SYSV_STATE, -1); BEQUEATH VOID; }
+    SHOULD sel == "LITERAL" { compile_literal(pop()); BEQUEATH VOID; }  // immediate
+    SHOULD sel == "POSTPONE" {                                          // immediate
+        BIRTH t WITH parse_name(); BIRTH x WITH find(t);
+        SHOULD x == 0 { CONDEMN t + " ?"; }
+        SHOULD is_immediate(x) { ccompile({op: "call", xt: x}); }
+        LEST { ccompile({op: "postpone", xt: x}); }
+        BEQUEATH VOID;
+    }
+
+    // ---- comments (immediate) ----
+    SHOULD sel == "\\" { set_toin(srclen()); BEQUEATH VOID; }   // line comment
+    SHOULD sel == "(" { parse_until(41); BEQUEATH VOID; }       // ')' == 41
+
+    CONDEMN "unimplemented primitive: " + sel;
+}
+
+// Register every primitive in this module. name == selector for all of them.
+RITE reg(name) { new_prim(name, name, 0); }
+RITE reg_imm(name) { new_prim(name, name, 1); }
+
+RITE register_prims() {
+    reg("DUP"); reg("DROP"); reg("SWAP"); reg("OVER"); reg("ROT"); reg("?DUP");
+    reg("DEPTH"); reg("2DROP"); reg("2DUP"); reg("2SWAP"); reg("2OVER");
+    reg("+"); reg("-"); reg("*"); reg("/"); reg("MOD"); reg("/MOD");
+    reg("*/"); reg("*/MOD"); reg("NEGATE"); reg("ABS"); reg("1+"); reg("1-");
+    reg("2*"); reg("2/"); reg("MIN"); reg("MAX"); reg("S>D");
+    reg("="); reg("<"); reg(">"); reg("0="); reg("0<"); reg("0>");
+    reg("U<"); reg("U>");
+    reg("AND"); reg("OR"); reg("XOR"); reg("INVERT"); reg("LSHIFT"); reg("RSHIFT");
+    reg("@"); reg("!"); reg("C@"); reg("C!"); reg("+!"); reg("2@"); reg("2!");
+    reg(","); reg("C,"); reg("HERE"); reg("ALLOT"); reg("CELL+"); reg("CELLS");
+    reg("CHAR+"); reg("CHARS"); reg("ALIGN"); reg("ALIGNED"); reg("FILL"); reg("MOVE");
+    reg("."); reg("U."); reg("EMIT"); reg("CR"); reg("SPACE"); reg("SPACES");
+    reg("BL"); reg("TYPE");
+    reg("BASE"); reg("STATE"); reg("HEX"); reg("DECIMAL"); reg(">IN"); reg("SOURCE");
+    reg(":"); reg_imm(";"); reg("EXECUTE"); reg("EXIT"); reg_imm("RECURSE");
+    reg("'"); reg_imm("[']");
+    reg_imm("IF"); reg_imm("ELSE"); reg_imm("THEN"); reg_imm("BEGIN");
+    reg_imm("UNTIL"); reg_imm("AGAIN"); reg_imm("WHILE"); reg_imm("REPEAT");
+    reg_imm("DO"); reg_imm("?DO"); reg_imm("LOOP"); reg_imm("+LOOP"); reg_imm("LEAVE");
+    reg(">R"); reg("R>"); reg("R@"); reg("I"); reg("J"); reg("UNLOOP");
+    reg("CREATE"); reg("VARIABLE"); reg("CONSTANT"); reg_imm("DOES>"); reg(">BODY");
+    reg("IMMEDIATE"); reg_imm("["); reg("]"); reg_imm("LITERAL"); reg_imm("POSTPONE");
+    reg("TRUE"); reg("FALSE");
+    reg_imm("S\""); reg_imm(".\""); reg_imm(".("); reg("CHAR"); reg_imm("[CHAR]");
+    reg("WORD"); reg("COUNT"); reg("FIND");
+    reg("<#"); reg("HOLD"); reg("#"); reg("#S"); reg("#>"); reg("SIGN"); reg(">NUMBER");
+    reg("M*"); reg("UM*"); reg("UM/MOD"); reg("SM/REM"); reg("FM/MOD"); reg("EVALUATE");
+    reg("ACCEPT");
+    reg_imm("\\"); reg_imm("(");
+}
+
+RITE fill_mem(a, u, ch) {
+    SHOULD u <= 0 { BEQUEATH VOID; }
+    c_store(a, ch);
+    BEQUEATH fill_mem(a + 1, u - 1, ch);
+}
+// MOVE must be overlap-safe (like C memmove).
+RITE move_mem(s, d, u) {
+    SHOULD u <= 0 { BEQUEATH VOID; }
+    SHOULD d > s { BEQUEATH move_mem_down(s, d, u, u - 1); }
+    BEQUEATH move_mem_up(s, d, u, 0);
+}
+RITE move_mem_up(s, d, u, i) {
+    SHOULD i >= u { BEQUEATH VOID; }
+    c_store(d + i, c_fetch(s + i));
+    BEQUEATH move_mem_up(s, d, u, i + 1);
+}
+RITE move_mem_down(s, d, u, i) {
+    SHOULD i < 0 { BEQUEATH VOID; }
+    c_store(d + i, c_fetch(s + i));
+    BEQUEATH move_mem_down(s, d, u, i - 1);
+}
+RITE emit_spaces(n) {
+    SHOULD n <= 0 { BEQUEATH VOID; }
+    emit_str(" ");
+    BEQUEATH emit_spaces(n - 1);
+}

@@ -1,0 +1,10 @@
+# build artifacts produced by build.~ATH
+forth.~ATH
+forth.c
+forth
+# build artifacts of the !~ATH test runner
+run-tests.c
+run-tests
+# build artifacts of the !~ATH build driver
+build.c
+build

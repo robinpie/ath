@@ -1,0 +1,94 @@
+// ===========================================================================
+// build.~ATH : the Forth build driver, written in !~ATH.
+//
+// It concatenates the modular src/*.~ATH sources (lexical order, with a banner
+// per file) into a single forth.~ATH, then transpiles it with athtoc-bin and
+// compiles the result with gcc. SCRY/INSCRIBE do the file work natively; the
+// steps that need shell redirection (`< >`) and globbing (`$(ls ...)`) are
+// delegated to `sh -c` `process` entities, chained on their deaths.
+//
+// Chicken-and-egg note: this builder is itself an !~ATH program, so to build
+// *it* the first time use the manual transpile+compile one-liner (run here):
+//
+//   tpc=../../transpiler-to-c
+//   $tpc/athtoc-bin < build.~ATH > build.c
+//   gcc -std=c89 build.c $(ls $tpc/runtime/*.c | grep -v test_runtime.c) \
+//       -I$tpc/runtime -ldl -lffi -o build && ./build
+// ===========================================================================
+
+ENTOMB TPC WITH "../../transpiler-to-c";
+ENTOMB SRC WITH "src";
+ENTOMB ATH_OUT WITH "forth.~ATH";
+ENTOMB C_OUT WITH "forth.c";
+ENTOMB BIN WITH "forth";
+ENTOMB LISTFILE WITH "/tmp/forth-src-list.txt";
+
+RITE q(s) {
+    BEQUEATH "'" + s + "'";
+}
+
+// Final path segment of `p` (its basename).
+RITE basename(p) {
+    BIRTH parts WITH SPLIT(p, "/");
+    BEQUEATH parts[LENGTH(parts) - 1];
+}
+
+// Concatenate files[i..n) -- each prefixed with a "// ===== name =====" banner
+// -- onto `acc`, skipping blank entries. Returns the combined text.
+RITE concat_from(files, i, n, acc) {
+    SHOULD i >= n {
+        BEQUEATH acc;
+    }
+    BIRTH f WITH TRIM(files[i]);
+    SHOULD LENGTH(f) == 0 {
+        BEQUEATH concat_from(files, i + 1, n, acc);
+    }
+    BIRTH chunk WITH "// ===== " + basename(f) + " =====\n" + SCRY(f) + "\n";
+    BEQUEATH concat_from(files, i + 1, n, acc + chunk);
+}
+
+// Step 1: read the discovered file list, concatenate, write forth.~ATH.
+RITE do_concat() {
+    BIRTH files WITH SPLIT(SCRY(LISTFILE), "\n");
+    BIRTH text WITH concat_from(files, 0, LENGTH(files), "");
+    INSCRIBE(ATH_OUT, text);
+    UTTER("wrote " + ATH_OUT + " (" + STRING(LENGTH(SPLIT(text, "\n")) - 1) + " lines)");
+}
+
+// Step 3: compile forth.c against the runtime (mirrors the Makefile: skip
+// test_runtime.c, link -ldl -lffi).
+RITE do_compile() {
+    BIRTH cmd WITH "gcc -std=c89 -O2 " + C_OUT
+        + " $(ls " + TPC + "/runtime/*.c | grep -v test_runtime.c)"
+        + " -I" + TPC + "/runtime -ldl -lffi -o " + BIN;
+    import process G("sh", "-c", cmd);
+    ~ATH(G) {
+    } EXECUTE(
+        UTTER("built -> " + BIN)
+    );
+}
+
+// Step 2: transpile forth.~ATH -> forth.c with the bootstrap transpiler.
+RITE do_transpile() {
+    BIRTH cmd WITH TPC + "/athtoc-bin < " + q(ATH_OUT) + " > " + q(C_OUT);
+    import process P("sh", "-c", cmd);
+    ~ATH(P) {
+    } EXECUTE(
+        UTTER("transpiled -> " + C_OUT);
+        do_compile()
+    );
+}
+
+RITE main() {
+    // Discover sources first (ls sorts lexically, like the shell's *.~ATH glob).
+    import process L("sh", "-c", "ls " + SRC + "/*.~ATH > " + q(LISTFILE));
+    ~ATH(L) {
+    } EXECUTE(
+        do_concat();
+        do_transpile()
+    );
+
+    THIS.DIE();
+}
+
+main();

@@ -1,0 +1,72 @@
+// ===========================================================================
+// 30_dict : the dictionary.
+//
+// G_WORDS is an array of entry records; an execution token (xt) is a 1-based
+// index into it (xt 0 means "not found"). G_NAMES maps an UPPERCASED name to
+// its newest xt (Forth lookup is case-insensitive and newest-first).
+//
+// Entry record fields:
+//   name  : original name string
+//   imm   : 1 if IMMEDIATE, else 0
+//   kind  : "prim" | "colon" | "var" | "const" | "create"
+//   prim  : primitive selector string (kind=="prim")
+//   code  : compiled instruction-cell array (kind=="colon")
+//   body  : data-space address of the body (kind in var/const/create)
+//   does  : DOES> code array, or VOID (kind=="create")
+//   hidden: 1 while a colon definition is being compiled (not yet findable)
+// ===========================================================================
+
+BIRTH G_WORDS WITH [];     // index 0 unused conceptually; xt = index+1
+BIRTH G_NAMES WITH {};     // UPPERCASE name -> xt
+BIRTH G_LAST_DEF WITH 0;   // xt of the most recently created word (for IMMEDIATE)
+
+RITE up(s) { BEQUEATH UPPERCASE(s); }
+
+// Append an entry record, register its name, return its xt.
+RITE dict_add(entry) {
+    G_WORDS = APPEND(G_WORDS, entry);
+    BIRTH xt WITH LENGTH(G_WORDS);          // 1-based
+    SHOULD entry.hidden != 1 {
+        G_NAMES = SET(G_NAMES, up(entry.name), xt);
+    }
+    G_LAST_DEF = xt;
+    BEQUEATH xt;
+}
+
+// Look up a name -> xt, or 0 if absent.
+RITE find(name) {
+    BIRTH k WITH up(name);
+    SHOULD HAS(G_NAMES, k) {
+        BEQUEATH G_NAMES[k];
+    }
+    BEQUEATH 0;
+}
+
+RITE entry(xt) {
+    BEQUEATH G_WORDS[xt - 1];
+}
+
+// Replace the entry at xt (entries are immutable maps; rebuild the slot).
+RITE set_entry(xt, e) {
+    G_WORDS = CONCAT(CONCAT(SLICE(G_WORDS, 0, xt - 1), [e]), SLICE(G_WORDS, xt, LENGTH(G_WORDS)));
+}
+
+// Make a word (newest definition of that name) findable / immediate.
+RITE reveal(xt) {
+    BIRTH e WITH entry(xt);
+    BIRTH e2 WITH SET(e, "hidden", 0);
+    set_entry(xt, e2);
+    G_NAMES = SET(G_NAMES, up(e.name), xt);
+}
+RITE make_immediate(xt) {
+    set_entry(xt, SET(entry(xt), "imm", 1));
+}
+RITE is_immediate(xt) {
+    BEQUEATH entry(xt).imm == 1;
+}
+
+// --- convenience constructors ----------------------------------------------
+RITE new_prim(name, sel, imm) {
+    BEQUEATH dict_add({name: name, imm: imm, kind: "prim", prim: sel,
+                       code: [], body: 0, does: VOID, hidden: 0});
+}

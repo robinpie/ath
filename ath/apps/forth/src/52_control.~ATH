@@ -1,0 +1,121 @@
+// ===========================================================================
+// 52_control : compile-time control-flow words (immediate) + their VM runtime.
+//
+// Compile-time words use the DATA stack to hold patch marks, the standard
+// Forth convention (the data stack is otherwise free during compilation).
+// The return stack (G_RS) holds DO/LOOP parameters as raw triples
+//   [ after, limit, index ]   (index on top)
+// together with any >R values; colon return frames live on G_CALLS instead.
+// ===========================================================================
+
+// Replace the t field of the compile cell at index idx.
+RITE patch_target(idx, t) {
+    BIRTH cell WITH G_CCODE[idx];
+    G_CCODE = CONCAT(CONCAT(SLICE(G_CCODE, 0, idx), [SET(cell, "t", t)]),
+                     SLICE(G_CCODE, idx + 1, LENGTH(G_CCODE)));
+}
+
+// --- compile-time (immediate) -----------------------------------------------
+RITE c_if() {
+    BIRTH m WITH here_code(); ccompile({op: "0branch", t: 0}); push(m);
+}
+RITE c_else() {
+    BIRTH ifm WITH pop();
+    BIRTH e WITH here_code(); ccompile({op: "branch", t: 0});
+    patch_target(ifm, here_code());
+    push(e);
+}
+RITE c_then() {
+    patch_target(pop(), here_code());
+}
+RITE c_begin() {
+    push(here_code());
+}
+RITE c_until() {
+    ccompile({op: "0branch", t: pop()});
+}
+RITE c_again() {
+    ccompile({op: "branch", t: pop()});
+}
+RITE c_while() {
+    BIRTH w WITH here_code(); ccompile({op: "0branch", t: 0});
+    BIRTH dest WITH pop();
+    push(w); push(dest);
+}
+RITE c_repeat() {
+    BIRTH dest WITH pop(); BIRTH w WITH pop();
+    ccompile({op: "branch", t: dest});
+    patch_target(w, here_code());
+}
+RITE c_do() {
+    BIRTH d WITH here_code(); ccompile({op: "do", t: 0}); push(d);
+}
+RITE c_qdo() {
+    BIRTH d WITH here_code(); ccompile({op: "qdo", t: 0}); push(d);
+}
+RITE c_loop() {
+    BIRTH d WITH pop();
+    ccompile({op: "loop", t: d + 1});
+    patch_target(d, here_code());
+}
+RITE c_ploop() {
+    BIRTH d WITH pop();
+    ccompile({op: "ploop", t: d + 1});
+    patch_target(d, here_code());
+}
+RITE c_leave() {
+    ccompile({op: "leave"});
+}
+
+// --- VM runtime for control / string cells ----------------------------------
+RITE ploop_done(old, new, limit, n) {
+    SHOULD n >= 0 { BEQUEATH old < limit AND new >= limit; }
+    BEQUEATH old >= limit AND new < limit;
+}
+
+RITE vm_step_ctl(cell, op) {
+    SHOULD op == "do" {
+        BIRTH index WITH pop(); BIRTH limit WITH pop();
+        rpush(cell.t); rpush(limit); rpush(index); BEQUEATH VOID;
+    }
+    SHOULD op == "qdo" {
+        BIRTH index WITH pop(); BIRTH limit WITH pop();
+        SHOULD index == limit { G_VM_IP = cell.t; }
+        LEST { rpush(cell.t); rpush(limit); rpush(index); }
+        BEQUEATH VOID;
+    }
+    SHOULD op == "loop" {
+        BIRTH index WITH rpop(); BIRTH limit WITH rpop(); BIRTH after WITH rpop();
+        index = s32(index + 1);
+        SHOULD index == limit { BEQUEATH VOID; }
+        rpush(after); rpush(limit); rpush(index); G_VM_IP = cell.t; BEQUEATH VOID;
+    }
+    SHOULD op == "ploop" {
+        BIRTH n WITH pop();
+        BIRTH index WITH rpop(); BIRTH limit WITH rpop(); BIRTH after WITH rpop();
+        BIRTH newindex WITH s32(index + n);
+        SHOULD ploop_done(index, newindex, limit, n) { BEQUEATH VOID; }
+        rpush(after); rpush(limit); rpush(newindex); G_VM_IP = cell.t; BEQUEATH VOID;
+    }
+    SHOULD op == "leave" {
+        BIRTH after WITH rpick(2);
+        rpop(); rpop(); rpop();
+        G_VM_IP = after; BEQUEATH VOID;
+    }
+    SHOULD op == "slit" {            // Phase 6: push (addr, len) of a string
+        push(cell.addr); push(cell.len); BEQUEATH VOID;
+    }
+    SHOULD op == "sprint" {          // Phase 6: print a compiled string
+        emit_str(mem_to_str(cell.addr, cell.len)); BEQUEATH VOID;
+    }
+    SHOULD op == "does" {            // attach remaining code as last word's DOES>
+        BIRTH e WITH entry(G_LAST_CREATED);
+        set_entry(G_LAST_CREATED, SET(e, "does", {code: G_VM_CODE, start: G_VM_IP}));
+        vm_exit();
+        BEQUEATH VOID;
+    }
+    SHOULD op == "postpone" {        // compile a call to xt at runtime
+        compile_xt(cell.xt); BEQUEATH VOID;
+    }
+    CONDEMN "unknown VM op: " + op;
+}
