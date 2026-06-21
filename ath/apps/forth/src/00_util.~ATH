@@ -1,0 +1,62 @@
+// ===========================================================================
+// 00_util : 32-bit cell math, char helpers, and the line-buffered output sink.
+//
+// Cells are 32 bits (see plan): a double-cell is 64 bits and fits one native
+// !~ATH long, so double-cell arithmetic needs no hand-rolled bignum. Single
+// cells are kept as SIGNED 32-bit values (the result of s32()).
+// ===========================================================================
+
+ENTOMB U32 WITH 4294967296;        // 2^32
+ENTOMB I32MIN WITH 2147483648;     // 2^31
+ENTOMB U32MASK WITH 4294967295;    // 2^32 - 1
+
+// Low 32 bits as an unsigned value 0 .. 2^32-1.
+RITE mask32(n) {
+    BEQUEATH n & U32MASK;
+}
+
+// Low 32 bits interpreted as a signed two's-complement 32-bit integer.
+RITE s32(n) {
+    BIRTH m WITH n & U32MASK;
+    SHOULD m >= I32MIN {
+        BEQUEATH m - U32;
+    }
+    BEQUEATH m;
+}
+
+// --- output sink ------------------------------------------------------------
+// !~ATH UTTER always appends a newline, so we accumulate raw output and flush
+// only whole lines (UTTER re-adds the newline). A trailing partial line is
+// flushed at program exit by flushAll().
+BIRTH G_OUT WITH "";
+
+RITE emit_str(s) {
+    G_OUT = G_OUT + s;
+    flush_lines();
+}
+
+RITE flush_lines() {
+    BIRTH idx WITH index_of_nl(G_OUT, 0);
+    SHOULD idx >= 0 {
+        UTTER(SUBSTRING(G_OUT, 0, idx));
+        G_OUT = SUBSTRING(G_OUT, idx + 1, LENGTH(G_OUT));
+        flush_lines();
+    }
+}
+
+RITE index_of_nl(s, from) {
+    SHOULD from >= LENGTH(s) { BEQUEATH -1; }
+    SHOULD CODE(s[from]) == 10 { BEQUEATH from; }
+    BEQUEATH index_of_nl(s, from + 1);
+}
+
+RITE flush_all() {
+    SHOULD LENGTH(G_OUT) > 0 {
+        UTTER(G_OUT);
+        G_OUT = "";
+    }
+}
+
+RITE emit_char(code) {
+    emit_str(CHAR(code & 255));
+}

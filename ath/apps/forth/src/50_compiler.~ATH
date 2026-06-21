@@ -1,0 +1,115 @@
+// ===========================================================================
+// 50_compiler : the threaded-code VM + the colon compiler.
+//
+// A colon word's `code` is an array of instruction cells (maps), e.g.
+//   {op:"lit", n}   {op:"call", xt}   {op:"exit"}
+//   {op:"branch", t}   {op:"0branch", t}                       (Phase 4)
+//   {op:"do",t} {op:"qdo",t} {op:"loop",t} {op:"ploop",t} {op:"leave"} (Phase 4)
+//   {op:"slit", addr, len}                                     (Phase 6)
+//
+// The VM keeps its own explicit call stack (G_CALLS) of {code, ip} frames so
+// deep Forth nesting and long loops never grow the !~ATH C stack -- the
+// scheduler steps one cell at a time inside the batched trampoline.
+// ===========================================================================
+
+BIRTH G_VM_CODE WITH VOID;   // currently executing code array (VOID == idle)
+BIRTH G_VM_IP WITH 0;        // instruction pointer into G_VM_CODE
+BIRTH G_CALLS WITH [];       // call-return frames: {code, ip}
+
+BIRTH G_CCODE WITH [];       // code under construction (compile buffer)
+BIRTH G_CURRENT_XT WITH -1;  // xt of the colon word being compiled
+BIRTH G_LAST_CREATED WITH 0; // xt of the most recent CREATE (for DOES>)
+
+RITE vm_active() { BEQUEATH G_VM_CODE != VOID; }
+
+// Enter a word: run a primitive inline, or push a frame and jump into a colon
+// (and dispatch data words). Works both as a top-level entry (idle VM) and as
+// a runtime call from inside vm_step.
+RITE vm_enter(xt) {
+    BIRTH e WITH entry(xt);
+    BIRTH k WITH e.kind;
+    SHOULD k == "prim" { run_prim(e.prim); BEQUEATH VOID; }
+    SHOULD k == "colon" {
+        G_CALLS = APPEND(G_CALLS, {code: G_VM_CODE, ip: G_VM_IP});
+        G_VM_CODE = e.code;
+        G_VM_IP = 0;
+        BEQUEATH VOID;
+    }
+    SHOULD k == "const" { push(e.body); BEQUEATH VOID; }
+    SHOULD k == "var" { push(e.body); BEQUEATH VOID; }
+    SHOULD k == "create" {
+        push(e.body);
+        SHOULD e.does != VOID {
+            // does is {code, start}: indices stay absolute in the defining
+            // word's code array, so branch targets remain valid.
+            G_CALLS = APPEND(G_CALLS, {code: G_VM_CODE, ip: G_VM_IP});
+            G_VM_CODE = e.does.code;
+            G_VM_IP = e.does.start;
+        }
+        BEQUEATH VOID;
+    }
+    CONDEMN "cannot execute word kind: " + k;
+}
+
+// Return from the current colon (the EXIT runtime behaviour).
+RITE vm_exit() {
+    BIRTH n WITH LENGTH(G_CALLS);
+    SHOULD n <= 0 { G_VM_CODE = VOID; BEQUEATH VOID; }
+    BIRTH f WITH G_CALLS[n - 1];
+    G_CALLS = SLICE(G_CALLS, 0, n - 1);
+    G_VM_CODE = f.code;
+    G_VM_IP = f.ip;
+}
+
+// Execute one VM instruction cell.
+RITE vm_step() {
+    BIRTH cell WITH G_VM_CODE[G_VM_IP];
+    G_VM_IP = G_VM_IP + 1;
+    BIRTH op WITH cell.op;
+    SHOULD op == "call" { vm_enter(cell.xt); BEQUEATH VOID; }
+    SHOULD op == "lit" { push(cell.n); BEQUEATH VOID; }
+    SHOULD op == "exit" { vm_exit(); BEQUEATH VOID; }
+    SHOULD op == "branch" { G_VM_IP = cell.t; BEQUEATH VOID; }
+    SHOULD op == "0branch" {
+        SHOULD pop() == 0 { G_VM_IP = cell.t; }
+        BEQUEATH VOID;
+    }
+    vm_step_ctl(cell, op);          // loops & strings (Phase 4/6)
+}
+
+// Top-level execution of an xt from the interpreter (VM is idle here).
+RITE execute_xt(xt) {
+    vm_enter(xt);
+}
+
+// --- the colon compiler -----------------------------------------------------
+RITE ccompile(cell) {
+    G_CCODE = APPEND(G_CCODE, cell);
+}
+RITE compile_xt(xt) {
+    ccompile({op: "call", xt: xt});
+}
+RITE compile_literal(n) {
+    ccompile({op: "lit", n: s32(n)});
+}
+RITE here_code() {              // current compile position (for branch patching)
+    BEQUEATH LENGTH(G_CCODE);
+}
+
+RITE begin_def() {
+    BIRTH name WITH parse_name();
+    SHOULD name == "" { CONDEMN "attempt to define nameless word"; }
+    G_CCODE = [];
+    BIRTH xt WITH dict_add({name: name, imm: 0, kind: "colon", prim: "",
+                            code: [], body: 0, does: VOID, hidden: 1});
+    G_CURRENT_XT = xt;
+    store(SYSV_STATE, -1);
+}
+RITE end_def() {
+    ccompile({op: "exit"});
+    BIRTH e WITH entry(G_CURRENT_XT);
+    set_entry(G_CURRENT_XT, SET(e, "code", G_CCODE));
+    reveal(G_CURRENT_XT);
+    store(SYSV_STATE, 0);
+    G_CURRENT_XT = -1;
+}

@@ -1,0 +1,176 @@
+// ===========================================================================
+// 60_interp : input source, tokenizer, number parsing, and the outer
+//             interpreter loop (driven by the batched-recursion trampoline).
+//
+// The current source line lives both in G_CURLINE (a !~ATH string, for fast
+// parsing) and copied into the TIB region of G_MEM (so SOURCE yields a real
+// address). >IN and the source length are system variables in G_MEM.
+// ===========================================================================
+
+BIRTH G_LINES WITH [];     // all input lines
+BIRTH G_LINEIDX WITH -1;   // index of current line (-1 before first refill)
+BIRTH G_CURLINE WITH "";   // current line text
+BIRTH G_SRC_ADDR WITH 256; // address of current source text (TIB_ADDR default)
+BIRTH G_DONE WITH 0;
+
+ENTOMB BATCH WITH 512;
+
+RITE toin() { BEQUEATH fetch(SYSV_TOIN); }
+RITE set_toin(v) { store(SYSV_TOIN, v); }
+RITE srclen() { BEQUEATH fetch(SYSV_SRCLEN); }
+RITE compiling() { BEQUEATH fetch(SYSV_STATE) != 0; }
+
+// Load the next input line into TIB + G_CURLINE. Returns ALIVE on success.
+RITE refill() {
+    G_LINEIDX = G_LINEIDX + 1;
+    SHOULD G_LINEIDX >= LENGTH(G_LINES) { BEQUEATH DEAD; }
+    BIRTH line WITH G_LINES[G_LINEIDX];
+    G_CURLINE = line;
+    G_SRC_ADDR = TIB_ADDR;
+    str_to_mem(TIB_ADDR, line);
+    store(SYSV_SRCLEN, LENGTH(line));
+    set_toin(0);
+    BEQUEATH ALIVE;
+}
+
+RITE is_space(code) {
+    BEQUEATH code == 32 OR code == 9 OR code == 13 OR code == 10;
+}
+
+// Parse the next blank-delimited token from the current line, advancing >IN.
+// Returns "" at end of line.
+RITE parse_name() {
+    BIRTH len WITH srclen();
+    BIRTH i WITH skip_spaces(toin(), len);
+    BIRTH start WITH i;
+    BIRTH e WITH scan_word(i, len);
+    // Consume the single trailing delimiter, like a standard text interpreter,
+    // so words that PARSE immediately (WORD, S", CHAR ...) see content directly.
+    SHOULD e < len { set_toin(e + 1); } LEST { set_toin(len); }
+    BEQUEATH SUBSTRING(G_CURLINE, start, e);
+}
+RITE skip_spaces(i, len) {
+    SHOULD i >= len { BEQUEATH i; }
+    SHOULD is_space(CODE(G_CURLINE[i])) { BEQUEATH skip_spaces(i + 1, len); }
+    BEQUEATH i;
+}
+RITE scan_word(i, len) {
+    SHOULD i >= len { BEQUEATH i; }
+    SHOULD is_space(CODE(G_CURLINE[i])) { BEQUEATH i; }
+    BEQUEATH scan_word(i + 1, len);
+}
+
+// Parse text up to (and consuming) the delimiter character `delim`.
+// Returns the text between >IN and the delimiter; advances >IN past delim.
+RITE parse_until(delim) {
+    BIRTH len WITH srclen();
+    BIRTH start WITH toin();
+    BIRTH e WITH scan_until(start, len, delim);
+    BIRTH text WITH SUBSTRING(G_CURLINE, start, e);
+    SHOULD e < len { set_toin(e + 1); } LEST { set_toin(len); }
+    BEQUEATH text;
+}
+RITE scan_until(i, len, delim) {
+    SHOULD i >= len { BEQUEATH i; }
+    SHOULD CODE(G_CURLINE[i]) == delim { BEQUEATH i; }
+    BEQUEATH scan_until(i + 1, len, delim);
+}
+
+// --- number parsing ---------------------------------------------------------
+RITE digit_val(c) {
+    BIRTH d WITH CODE(UPPERCASE(c));
+    SHOULD d >= 48 AND d <= 57 { BEQUEATH d - 48; }
+    SHOULD d >= 65 AND d <= 90 { BEQUEATH d - 55; }
+    BEQUEATH -1;
+}
+// Returns {ok: BOOLEAN, val: INTEGER}.
+RITE parse_number(tok) {
+    BIRTH n WITH LENGTH(tok);
+    SHOULD n == 0 { BEQUEATH {ok: DEAD, val: 0}; }
+    BIRTH neg WITH 0;
+    BIRTH start WITH 0;
+    SHOULD tok[0] == "-" {
+        SHOULD n == 1 { BEQUEATH {ok: DEAD, val: 0}; }
+        neg = 1; start = 1;
+    }
+    BIRTH base WITH cur_base();
+    BEQUEATH parse_digits(tok, start, n, base, neg, 0);
+}
+RITE parse_digits(tok, i, n, base, neg, acc) {
+    SHOULD i >= n {
+        SHOULD neg == 1 { BEQUEATH {ok: ALIVE, val: s32(0 - acc)}; }
+        BEQUEATH {ok: ALIVE, val: s32(acc)};
+    }
+    BIRTH d WITH digit_val(tok[i]);
+    SHOULD d < 0 OR d >= base { BEQUEATH {ok: DEAD, val: 0}; }
+    BEQUEATH parse_digits(tok, i + 1, n, base, neg, acc * base + d);
+}
+
+// --- interpret one token ----------------------------------------------------
+RITE interpret_word(tok) {
+    BIRTH xt WITH find(tok);
+    SHOULD xt != 0 {
+        SHOULD compiling() AND NOT is_immediate(xt) {
+            compile_xt(xt);
+        } LEST {
+            execute_xt(xt);
+        }
+        BEQUEATH VOID;
+    }
+    BIRTH num WITH parse_number(tok);
+    SHOULD num.ok {
+        SHOULD compiling() { compile_literal(num.val); } LEST { push(num.val); }
+        BEQUEATH VOID;
+    }
+    CONDEMN tok + " ?";
+}
+
+// One interpreter step: parse + handle a token, refilling at end of line.
+RITE step_interp() {
+    BIRTH tok WITH parse_name();
+    SHOULD tok == "" {
+        SHOULD NOT refill() { G_DONE = 1; }
+        BEQUEATH VOID;
+    }
+    interpret_word(tok);
+}
+
+// Reset interpreter/VM state after an uncaught error and abandon the line.
+RITE reset_after_error(err) {
+    emit_str("\n" + err + "\n");
+    clear_stacks();
+    G_VM_CODE = VOID;
+    G_CALLS = [];
+    G_CCODE = [];
+    G_CURRENT_XT = -1;
+    store(SYSV_STATE, 0);
+    set_toin(srclen());
+}
+
+// One scheduler step: advance the VM if running, else interpret a token.
+RITE scheduler_step() {
+    ATTEMPT {
+        SHOULD vm_active() { vm_step(); } LEST { step_interp(); }
+    } SALVAGE err {
+        reset_after_error(err);
+    }
+}
+
+// --- the trampoline driver --------------------------------------------------
+RITE run_batch(k) {
+    SHOULD k <= 0 { BEQUEATH VOID; }
+    SHOULD G_DONE == 1 { BEQUEATH VOID; }
+    scheduler_step();
+    BEQUEATH run_batch(k - 1);
+}
+RITE driver() {
+    SHOULD G_DONE == 1 {
+        flush_all();
+        THIS.DIE();
+        BEQUEATH VOID;
+    }
+    run_batch(BATCH);
+    import timer T(1);
+    ~ATH(T) {
+    } EXECUTE(driver());
+}

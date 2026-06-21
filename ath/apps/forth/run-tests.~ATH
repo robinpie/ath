@@ -1,0 +1,90 @@
+// ===========================================================================
+// run-tests.~ATH : the Forth 2012 CORE test runner, written in !~ATH.
+//
+// It spawns the built ./forth interpreter on tester.fr + core.fr (the run
+// itself dies as a `process` entity we ~ATH on), then SCRYs the captured
+// output and checks the suite's own #ERRORS counter plus undefined-word /
+// stack-error markers.
+//
+// !~ATH `process` entities can't be fed stdin directly, so the cat|forth pipe
+// is delegated to `sh -c`. Run from this directory (./forth must be built):
+//
+//   ../../transpiler-to-c/athtoc-bin < run-tests.~ATH > run-tests.c
+//   gcc -std=c89 run-tests.c $(ls ../../transpiler-to-c/runtime/*.c \
+//       | grep -v test_runtime.c) -I../../transpiler-to-c/runtime -ldl -lffi \
+//       -o run-tests && ./run-tests
+// ===========================================================================
+
+ENTOMB SUITE WITH "/tmp/forth2012-test-suite/src";
+ENTOMB FORTH WITH "./forth";
+ENTOMB OUTFILE WITH "/tmp/forth-core-out.txt";
+
+RITE q(s) {
+    BEQUEATH "'" + s + "'";
+}
+
+// Count non-overlapping occurrences of `sub` in `s`.
+RITE count_occ(s, sub) {
+    BEQUEATH LENGTH(SPLIT(s, sub)) - 1;
+}
+
+// Value printed after the last "#ERRORS=" marker, as a string ("?" if absent).
+RITE extract_errors(out) {
+    BIRTH parts WITH SPLIT(out, "#ERRORS=");
+    SHOULD LENGTH(parts) < 2 { BEQUEATH "?"; }
+    BIRTH rest WITH TRIM(parts[LENGTH(parts) - 1]);
+    BEQUEATH SPLIT(rest, " ")[0];
+}
+
+// Print array entries [i, n).
+RITE print_range(arr, i, n) {
+    SHOULD i >= n { BEQUEATH VOID; }
+    UTTER(arr[i]);
+    BEQUEATH print_range(arr, i + 1, n);
+}
+
+RITE report() {
+    BIRTH out WITH SCRY(OUTFILE);
+
+    UTTER("----- core.fr output (tail) -----");
+    BIRTH lines WITH SPLIT(out, "\n");
+    BIRTH n WITH LENGTH(lines);
+    BIRTH start WITH n - 6;
+    SHOULD start < 0 { start = 0; }
+    print_range(lines, start, n);
+    UTTER("---------------------------------");
+
+    BIRTH errs WITH extract_errors(out);
+    BIRTH problems WITH count_occ(out, "INCORRECT RESULT")
+                       + count_occ(out, "WRONG NUMBER")
+                       + count_occ(out, "underflow")
+                       + count_occ(out, "out of bounds")
+                       + count_occ(out, "unimplemented");
+
+    UTTER("suite #ERRORS : " + errs);
+    UTTER("other problems: " + STRING(problems));
+
+    SHOULD errs == "0" AND problems == 0 {
+        UTTER("RESULT: PASS (all CORE tests passed)");
+    } LEST {
+        UTTER("RESULT: FAIL");
+    }
+}
+
+RITE main() {
+    // { cat tester.fr core.fr; printf '...#ERRORS print...'; } | ./forth > out 2>&1
+    BIRTH cmd WITH "{ cat " + q(SUITE + "/tester.fr") + " " + q(SUITE + "/core.fr")
+        + "; printf " + q("\\nCR .( #ERRORS=) #ERRORS @ . CR\\n") + "; } | "
+        + q(FORTH) + " > " + q(OUTFILE) + " 2>&1";
+
+    UTTER("running CORE suite (" + SUITE + ") ...");
+    import process P("sh", "-c", cmd);
+    ~ATH(P) {
+    } EXECUTE(
+        report()
+    );
+
+    THIS.DIE();
+}
+
+main();

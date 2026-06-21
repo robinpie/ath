@@ -1,0 +1,125 @@
+// ===========================================================================
+// 56_numbers : double-cell arithmetic helpers, pictured numeric output state,
+//              >NUMBER, and the EVALUATE machinery.
+//
+// A double-cell number is two cells on the data stack: low then high (high on
+// top). Because cells are 32-bit, a double fits a native 64-bit long, except
+// full-range UNSIGNED doubles (>= 2^63) -- those are handled with limb math.
+// ===========================================================================
+
+BIRTH G_HP WITH 5120;      // HOLD pointer (HOLD_END); fills downward
+
+// unsigned (lo,hi) / base -> {qlo, qhi, r}   (base <= 36)
+RITE ud_divmod(lo, hi, base) {
+    BIRTH ahi WITH mask32(hi);
+    BIRTH alo WITH mask32(lo);
+    BIRTH qhi WITH ahi / base;
+    BIRTH rem WITH ahi % base;
+    BIRTH temp WITH rem * U32 + alo;
+    BEQUEATH {qlo: s32(temp / base), qhi: s32(qhi), r: temp % base};
+}
+// unsigned (lo,hi) * base + d -> {lo, hi}
+RITE ud_muladd(lo, hi, base, d) {
+    BIRTH tlo WITH mask32(lo) * base + d;
+    BIRTH newlo WITH tlo & U32MASK;
+    BIRTH carry WITH tlo >> 32;
+    BIRTH thi WITH mask32(hi) * base + carry;
+    BEQUEATH {lo: s32(newlo), hi: s32(thi & U32MASK)};
+}
+// unsigned 64-bit (lo,hi) / 32-bit d -> {q, r} via bitwise long division.
+RITE um_divmod(lo, hi, d) {
+    BEQUEATH um_div_bit(63, 0, 0, mask32(lo), mask32(hi), mask32(d));
+}
+RITE um_div_bit(i, rem, quot, lo, hi, d) {
+    SHOULD i < 0 { BEQUEATH {q: quot, r: rem}; }
+    BIRTH bit WITH 0;
+    SHOULD i < 32 { bit = (lo >> i) & 1; } LEST { bit = (hi >> (i - 32)) & 1; }
+    BIRTH r2 WITH (rem << 1) | bit;
+    SHOULD r2 >= d { BEQUEATH um_div_bit(i - 1, r2 - d, quot | bit_shift(i), lo, hi, d); }
+    BEQUEATH um_div_bit(i - 1, r2, quot, lo, hi, d);
+}
+RITE bit_shift(i) { BEQUEATH 1 << i; }
+
+// signed double (lo,hi) as a native signed long
+RITE dval(lo, hi) { BEQUEATH mask32(lo) + s32(hi) * U32; }
+
+// --- EVALUATE ---------------------------------------------------------------
+// Make the string at (addr, u) the input source. SOURCE must report the SAME
+// address (GS1 relies on this), so we point G_SRC_ADDR at addr -- no copy.
+RITE do_evaluate(addr, u) {
+    BIRTH s_line WITH G_CURLINE;
+    BIRTH s_addr WITH G_SRC_ADDR;
+    BIRTH s_toin WITH fetch(SYSV_TOIN);
+    BIRTH s_len WITH fetch(SYSV_SRCLEN);
+    BIRTH s_code WITH G_VM_CODE;
+    BIRTH s_ip WITH G_VM_IP;
+    BIRTH s_calls WITH G_CALLS;
+
+    G_CURLINE = mem_to_str(addr, u);
+    G_SRC_ADDR = addr;
+    store(SYSV_SRCLEN, u);
+    store(SYSV_TOIN, 0);
+    G_VM_CODE = VOID;
+    G_CALLS = [];
+
+    ATTEMPT {
+        eval_run();
+    } SALVAGE err {
+        // restore source/VM, then re-raise so the outer handler reports it
+        G_VM_CODE = s_code; G_VM_IP = s_ip; G_CALLS = s_calls;
+        G_CURLINE = s_line; G_SRC_ADDR = s_addr;
+        store(SYSV_SRCLEN, s_len); store(SYSV_TOIN, s_toin);
+        CONDEMN err;
+    }
+
+    G_VM_CODE = s_code; G_VM_IP = s_ip; G_CALLS = s_calls;
+    G_CURLINE = s_line; G_SRC_ADDR = s_addr;
+    store(SYSV_SRCLEN, s_len); store(SYSV_TOIN, s_toin);
+}
+// Run the (single-line) EVALUATE source to completion. Bounded recursion --
+// fine for the short strings the test suite evaluates.
+RITE eval_run() {
+    SHOULD vm_active() { vm_step(); BEQUEATH eval_run(); }
+    BIRTH tok WITH parse_name();
+    SHOULD tok == "" { BEQUEATH VOID; }
+    interpret_word(tok);
+    BEQUEATH eval_run();
+}
+
+// Parse to delim. parse_name already consumed the single delimiting space
+// after the parsing word, so no extra skip is needed here.
+RITE parse_string_arg(delim) {
+    BEQUEATH parse_until(delim);
+}
+
+// --- pictured numeric output helpers ----------------------------------------
+RITE hold_char(c) {
+    G_HP = G_HP - 1;
+    c_store(G_HP, c);
+}
+RITE do_hash(lo, hi) {
+    BIRTH r WITH ud_divmod(lo, hi, cur_base());
+    hold_char(CODE(digit_char(r.r)));
+    BEQUEATH {lo: r.qlo, hi: r.qhi};
+}
+RITE do_hash_s(lo, hi) {
+    BIRTH t WITH do_hash(lo, hi);
+    SHOULD t.lo == 0 AND t.hi == 0 { BEQUEATH VOID; }
+    BEQUEATH do_hash_s(t.lo, t.hi);
+}
+
+// >NUMBER conversion loop. Returns {lo, hi, addr, u}.
+RITE to_number(lo, hi, addr, u) {
+    SHOULD u <= 0 { BEQUEATH {lo: lo, hi: hi, addr: addr, u: u}; }
+    BIRTH dv WITH digit_val(CHAR(c_fetch(addr)));
+    SHOULD dv < 0 OR dv >= cur_base() { BEQUEATH {lo: lo, hi: hi, addr: addr, u: u}; }
+    BIRTH nn WITH ud_muladd(lo, hi, cur_base(), dv);
+    BEQUEATH to_number(nn.lo, nn.hi, addr + 1, u - 1);
+}
+
+// WORD: skip leading delimiters from i.
+RITE wskip(i, len, delim) {
+    SHOULD i >= len { BEQUEATH i; }
+    SHOULD CODE(G_CURLINE[i]) == delim { BEQUEATH wskip(i + 1, len, delim); }
+    BEQUEATH i;
+}

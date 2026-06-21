@@ -1,0 +1,94 @@
+// ===========================================================================
+// 10_memory : the single byte-addressed data space (one BUFFER).
+//
+// Every Forth address is an integer offset into G_MEM. Low addresses are
+// reserved for transient regions so their addresses are real and stable:
+//
+//   TIB_ADDR    256..1279   terminal input buffer (current source line copy)
+//   PAD_ADDR   1536..2559   PAD scratch
+//   SSCRATCH   2560..3583   S" interpret-mode transient
+//   WORDBUF    3584..4095   WORD counted-string buffer
+//   SYSV_*     4096..4111   system VARIABLEs (BASE, STATE, >IN, #src)
+//   HOLD       4608..5119   numeric-output HOLD buffer (fills down from HOLD_END)
+//   EVALBUF    5120..7167   EVALUATE source copy (so SOURCE has a real address)
+//   DICT_START 8192..       HERE / general data space (CREATE, VARIABLE, ,)
+// ===========================================================================
+
+ENTOMB MEMSIZE WITH 1048576;       // 1 MiB data space
+BIRTH G_MEM WITH BUFFER(MEMSIZE);
+
+ENTOMB CELL WITH 4;
+
+ENTOMB TIB_ADDR  WITH 256;
+ENTOMB TIB_SIZE  WITH 1024;
+ENTOMB PAD_ADDR  WITH 1536;
+ENTOMB PAD_SIZE  WITH 1024;
+ENTOMB SSCRATCH  WITH 2560;        // S" interpret-mode transient
+ENTOMB WORDBUF   WITH 3584;        // WORD counted-string buffer
+ENTOMB SYSV_BASE WITH 4096;        // BASE variable cell
+ENTOMB SYSV_STATE WITH 4100;       // STATE variable cell
+ENTOMB SYSV_TOIN WITH 4104;        // >IN  (offset into current source)
+ENTOMB SYSV_SRCLEN WITH 4108;      // length of current source line
+ENTOMB HOLD_END  WITH 5120;        // HOLD buffer fills downward from here
+ENTOMB EVALBUF   WITH 5120;        // EVALUATE source copy
+ENTOMB DICT_START WITH 8192;       // HERE starts here
+
+BIRTH G_HERE WITH DICT_START;
+
+// --- raw byte access --------------------------------------------------------
+RITE c_fetch(addr) {
+    BEQUEATH BYTE_AT(G_MEM, addr);
+}
+RITE c_store(addr, v) {
+    SET_BYTE(G_MEM, addr, v & 255);
+}
+
+// --- cell access (little-endian, 4 bytes) -----------------------------------
+RITE fetch(addr) {
+    BIRTH b0 WITH BYTE_AT(G_MEM, addr);
+    BIRTH b1 WITH BYTE_AT(G_MEM, addr + 1);
+    BIRTH b2 WITH BYTE_AT(G_MEM, addr + 2);
+    BIRTH b3 WITH BYTE_AT(G_MEM, addr + 3);
+    BEQUEATH s32(b0 + b1 * 256 + b2 * 65536 + b3 * 16777216);
+}
+RITE store(addr, val) {
+    BIRTH m WITH mask32(val);
+    SET_BYTE(G_MEM, addr, m & 255);
+    SET_BYTE(G_MEM, addr + 1, (m >> 8) & 255);
+    SET_BYTE(G_MEM, addr + 2, (m >> 16) & 255);
+    SET_BYTE(G_MEM, addr + 3, (m >> 24) & 255);
+}
+
+// --- HERE / dictionary allocation -------------------------------------------
+RITE here() {
+    BEQUEATH G_HERE;
+}
+RITE allot(n) {
+    G_HERE = G_HERE + n;
+}
+RITE comma(x) {
+    store(G_HERE, x);
+    G_HERE = G_HERE + CELL;
+}
+RITE c_comma(x) {
+    c_store(G_HERE, x);
+    G_HERE = G_HERE + 1;
+}
+
+// Copy a !~ATH string's bytes into memory at addr; returns number of bytes.
+RITE str_to_mem(addr, s) {
+    BEQUEATH str_to_mem_at(addr, s, 0);
+}
+RITE str_to_mem_at(addr, s, i) {
+    SHOULD i >= LENGTH(s) { BEQUEATH i; }
+    c_store(addr + i, CODE(s[i]));
+    BEQUEATH str_to_mem_at(addr, s, i + 1);
+}
+// Read u bytes from memory at addr into a !~ATH string.
+RITE mem_to_str(addr, u) {
+    BEQUEATH mem_to_str_at(addr, u, 0, "");
+}
+RITE mem_to_str_at(addr, u, i, acc) {
+    SHOULD i >= u { BEQUEATH acc; }
+    BEQUEATH mem_to_str_at(addr, u, i + 1, acc + CHAR(BYTE_AT(G_MEM, addr + i)));
+}
