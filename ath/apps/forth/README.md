@@ -63,6 +63,6 @@ gcc -std=c89 run-tests.c $(ls $tpc/runtime/*.c | grep -v test_runtime.c) \
 
 ## Scope & limitations
 
-- Targets the CORE word set. Core-Extension and optional word sets may be implemented later
+- Targets the CORE word set. Core-Extension and optional word sets may be implemented later.
 - `ACCEPT` is interactive; in batch mode it accepts 0 characters (the suite's ACCEPT test is a visual one and passes trivially).
 - Cells are 32-bit (the test suite computes cell width at runtime, so this works), and division is floored (the suite adapts via `IFFLOORED`).
