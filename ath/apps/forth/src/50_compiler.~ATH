@@ -37,6 +37,19 @@ RITE vm_enter(xt) {
     }
     SHOULD k == "const" { push(e.body); BEQUEATH VOID; }
     SHOULD k == "var" { push(e.body); BEQUEATH VOID; }
+    SHOULD k == "value" { push(fetch(e.body)); BEQUEATH VOID; }
+    SHOULD k == "defer" {
+        BIRTH t WITH fetch(e.body);
+        SHOULD t == 0 { CONDEMN "uninitialised DEFER"; }
+        vm_enter(t); BEQUEATH VOID;
+    }
+    SHOULD k == "marker" {
+        BIRTH snap WITH e.does;
+        G_WORDS = SLICE(G_WORDS, 0, snap.words);
+        G_NAMES = snap.names;
+        G_HERE = snap.here;
+        BEQUEATH VOID;
+    }
     SHOULD k == "create" {
         push(e.body);
         SHOULD e.does != VOID {
@@ -104,6 +117,17 @@ RITE begin_def() {
                             code: [], body: 0, does: VOID, hidden: 1});
     G_CURRENT_XT = xt;
     store(SYSV_STATE, -1);
+}
+// :NONAME -- start an unnamed colon definition; returns its xt (left on the
+// stack by the caller). Not registered in G_NAMES, so it is reachable only via
+// the returned xt.
+RITE begin_noname() {
+    G_CCODE = [];
+    BIRTH xt WITH dict_add({name: "", imm: 0, kind: "colon", prim: "",
+                            code: [], body: 0, does: VOID, hidden: 1});
+    G_CURRENT_XT = xt;
+    store(SYSV_STATE, -1);
+    BEQUEATH xt;
 }
 RITE end_def() {
     ccompile({op: "exit"});

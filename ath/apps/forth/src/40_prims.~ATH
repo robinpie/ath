@@ -85,6 +85,12 @@ RITE run_prim(sel) {
     SHOULD sel == "2OVER" {
         BIRTH a WITH pick(3); BIRTH b WITH pick(2); push(a); push(b); BEQUEATH VOID;
     }
+    SHOULD sel == "NIP" { BIRTH b WITH pop(); pop(); push(b); BEQUEATH VOID; }
+    SHOULD sel == "TUCK" {
+        BIRTH b WITH pop(); BIRTH a WITH pop(); push(b); push(a); push(b); BEQUEATH VOID;
+    }
+    SHOULD sel == "PICK" { BIRTH n WITH pop(); push(pick(n)); BEQUEATH VOID; }
+    SHOULD sel == "ROLL" { ds_roll(pop()); BEQUEATH VOID; }
 
     // ---- arithmetic ----
     SHOULD sel == "+" { BIRTH b WITH pop(); push(s32(pop() + b)); BEQUEATH VOID; }
@@ -137,6 +143,12 @@ RITE run_prim(sel) {
     SHOULD sel == "U>" {
         BIRTH b WITH mask32(pop()); BIRTH a WITH mask32(pop()); push(flag(a > b)); BEQUEATH VOID;
     }
+    SHOULD sel == "<>" { BIRTH b WITH pop(); push(flag(pop() != b)); BEQUEATH VOID; }
+    SHOULD sel == "0<>" { push(flag(pop() != 0)); BEQUEATH VOID; }
+    SHOULD sel == "WITHIN" {
+        BIRTH hi WITH pop(); BIRTH lo WITH pop(); BIRTH t WITH pop();
+        push(flag(mask32(t - lo) < mask32(hi - lo))); BEQUEATH VOID;
+    }
 
     // ---- bitwise ----
     SHOULD sel == "AND" { BIRTH b WITH pop(); push(s32(pop() & b)); BEQUEATH VOID; }
@@ -181,6 +193,11 @@ RITE run_prim(sel) {
     SHOULD sel == "MOVE" {
         BIRTH u WITH pop(); BIRTH d WITH pop(); BIRTH s WITH pop(); move_mem(s, d, u); BEQUEATH VOID;
     }
+    SHOULD sel == "ERASE" {
+        BIRTH u WITH pop(); BIRTH a WITH pop(); fill_mem(a, u, 0); BEQUEATH VOID;
+    }
+    SHOULD sel == "PAD" { push(PAD_ADDR); BEQUEATH VOID; }
+    SHOULD sel == "UNUSED" { push(MEMSIZE - here()); BEQUEATH VOID; }
 
     // ---- I/O ----
     SHOULD sel == "." {
@@ -197,6 +214,14 @@ RITE run_prim(sel) {
     SHOULD sel == "TYPE" {
         BIRTH u WITH pop(); BIRTH a WITH pop(); emit_str(mem_to_str(a, u)); BEQUEATH VOID;
     }
+    SHOULD sel == ".R" {
+        BIRTH w WITH pop(); BIRTH s WITH fmt_signed(pop(), cur_base());
+        emit_spaces(w - LENGTH(s)); emit_str(s); BEQUEATH VOID;
+    }
+    SHOULD sel == "U.R" {
+        BIRTH w WITH pop(); BIRTH s WITH fmt_unsigned(mask32(pop()), cur_base());
+        emit_spaces(w - LENGTH(s)); emit_str(s); BEQUEATH VOID;
+    }
 
     // ---- system variables / base ----
     SHOULD sel == "BASE" { push(SYSV_BASE); BEQUEATH VOID; }
@@ -205,11 +230,40 @@ RITE run_prim(sel) {
     SHOULD sel == "DECIMAL" { store(SYSV_BASE, 10); BEQUEATH VOID; }
     SHOULD sel == ">IN" { push(SYSV_TOIN); BEQUEATH VOID; }
     SHOULD sel == "SOURCE" { push(G_SRC_ADDR); push(srclen()); BEQUEATH VOID; }
+    SHOULD sel == "SOURCE-ID" { push(G_SRC_ID); BEQUEATH VOID; }
+    SHOULD sel == "REFILL" {
+        SHOULD G_SRC_ID == -1 { push(0); } LEST { push(flag(refill())); }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "PARSE" {
+        BIRTH delim WITH pop();
+        BIRTH len WITH srclen(); BIRTH start WITH toin();
+        BIRTH e WITH scan_until(start, len, delim);
+        push(G_SRC_ADDR + start); push(e - start);
+        SHOULD e < len { set_toin(e + 1); } LEST { set_toin(len); }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "PARSE-NAME" {
+        BIRTH len WITH srclen();
+        BIRTH start WITH skip_spaces(toin(), len);
+        BIRTH e WITH scan_word(start, len);
+        push(G_SRC_ADDR + start); push(e - start);
+        SHOULD e < len { set_toin(e + 1); } LEST { set_toin(len); }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "SAVE-INPUT" { push(toin()); push(1); BEQUEATH VOID; }
+    SHOULD sel == "RESTORE-INPUT" {
+        BIRTH n WITH pop();
+        BIRTH saved WITH restore_input_consume(n, 0);
+        set_toin(saved); push(0); BEQUEATH VOID;
+    }
 
     // ---- defining / executing ----
     SHOULD sel == ":" { begin_def(); BEQUEATH VOID; }
+    SHOULD sel == ":NONAME" { push(begin_noname()); BEQUEATH VOID; }
     SHOULD sel == ";" { end_def(); BEQUEATH VOID; }            // immediate
     SHOULD sel == "EXECUTE" { vm_enter(pop()); BEQUEATH VOID; }
+    SHOULD sel == "COMPILE," { compile_xt(pop()); BEQUEATH VOID; }
     SHOULD sel == "EXIT" { vm_exit(); BEQUEATH VOID; }
     SHOULD sel == "RECURSE" {                                   // immediate
         ccompile({op: "call", xt: G_CURRENT_XT}); BEQUEATH VOID;
@@ -237,6 +291,10 @@ RITE run_prim(sel) {
     SHOULD sel == "LOOP" { c_loop(); BEQUEATH VOID; }
     SHOULD sel == "+LOOP" { c_ploop(); BEQUEATH VOID; }
     SHOULD sel == "LEAVE" { c_leave(); BEQUEATH VOID; }
+    SHOULD sel == "CASE" { c_case(); BEQUEATH VOID; }
+    SHOULD sel == "OF" { c_of(); BEQUEATH VOID; }
+    SHOULD sel == "ENDOF" { c_endof(); BEQUEATH VOID; }
+    SHOULD sel == "ENDCASE" { c_endcase(); BEQUEATH VOID; }
 
     // ---- return stack / loop index (runtime) ----
     SHOULD sel == ">R" { rpush(pop()); BEQUEATH VOID; }
@@ -245,6 +303,13 @@ RITE run_prim(sel) {
     SHOULD sel == "I" { push(rpeek()); BEQUEATH VOID; }
     SHOULD sel == "J" { push(rpick(3)); BEQUEATH VOID; }
     SHOULD sel == "UNLOOP" { rpop(); rpop(); rpop(); BEQUEATH VOID; }
+    SHOULD sel == "2>R" {
+        BIRTH b WITH pop(); BIRTH a WITH pop(); rpush(a); rpush(b); BEQUEATH VOID;
+    }
+    SHOULD sel == "2R>" {
+        BIRTH b WITH rpop(); BIRTH a WITH rpop(); push(a); push(b); BEQUEATH VOID;
+    }
+    SHOULD sel == "2R@" { push(rpick(1)); push(rpick(0)); BEQUEATH VOID; }
 
     // ---- flags ----
     SHOULD sel == "TRUE" { push(-1); BEQUEATH VOID; }
@@ -261,12 +326,33 @@ RITE run_prim(sel) {
         }
         BEQUEATH VOID;
     }
+    SHOULD sel == "S\\\"" {                                     // immediate
+        BIRTH codes WITH parse_escaped_string();
+        BIRTH n WITH LENGTH(codes);
+        SHOULD compiling() {
+            BIRTH a WITH here(); codes_to_mem(a, codes, 0); allot(n);
+            ccompile({op: "slit", addr: a, len: n});
+        } LEST {
+            codes_to_mem(SSCRATCH, codes, 0); push(SSCRATCH); push(n);
+        }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "HOLDS" {
+        BIRTH u WITH pop(); BIRTH a WITH pop(); holds_str(a, u); BEQUEATH VOID;
+    }
     SHOULD sel == ".\"" {                                       // immediate
         BIRTH text WITH parse_string_arg(34);
         SHOULD compiling() {
             BIRTH a WITH here(); str_to_mem(a, text); allot(LENGTH(text));
             ccompile({op: "sprint", addr: a, len: LENGTH(text)});
         } LEST { emit_str(text); }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "C\"" {                                       // immediate
+        BIRTH text WITH parse_string_arg(34);
+        BIRTH a WITH here();
+        c_store(a, LENGTH(text)); str_to_mem(a + 1, text); allot(1 + LENGTH(text));
+        ccompile({op: "clit", addr: a});
         BEQUEATH VOID;
     }
     SHOULD sel == ".(" { emit_str(parse_string_arg(41)); BEQUEATH VOID; }  // immediate
@@ -396,6 +482,69 @@ RITE run_prim(sel) {
                   code: [], body: v, does: VOID, hidden: 0});
         BEQUEATH VOID;
     }
+    SHOULD sel == "VALUE" {
+        BIRTH nm WITH parse_name();
+        BIRTH v WITH pop();
+        BIRTH bd WITH here(); allot(CELL); store(bd, v);
+        dict_add({name: nm, imm: 0, kind: "value", prim: "",
+                  code: [], body: bd, does: VOID, hidden: 0});
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "TO" {                                        // immediate
+        BIRTH t WITH parse_name(); BIRTH x WITH find(t);
+        SHOULD x == 0 { CONDEMN t + " ?"; }
+        BIRTH bd WITH entry(x).body;
+        SHOULD compiling() { ccompile({op: "tostore", addr: bd}); }
+        LEST { store(bd, pop()); }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "BUFFER:" {
+        BIRTH nm WITH parse_name();
+        BIRTH n WITH pop();
+        BIRTH bd WITH here(); allot(n);
+        dict_add({name: nm, imm: 0, kind: "create", prim: "",
+                  code: [], body: bd, does: VOID, hidden: 0});
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "MARKER" {
+        BIRTH nm WITH parse_name();
+        // Snapshot dict + name map + HERE *before* adding the marker entry, so
+        // executing the marker also forgets the marker itself.
+        BIRTH snap WITH {words: LENGTH(G_WORDS), names: G_NAMES, here: G_HERE};
+        dict_add({name: nm, imm: 0, kind: "marker", prim: "",
+                  code: [], body: 0, does: snap, hidden: 0});
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "DEFER" {
+        BIRTH nm WITH parse_name();
+        BIRTH bd WITH here(); allot(CELL); store(bd, 0);
+        dict_add({name: nm, imm: 0, kind: "defer", prim: "",
+                  code: [], body: bd, does: VOID, hidden: 0});
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "DEFER!" {
+        BIRTH x1 WITH pop(); BIRTH x2 WITH pop();
+        store(entry(x1).body, x2); BEQUEATH VOID;
+    }
+    SHOULD sel == "DEFER@" {
+        push(fetch(entry(pop()).body)); BEQUEATH VOID;
+    }
+    SHOULD sel == "IS" {                                        // immediate
+        BIRTH t WITH parse_name(); BIRTH x WITH find(t);
+        SHOULD x == 0 { CONDEMN t + " ?"; }
+        BIRTH bd WITH entry(x).body;
+        SHOULD compiling() { ccompile({op: "tostore", addr: bd}); }
+        LEST { store(bd, pop()); }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "ACTION-OF" {                                 // immediate
+        BIRTH t WITH parse_name(); BIRTH x WITH find(t);
+        SHOULD x == 0 { CONDEMN t + " ?"; }
+        BIRTH bd WITH entry(x).body;
+        SHOULD compiling() { ccompile({op: "defetch", addr: bd}); }
+        LEST { push(fetch(bd)); }
+        BEQUEATH VOID;
+    }
     SHOULD sel == "DOES>" { ccompile({op: "does"}); BEQUEATH VOID; }    // immediate
     SHOULD sel == ">BODY" { push(entry(pop()).body); BEQUEATH VOID; }
     SHOULD sel == "IMMEDIATE" { make_immediate(G_LAST_DEF); BEQUEATH VOID; }
@@ -407,6 +556,12 @@ RITE run_prim(sel) {
         SHOULD x == 0 { CONDEMN t + " ?"; }
         SHOULD is_immediate(x) { ccompile({op: "call", xt: x}); }
         LEST { ccompile({op: "postpone", xt: x}); }
+        BEQUEATH VOID;
+    }
+    SHOULD sel == "[COMPILE]" {                                 // immediate
+        BIRTH t WITH parse_name(); BIRTH x WITH find(t);
+        SHOULD x == 0 { CONDEMN t + " ?"; }
+        ccompile({op: "call", xt: x});
         BEQUEATH VOID;
     }
 
@@ -424,28 +579,38 @@ RITE reg_imm(name) { new_prim(name, name, 1); }
 RITE register_prims() {
     reg("DUP"); reg("DROP"); reg("SWAP"); reg("OVER"); reg("ROT"); reg("?DUP");
     reg("DEPTH"); reg("2DROP"); reg("2DUP"); reg("2SWAP"); reg("2OVER");
+    reg("NIP"); reg("TUCK"); reg("PICK"); reg("ROLL");
     reg("+"); reg("-"); reg("*"); reg("/"); reg("MOD"); reg("/MOD");
     reg("*/"); reg("*/MOD"); reg("NEGATE"); reg("ABS"); reg("1+"); reg("1-");
     reg("2*"); reg("2/"); reg("MIN"); reg("MAX"); reg("S>D");
     reg("="); reg("<"); reg(">"); reg("0="); reg("0<"); reg("0>");
-    reg("U<"); reg("U>");
+    reg("U<"); reg("U>"); reg("<>"); reg("0<>"); reg("WITHIN");
     reg("AND"); reg("OR"); reg("XOR"); reg("INVERT"); reg("LSHIFT"); reg("RSHIFT");
     reg("@"); reg("!"); reg("C@"); reg("C!"); reg("+!"); reg("2@"); reg("2!");
     reg(","); reg("C,"); reg("HERE"); reg("ALLOT"); reg("CELL+"); reg("CELLS");
     reg("CHAR+"); reg("CHARS"); reg("ALIGN"); reg("ALIGNED"); reg("FILL"); reg("MOVE");
+    reg("ERASE"); reg("PAD"); reg("UNUSED");
     reg("."); reg("U."); reg("EMIT"); reg("CR"); reg("SPACE"); reg("SPACES");
-    reg("BL"); reg("TYPE");
+    reg("BL"); reg("TYPE"); reg(".R"); reg("U.R");
     reg("BASE"); reg("STATE"); reg("HEX"); reg("DECIMAL"); reg(">IN"); reg("SOURCE");
-    reg(":"); reg_imm(";"); reg("EXECUTE"); reg("EXIT"); reg_imm("RECURSE");
+    reg("SOURCE-ID"); reg("REFILL"); reg("PARSE"); reg("PARSE-NAME");
+    reg("SAVE-INPUT"); reg("RESTORE-INPUT");
+    reg(":"); reg_imm(";"); reg("EXECUTE"); reg("COMPILE,"); reg("EXIT"); reg_imm("RECURSE");
     reg("'"); reg_imm("[']");
     reg_imm("IF"); reg_imm("ELSE"); reg_imm("THEN"); reg_imm("BEGIN");
     reg_imm("UNTIL"); reg_imm("AGAIN"); reg_imm("WHILE"); reg_imm("REPEAT");
     reg_imm("DO"); reg_imm("?DO"); reg_imm("LOOP"); reg_imm("+LOOP"); reg_imm("LEAVE");
+    reg_imm("CASE"); reg_imm("OF"); reg_imm("ENDOF"); reg_imm("ENDCASE");
+    reg(":NONAME"); reg_imm("C\""); reg_imm("[COMPILE]");
     reg(">R"); reg("R>"); reg("R@"); reg("I"); reg("J"); reg("UNLOOP");
+    reg("2>R"); reg("2R>"); reg("2R@");
     reg("CREATE"); reg("VARIABLE"); reg("CONSTANT"); reg_imm("DOES>"); reg(">BODY");
+    reg("VALUE"); reg_imm("TO"); reg("BUFFER:"); reg("MARKER");
+    reg("DEFER"); reg("DEFER!"); reg("DEFER@"); reg_imm("IS"); reg_imm("ACTION-OF");
     reg("IMMEDIATE"); reg_imm("["); reg("]"); reg_imm("LITERAL"); reg_imm("POSTPONE");
     reg("TRUE"); reg("FALSE");
-    reg_imm("S\""); reg_imm(".\""); reg_imm(".("); reg("CHAR"); reg_imm("[CHAR]");
+    reg_imm("S\""); reg_imm("S\\\""); reg_imm(".\""); reg_imm(".("); reg("CHAR"); reg_imm("[CHAR]");
+    reg("HOLDS");
     reg("WORD"); reg("COUNT"); reg("FIND");
     reg("<#"); reg("HOLD"); reg("#"); reg("#S"); reg("#>"); reg("SIGN"); reg(">NUMBER");
     reg("M*"); reg("UM*"); reg("UM/MOD"); reg("SM/REM"); reg("FM/MOD"); reg("EVALUATE");

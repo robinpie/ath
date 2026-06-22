@@ -11,6 +11,7 @@ BIRTH G_LINES WITH [];     // all input lines
 BIRTH G_LINEIDX WITH -1;   // index of current line (-1 before first refill)
 BIRTH G_CURLINE WITH "";   // current line text
 BIRTH G_SRC_ADDR WITH 256; // address of current source text (TIB_ADDR default)
+BIRTH G_SRC_ID WITH 0;     // SOURCE-ID: 0 = stdin/user, -1 = string (EVALUATE)
 BIRTH G_DONE WITH 0;
 
 ENTOMB BATCH WITH 512;
@@ -74,6 +75,78 @@ RITE scan_until(i, len, delim) {
     SHOULD i >= len { BEQUEATH i; }
     SHOULD CODE(G_CURLINE[i]) == delim { BEQUEATH i; }
     BEQUEATH scan_until(i + 1, len, delim);
+}
+
+// RESTORE-INPUT: pop `n` saved cells; return the last (deepest) one, which is
+// the >IN value SAVE-INPUT pushed first.
+RITE restore_input_consume(n, last) {
+    SHOULD n <= 0 { BEQUEATH last; }
+    BIRTH v WITH pop();
+    BEQUEATH restore_input_consume(n - 1, v);
+}
+
+// --- S\" escaped-string parsing (Forth 2012) --------------------------------
+// Scan G_CURLINE from >IN to the first unescaped '"', decoding escape sequences
+// into an array of byte codes; advance >IN past the closing quote. Returns the
+// array of codes (bytes may be 0/NUL, so a code array -- not a string).
+RITE parse_escaped_string() {
+    BIRTH r WITH esc_scan(toin(), srclen(), []);
+    set_toin(r.next);
+    BEQUEATH r.codes;
+}
+RITE esc_scan(i, len, acc) {
+    SHOULD i >= len { BEQUEATH {codes: acc, next: len}; }
+    BIRTH c WITH CODE(G_CURLINE[i]);
+    SHOULD c == 34 { BEQUEATH {codes: acc, next: i + 1}; }    // closing quote
+    SHOULD c == 92 { BEQUEATH esc_escape(i + 1, len, acc); } // backslash
+    BEQUEATH esc_scan(i + 1, len, APPEND(acc, c));
+}
+RITE esc_escape(i, len, acc) {
+    SHOULD i >= len { BEQUEATH {codes: acc, next: len}; }    // trailing backslash
+    BIRTH ec WITH G_CURLINE[i];
+    BIRTH lc WITH LOWERCASE(ec);
+    SHOULD lc == "x" { BEQUEATH esc_hex(i + 1, len, acc); }
+    SHOULD lc == "m" {                                        // CR/LF pair
+        BEQUEATH esc_scan(i + 1, len, APPEND(APPEND(acc, 13), 10));
+    }
+    BEQUEATH esc_scan(i + 1, len, APPEND(acc, esc_map(lc, ec)));
+}
+RITE esc_map(lc, ec) {
+    SHOULD lc == "a" { BEQUEATH 7; }
+    SHOULD lc == "b" { BEQUEATH 8; }
+    SHOULD lc == "e" { BEQUEATH 27; }
+    SHOULD lc == "f" { BEQUEATH 12; }
+    SHOULD lc == "l" { BEQUEATH 10; }
+    SHOULD lc == "n" { BEQUEATH 10; }     // newline (system-dependent value)
+    SHOULD lc == "q" { BEQUEATH 34; }
+    SHOULD lc == "r" { BEQUEATH 13; }
+    SHOULD lc == "t" { BEQUEATH 9; }
+    SHOULD lc == "v" { BEQUEATH 11; }
+    SHOULD lc == "z" { BEQUEATH 0; }
+    SHOULD ec == "\"" { BEQUEATH 34; }
+    SHOULD ec == "\\" { BEQUEATH 92; }
+    BEQUEATH CODE(ec);                     // unknown escape: the char itself
+}
+// \xHH : up to two hex digits, case-insensitive.
+RITE esc_hex(i, len, acc) {
+    BIRTH d1 WITH hex_digit_at(i, len);
+    SHOULD d1 < 0 { BEQUEATH esc_scan(i, len, APPEND(acc, 0)); }
+    BIRTH d2 WITH hex_digit_at(i + 1, len);
+    SHOULD d2 < 0 { BEQUEATH esc_scan(i + 1, len, APPEND(acc, d1)); }
+    BEQUEATH esc_scan(i + 2, len, APPEND(acc, d1 * 16 + d2));
+}
+RITE hex_digit_at(i, len) {
+    SHOULD i >= len { BEQUEATH -1; }
+    BIRTH d WITH CODE(UPPERCASE(G_CURLINE[i]));
+    SHOULD d >= 48 AND d <= 57 { BEQUEATH d - 48; }
+    SHOULD d >= 65 AND d <= 70 { BEQUEATH d - 55; }
+    BEQUEATH -1;
+}
+// Write an array of byte codes into memory at addr.
+RITE codes_to_mem(addr, codes, i) {
+    SHOULD i >= LENGTH(codes) { BEQUEATH VOID; }
+    c_store(addr + i, codes[i]);
+    BEQUEATH codes_to_mem(addr, codes, i + 1);
 }
 
 // --- number parsing ---------------------------------------------------------

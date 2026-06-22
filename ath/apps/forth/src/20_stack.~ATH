@@ -32,6 +32,16 @@ RITE pick(d) {
     SHOULD d >= n { CONDEMN "stack underflow"; }
     BEQUEATH G_DS[n - 1 - d];
 }
+// Remove the element at depth d and re-push it on top (ROLL). d==0 is a no-op.
+RITE ds_roll(d) {
+    BIRTH n WITH LENGTH(G_DS);
+    SHOULD d >= n { CONDEMN "stack underflow"; }
+    SHOULD d == 0 { BEQUEATH VOID; }
+    BIRTH idx WITH n - 1 - d;
+    BIRTH v WITH G_DS[idx];
+    G_DS = CONCAT(SLICE(G_DS, 0, idx), SLICE(G_DS, idx + 1, n));
+    G_DS = APPEND(G_DS, v);
+}
 
 RITE rpush(x) {
     G_RS = APPEND(G_RS, s32(x));

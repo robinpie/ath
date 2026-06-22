@@ -54,9 +54,11 @@ RITE do_evaluate(addr, u) {
     BIRTH s_code WITH G_VM_CODE;
     BIRTH s_ip WITH G_VM_IP;
     BIRTH s_calls WITH G_CALLS;
+    BIRTH s_id WITH G_SRC_ID;
 
     G_CURLINE = mem_to_str(addr, u);
     G_SRC_ADDR = addr;
+    G_SRC_ID = -1;
     store(SYSV_SRCLEN, u);
     store(SYSV_TOIN, 0);
     G_VM_CODE = VOID;
@@ -67,13 +69,13 @@ RITE do_evaluate(addr, u) {
     } SALVAGE err {
         // restore source/VM, then re-raise so the outer handler reports it
         G_VM_CODE = s_code; G_VM_IP = s_ip; G_CALLS = s_calls;
-        G_CURLINE = s_line; G_SRC_ADDR = s_addr;
+        G_CURLINE = s_line; G_SRC_ADDR = s_addr; G_SRC_ID = s_id;
         store(SYSV_SRCLEN, s_len); store(SYSV_TOIN, s_toin);
         CONDEMN err;
     }
 
     G_VM_CODE = s_code; G_VM_IP = s_ip; G_CALLS = s_calls;
-    G_CURLINE = s_line; G_SRC_ADDR = s_addr;
+    G_CURLINE = s_line; G_SRC_ADDR = s_addr; G_SRC_ID = s_id;
     store(SYSV_SRCLEN, s_len); store(SYSV_TOIN, s_toin);
 }
 // Run the (single-line) EVALUATE source to completion. Bounded recursion --
@@ -106,6 +108,13 @@ RITE do_hash_s(lo, hi) {
     BIRTH t WITH do_hash(lo, hi);
     SHOULD t.lo == 0 AND t.hi == 0 { BEQUEATH VOID; }
     BEQUEATH do_hash_s(t.lo, t.hi);
+}
+// HOLDS ( c-addr u -- ): prepend a string to the pictured-output buffer. HOLD
+// fills downward, so the chars are held from last to first.
+RITE holds_str(addr, u) {
+    SHOULD u <= 0 { BEQUEATH VOID; }
+    hold_char(c_fetch(addr + u - 1));
+    BEQUEATH holds_str(addr, u - 1);
 }
 
 // >NUMBER conversion loop. Returns {lo, hi, addr, u}.

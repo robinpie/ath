@@ -1,4 +1,4 @@
-This is a Forth 2012 CORE word-set interpreter written in !~ATH. It passes the Gerry Jackson Forth 2012 test suite's CORE tests.
+This is a Forth 2012 interpreter written in !~ATH, implementing the CORE and Core-Extension word sets. It passes the Gerry Jackson Forth 2012 test suite's CORE (`core.fr`) and Core-Extension (`coreexttest.fth`) tests.
 
 ## Building
 
@@ -23,7 +23,7 @@ cat tester.fr core.fr | ./forth
 
 ## Testing
 
-`run-tests.~ATH` is the CORE test runner.
+`run-tests.~ATH` is the test runner.
 
 Build and run it from this directory (`./forth` must already be built):
 
@@ -63,6 +63,7 @@ gcc -std=c89 run-tests.c $(ls $tpc/runtime/*.c | grep -v test_runtime.c) \
 
 ## Scope & limitations
 
-- Targets the CORE word set. Core-Extension and optional word sets may be implemented later.
+- Implements the CORE and Core-Extension word sets. Other optional word sets (Double, Exception, Facility, File, Locals, Memory, Tools, Search-order, String) may be implemented later.
+- Core-Ext `S\"` is supported in compilation mode (its interpretation semantics are undefined in Core Ext); `\m` expands to a CR/LF pair and `\xHH` to one byte. `SAVE-INPUT`/`RESTORE-INPUT` support a string (EVALUATE) source. `[COMPILE]` is provided though obsolescent in Forth 2012.
 - `ACCEPT` is interactive; in batch mode it accepts 0 characters (the suite's ACCEPT test is a visual one and passes trivially).
 - Cells are 32-bit (the test suite computes cell width at runtime, so this works), and division is floored (the suite adapts via `IFFLOORED`).

@@ -67,6 +67,35 @@ RITE c_leave() {
     ccompile({op: "leave"});
 }
 
+// CASE/OF/ENDOF/ENDCASE. The compile-time data stack holds the addresses of the
+// ENDOF forward branches accumulated so far, with a running count on top.
+RITE c_case() {
+    push(0);                       // count of pending ENDOF branches
+}
+RITE c_of() {
+    ccompile({op: "call", xt: find("OVER")});
+    ccompile({op: "call", xt: find("=")});
+    BIRTH m WITH here_code(); ccompile({op: "0branch", t: 0});
+    ccompile({op: "call", xt: find("DROP")});
+    push(m);                       // of-sys (above the count)
+}
+RITE c_endof() {
+    BIRTH ofm WITH pop();
+    BIRTH e WITH here_code(); ccompile({op: "branch", t: 0});
+    patch_target(ofm, here_code());
+    BIRTH cnt WITH pop();
+    push(e); push(cnt + 1);
+}
+RITE c_endcase() {
+    ccompile({op: "call", xt: find("DROP")});   // drop the case selector
+    endcase_patch(pop());
+}
+RITE endcase_patch(cnt) {
+    SHOULD cnt <= 0 { BEQUEATH VOID; }
+    patch_target(pop(), here_code());
+    BEQUEATH endcase_patch(cnt - 1);
+}
+
 // --- VM runtime for control / string cells ----------------------------------
 RITE ploop_done(old, new, limit, n) {
     SHOULD n >= 0 { BEQUEATH old < limit AND new >= limit; }
@@ -104,6 +133,15 @@ RITE vm_step_ctl(cell, op) {
     }
     SHOULD op == "slit" {            // Phase 6: push (addr, len) of a string
         push(cell.addr); push(cell.len); BEQUEATH VOID;
+    }
+    SHOULD op == "clit" {            // C" : push addr of a counted string
+        push(cell.addr); BEQUEATH VOID;
+    }
+    SHOULD op == "tostore" {         // TO / IS : store top into a fixed cell
+        store(cell.addr, pop()); BEQUEATH VOID;
+    }
+    SHOULD op == "defetch" {         // ACTION-OF : fetch from a fixed cell
+        push(fetch(cell.addr)); BEQUEATH VOID;
     }
     SHOULD op == "sprint" {          // Phase 6: print a compiled string
         emit_str(mem_to_str(cell.addr, cell.len)); BEQUEATH VOID;
