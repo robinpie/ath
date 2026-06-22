@@ -12,8 +12,6 @@ Version 0.1.0
 
 !^CAKE is purely declarative. A `.^CAKE` file contains recipes. `.^CAKE` files do not contain anything that executes. Recipes are eternal, unlike the mortality theme of !~ATH. The verbs that actually bake, fill, and read a buffer (`BAKE`, `SPRINKLE`, `SCOOP`, ...) live on the !~ATH side, as built-in rites that operate on a recipe once a `.^CAKE` file has been imported as a module.
 
-> Status: nothing is implemented yet. This document specifies the language; the two things it pins down exactly -- the layout algorithm and the captchalogue-code canonicalization -- are the parts that every implementation must reproduce bit-for-bit, because a code is only useful if two independent implementations agree on it.
-
 ---
 
 ## Lexical Structure
@@ -725,8 +723,6 @@ RECIPE Entity = Named && Placed;
 ---
 
 ## Implementation Notes
-
-!^CAKE is not yet implemented. When it is, the intended shape is:
 
 - A `.^CAKE` parser and layout/hash engine, callable by the !~ATH transpiler at watcher-module import time, exposing recipes as values and adding the built-in rites (`BAKE`, `SCOOP`, `SPRINKLE`, `CAPTCHA`, `SIZEOF`, `FLAVOR`, `PLATE`, `TASTE`, `UNPLATE`) to the runtime.
 - An extension to the foreign-session machinery that turns a recipe descriptor into an `ffi_type` element array, enabling by-value struct parameters and returns in `TRANSCRIBE`.
