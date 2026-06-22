@@ -56,7 +56,7 @@ RITE reveal(xt) {
     BIRTH e WITH entry(xt);
     BIRTH e2 WITH SET(e, "hidden", 0);
     set_entry(xt, e2);
-    G_NAMES = SET(G_NAMES, up(e.name), xt);
+    SHOULD e.name != "" { G_NAMES = SET(G_NAMES, up(e.name), xt); }
 }
 RITE make_immediate(xt) {
     set_entry(xt, SET(entry(xt), "imm", 1));

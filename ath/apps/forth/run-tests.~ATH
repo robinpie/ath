@@ -1,10 +1,10 @@
 // ===========================================================================
-// run-tests.~ATH : the Forth 2012 CORE test runner, written in !~ATH.
+// run-tests.~ATH : the Forth 2012 CORE + Core-Extension test runner, in !~ATH.
 //
-// It spawns the built ./forth interpreter on tester.fr + core.fr (the run
-// itself dies as a `process` entity we ~ATH on), then SCRYs the captured
-// output and checks the suite's own #ERRORS counter plus undefined-word /
-// stack-error markers.
+// It spawns the built ./forth interpreter on each suite (the runs die as
+// `process` entities we ~ATH on, chained), then SCRYs the captured output and
+// checks the suite's own error counter plus undefined-word / stack-error
+// markers.
 //
 // !~ATH `process` entities can't be fed stdin directly, so the cat|forth pipe
 // is delegated to `sh -c`. Run from this directory (./forth must be built):
@@ -17,7 +17,8 @@
 
 ENTOMB SUITE WITH "/tmp/forth2012-test-suite/src";
 ENTOMB FORTH WITH "./forth";
-ENTOMB OUTFILE WITH "/tmp/forth-core-out.txt";
+ENTOMB CORE_OUT WITH "/tmp/forth-core-out.txt";
+ENTOMB EXT_OUT WITH "/tmp/forth-coreext-out.txt";
 
 RITE q(s) {
     BEQUEATH "'" + s + "'";
@@ -28,9 +29,9 @@ RITE count_occ(s, sub) {
     BEQUEATH LENGTH(SPLIT(s, sub)) - 1;
 }
 
-// Value printed after the last "#ERRORS=" marker, as a string ("?" if absent).
-RITE extract_errors(out) {
-    BIRTH parts WITH SPLIT(out, "#ERRORS=");
+// Value printed after the last "<marker>" line, as a string ("?" if absent).
+RITE extract_after(out, marker) {
+    BIRTH parts WITH SPLIT(out, marker);
     SHOULD LENGTH(parts) < 2 { BEQUEATH "?"; }
     BIRTH rest WITH TRIM(parts[LENGTH(parts) - 1]);
     BEQUEATH SPLIT(rest, " ")[0];
@@ -43,10 +44,12 @@ RITE print_range(arr, i, n) {
     BEQUEATH print_range(arr, i + 1, n);
 }
 
-RITE report() {
-    BIRTH out WITH SCRY(OUTFILE);
+// Report on one suite's captured output. `marker` is the "<set>-ERRORS=" string
+// the suite was asked to print. Returns ALIVE on pass.
+RITE report(label, outfile, marker) {
+    BIRTH out WITH SCRY(outfile);
 
-    UTTER("----- core.fr output (tail) -----");
+    UTTER("----- " + label + " output (tail) -----");
     BIRTH lines WITH SPLIT(out, "\n");
     BIRTH n WITH LENGTH(lines);
     BIRTH start WITH n - 6;
@@ -54,34 +57,66 @@ RITE report() {
     print_range(lines, start, n);
     UTTER("---------------------------------");
 
-    BIRTH errs WITH extract_errors(out);
+    BIRTH errs WITH extract_after(out, marker);
     BIRTH problems WITH count_occ(out, "INCORRECT RESULT")
                        + count_occ(out, "WRONG NUMBER")
                        + count_occ(out, "underflow")
                        + count_occ(out, "out of bounds")
                        + count_occ(out, "unimplemented");
 
-    UTTER("suite #ERRORS : " + errs);
-    UTTER("other problems: " + STRING(problems));
+    UTTER(label + " suite errors : " + errs);
+    UTTER(label + " other problems: " + STRING(problems));
 
     SHOULD errs == "0" AND problems == 0 {
-        UTTER("RESULT: PASS (all CORE tests passed)");
-    } LEST {
-        UTTER("RESULT: FAIL");
+        UTTER("RESULT: PASS (" + label + ")");
+        BEQUEATH ALIVE;
     }
+    UTTER("RESULT: FAIL (" + label + ")");
+    BEQUEATH DEAD;
+}
+
+// Build a `cat ... | ./forth > out` shell command for a suite. `files` is the
+// space-joined list of suite filenames; `tail` is an extra printf snippet piped
+// in after the files (to print the error counter).
+RITE run_cmd(files, tail, outfile) {
+    BEQUEATH "{ cat " + files + "; printf " + q(tail) + "; } | "
+        + q(FORTH) + " > " + q(outfile) + " 2>&1";
+}
+
+RITE suite_files(names) {
+    BEQUEATH suite_files_from(names, 0, "");
+}
+RITE suite_files_from(names, i, acc) {
+    SHOULD i >= LENGTH(names) { BEQUEATH acc; }
+    BIRTH one WITH q(SUITE + "/" + names[i]);
+    SHOULD i == 0 { BEQUEATH suite_files_from(names, i + 1, one); }
+    BEQUEATH suite_files_from(names, i + 1, acc + " " + one);
 }
 
 RITE main() {
-    // { cat tester.fr core.fr; printf '...#ERRORS print...'; } | ./forth > out 2>&1
-    BIRTH cmd WITH "{ cat " + q(SUITE + "/tester.fr") + " " + q(SUITE + "/core.fr")
-        + "; printf " + q("\\nCR .( #ERRORS=) #ERRORS @ . CR\\n") + "; } | "
-        + q(FORTH) + " > " + q(OUTFILE) + " 2>&1";
+    BIRTH core_cmd WITH run_cmd(
+        suite_files(["tester.fr", "core.fr"]),
+        "\\nCR .( #ERRORS=) #ERRORS @ . CR\\n", CORE_OUT);
 
-    UTTER("running CORE suite (" + SUITE + ") ...");
-    import process P("sh", "-c", cmd);
+    // Core-Ext needs the harness, S= (utilities.fth) and the error counters
+    // (errorreport.fth); coreexttest resets #ERRORS, so read CORE-EXT-ERRORS.
+    BIRTH ext_cmd WITH run_cmd(
+        suite_files(["tester.fr", "core.fr", "utilities.fth",
+                     "errorreport.fth", "coreexttest.fth"]),
+        "\\nCR .( CORE-EXT-ERRORS=) CORE-EXT-ERRORS ERRORS[] + @ . CR\\n", EXT_OUT);
+
+    UTTER("running CORE suite ...");
+    import process P("sh", "-c", core_cmd);
     ~ATH(P) {
     } EXECUTE(
-        report()
+        report("CORE", CORE_OUT, "#ERRORS=");
+
+        UTTER("running Core-Extension suite ...");
+        import process E("sh", "-c", ext_cmd);
+        ~ATH(E) {
+        } EXECUTE(
+            report("Core-Ext", EXT_OUT, "CORE-EXT-ERRORS=")
+        );
     );
 
     THIS.DIE();
