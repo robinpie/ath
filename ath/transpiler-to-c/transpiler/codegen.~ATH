@@ -51,7 +51,11 @@ ENTOMB BINOPS WITH {
 // fn: current frame name
 
 RITE mkCtx(asyncRites, syncRites, branchNames, pipeline) {
-    BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],pre:[],defs:[],pm:DEAD,ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline,cb:DEAD};
+    // srn: current sync rite name (for self-tail-call detection)
+    // prm: current sync rite's parameter names (for tail-call param rebind)
+    // ia:  truthy while emitting inside an ATTEMPT/SALVAGE block (disables TCO,
+    //      since a backward goto out of the setjmp region would corrupt it)
+    BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],pre:[],defs:[],pm:DEAD,ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline,cb:DEAD,srn:"",prm:[],ia:DEAD};
 }
 
 // If we're emitting a segment inside a branch frame (ctx.cb is truthy), produce the prologue line that re-installs current_branch on resume. Otherwise empty.
@@ -396,7 +400,14 @@ RITE genCallExpr(expr, ctx) {
         BEQUEATH {ctx:ctx, stmts:raa+"_rite_async_"+callee.name+"("+ctx.sv+",NULL,"+STRING(argc)+",_args);\n"+t+"=ath_void();\n", t:t};
     }
     SHOULD callee.t == "Ident" AND HAS(ctx.sr, callee.name) {
-        BEQUEATH {ctx:ctx, stmts:raa+t+"=_rite_"+callee.name+"("+ctx.sv+","+STRING(argc)+",_args);\n", t:t};
+        // A self-call passes the rite's own "_closure" (its definition scope):
+        // loop-invariant across the recursion, so the parent chain depth stays
+        // constant and global lookups stay O(1). Non-self calls pass the caller
+        // scope, since a nested rite's closure is its enclosing rite's live "_sc",
+        // reachable only via that chain.
+        BIRTH clo WITH ctx.sv;
+        SHOULD ctx.sv == "_sc" AND callee.name == ctx.srn { clo = "_closure"; }
+        BEQUEATH {ctx:ctx, stmts:raa+t+"=_rite_"+callee.name+"("+clo+","+STRING(argc)+",_args);\n", t:t};
     }
     BIRTH rc WITH genExpr(callee, ctx); ctx = rc.ctx;
     BEQUEATH {ctx:ctx, stmts:raa+rc.stmts+t+"=ath_call_sync("+ctx.sv+","+rc.t+","+STRING(argc)+",_args);\n", t:t};
@@ -491,6 +502,27 @@ RITE genSyncStmt(stmt, depth, ctx) {
     SHOULD nt == "Bequeath" {
         // Async context: ctx.fn is set to current frame name
         BIRTH inAsync WITH ctx.fn != "";
+        // BEQUEATH is always a tail position, so `BEQUEATH self(...)` in a sync
+        // rite compiles to an in-place loop (bounded C stack and scope memory at
+        // any depth). Disabled inside ATTEMPT/SALVAGE (ctx.ia): a backward goto
+        // would jump out of the setjmp region and corrupt the error-frame stack.
+        SHOULD NOT inAsync AND NOT ctx.ia AND ctx.srn != ""
+            AND TYPEOF(stmt.val) == "MAP" AND stmt.val.t == "Call"
+            AND stmt.val.callee.t == "Ident" AND stmt.val.callee.name == ctx.srn {
+            BIRTH cargs WITH stmt.val.args;
+            BIRTH cargc WITH LENGTH(cargs);
+            BIRTH ra WITH genArgsList(cargs, 0, ctx); ctx = ra.ctx;
+            // Evaluate args (reading the current _sc), then install a fresh scope
+            // BEFORE releasing the old one: rebind increfs the args, so a borrowed
+            // pass-through arg cannot be freed out from under us by the decref.
+            BIRTH s WITH p+"{\n"+p+ra.stmts+ra.assigns+
+                p+"{ AthScope *_old=_sc;\n"+
+                p+"  _sc=ath_scope_new(_closure);\n"+
+                genTailRebind(ctx.prm, cargc, 0)+
+                p+"  ath_scope_decref(_old); }\n"+
+                p+"goto _tailtop;\n"+p+"}\n";
+            BEQUEATH {ctx:ctx, s:s};
+        }
         SHOULD TYPEOF(stmt.val) == "VOID" {
             SHOULD inAsync {
                 BEQUEATH {ctx:ctx, s:p+"{ if(f->base.next)ath_cont_resume(f->base.next,ath_void()); "+ctx.fn+"_free(f); return; }\n"};
@@ -532,8 +564,11 @@ RITE genSyncStmt(stmt, depth, ctx) {
     SHOULD nt == "AttemptSalvage" {
         BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
         BIRTH ef WITH "_ef"+STRING(rn.v);
-        BIRTH rt WITH genSyncStmtList(stmt.attempt, 0, depth+2, ctx); ctx = rt.ctx;
-        BIRTH rs WITH genSyncStmtList(stmt.salvage, 0, depth+2, ctx); ctx = rs.ctx;
+        // Mark the bodies as inside an attempt so a tail self-call here is NOT
+        // turned into a goto (which would escape the setjmp region); restore after.
+        BIRTH oia WITH ctx.ia;
+        BIRTH rt WITH genSyncStmtList(stmt.attempt, 0, depth+2, SET(ctx,"ia",ALIVE)); ctx = SET(rt.ctx,"ia",oia);
+        BIRTH rs WITH genSyncStmtList(stmt.salvage, 0, depth+2, SET(ctx,"ia",ALIVE)); ctx = SET(rs.ctx,"ia",oia);
         BIRTH s WITH p+"{\n"+
             p+"    AthErrorFrame "+ef+";\n"+
             p+"    ATH_ATTEMPT_BEGIN("+ef+") {\n"+rt.s+
@@ -788,6 +823,43 @@ RITE genSyncStmtList(stmts, i, depth, ctx) {
 
 // ===== Sync Rite Generation =====
 
+// Rebind a sync rite's params for a tail-self-call loop iteration. Params with
+// an index < the call's argument count take the just-evaluated _args[i]; any
+// extra params are reset to VOID, matching the entry-time binding convention.
+RITE genTailRebind(params, cargc, i) {
+    SHOULD i >= LENGTH(params) { BEQUEATH ""; }
+    BIRTH v WITH "ath_void()";
+    SHOULD i < cargc { v = "_args["+STRING(i)+"]"; }
+    BEQUEATH "      ath_scope_define(_sc,\""+params[i]+"\","+v+",0);\n" +
+             genTailRebind(params, cargc, i+1);
+}
+
+// Does this statement (or a tail position within it) contain a BEQUEATH whose
+// value is a direct call to `name`? BEQUEATH is always a tail position, so any
+// such call is a tail call. Recurses through SHOULD/LEST but NOT through
+// ATTEMPT/SALVAGE (a goto out of the setjmp region would corrupt it) nor into
+// nested RiteDefs (which carry their own name/scope).
+RITE stmtHasTailSelfCall(s, name) {
+    SHOULD s.t == "Bequeath" {
+        SHOULD TYPEOF(s.val) == "MAP" AND s.val.t == "Call"
+            AND s.val.callee.t == "Ident" AND s.val.callee.name == name { BEQUEATH ALIVE; }
+        BEQUEATH DEAD;
+    }
+    SHOULD s.t == "Cond" {
+        SHOULD bodyHasTailSelfCall(s.then, 0, name) { BEQUEATH ALIVE; }
+        SHOULD TYPEOF(s.els) == "ARRAY" { BEQUEATH bodyHasTailSelfCall(s.els, 0, name); }
+        SHOULD TYPEOF(s.els) == "MAP" AND s.els.t == "Cond" { BEQUEATH stmtHasTailSelfCall(s.els, name); }
+        BEQUEATH DEAD;
+    }
+    BEQUEATH DEAD;
+}
+
+RITE bodyHasTailSelfCall(stmts, i, name) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH DEAD; }
+    SHOULD stmtHasTailSelfCall(stmts[i], name) { BEQUEATH ALIVE; }
+    BEQUEATH bodyHasTailSelfCall(stmts, i+1, name);
+}
+
 RITE genSyncRite(stmt, ctx) {
     BIRTH name WITH stmt.name;
     BIRTH params WITH stmt.params;
@@ -796,12 +868,23 @@ RITE genSyncRite(stmt, ctx) {
     BIRTH saved_cl WITH ctx.cl;
     BIRTH saved_sv WITH ctx.sv;
     BIRTH saved_tc WITH ctx.tc;
+    BIRTH saved_srn WITH ctx.srn;
+    BIRTH saved_prm WITH ctx.prm;
+    BIRTH saved_ia WITH ctx.ia;
 
     ctx = emitFwd(ctx, "static AthValue _rite_"+name+"(AthScope*,int,AthValue*);");
 
-    // Clear fn/cl so BEQUEATH inside this sync rite emits sync-style goto _done
-    BIRTH rctx WITH SET(SET(SET(resetTc(ctx),"sv","_sc"),"fn",""),"cl","");
+    // Clear fn/cl so BEQUEATH inside this sync rite emits sync-style goto _done.
+    // srn/prm name this rite and its params so a self-tail-call in the body can
+    // pass "_closure" and rebind for the loop. ia starts DEAD: an ATTEMPT in an
+    // enclosing rite does not span into this rite's own C function.
+    BIRTH rctx WITH SET(SET(SET(SET(SET(SET(resetTc(ctx),"sv","_sc"),"fn",""),"cl",""),"srn",name),"prm",params),"ia",DEAD);
     BIRTH rb WITH genSyncStmtList(stmt.body, 0, 2, rctx); rctx = rb.ctx;
+
+    // Emit the loop label only when a tail self-call exists, to avoid an
+    // unused-label warning.
+    BIRTH topLabel WITH "";
+    SHOULD bodyHasTailSelfCall(stmt.body, 0, name) { topLabel = "    _tailtop:\n"; }
 
     BIRTH fn WITH "static AthValue _rite_"+name+"(AthScope *_closure,int _argc,AthValue *_argv) {\n"+
         "    AthScope *_sc;\n"+
@@ -811,6 +894,7 @@ RITE genSyncRite(stmt, ctx) {
         "    _t = (AthValue*)calloc(128, sizeof(AthValue));\n"+
         genParamBinds(params, 0, "_sc") +
         "    _ret = ath_void();\n"+
+        topLabel +
         rb.s +
         "    _done:\n"+
         "    free(_t);\n"+
@@ -820,7 +904,7 @@ RITE genSyncRite(stmt, ctx) {
 
     // Emit into rctx so any forward-decls/defs accumulated while generating nested rites in the body are preserved; restore the per-rite context fields (sv/fn/cl/tc) the caller depends on.
     rctx = emitDef(rctx, fn);
-    BEQUEATH SET(SET(SET(SET(rctx,"fn",saved_fn),"cl",saved_cl),"sv",saved_sv),"tc",saved_tc);
+    BEQUEATH SET(SET(SET(SET(SET(SET(SET(rctx,"fn",saved_fn),"cl",saved_cl),"sv",saved_sv),"tc",saved_tc),"srn",saved_srn),"prm",saved_prm),"ia",saved_ia);
 }
 
 RITE genParamBinds(params, i, sc) {
