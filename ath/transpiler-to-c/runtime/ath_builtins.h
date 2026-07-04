@@ -82,6 +82,11 @@ AthValue ath_builtin_SET_BYTE(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_BUFFER_TO_STRING(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_STRING_TO_BUFFER(AthScope *s, int argc, AthValue *argv);
 
+/* Portals (raw / datagram sockets) */
+AthValue ath_builtin_RECKON(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_SENDIFICATE(AthScope *s, int argc, AthValue *argv);
+AthValue ath_builtin_APPEARIFY(AthScope *s, int argc, AthValue *argv);
+
 /* !^CAKE schema rites (operate on RECIPE values and baked BUFFERs) */
 AthValue ath_builtin_CAPTCHA(AthScope *s, int argc, AthValue *argv);
 AthValue ath_builtin_SIZEOF(AthScope *s, int argc, AthValue *argv);

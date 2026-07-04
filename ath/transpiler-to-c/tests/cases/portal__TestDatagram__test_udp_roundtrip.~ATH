@@ -1,0 +1,19 @@
+// Unprivileged UDP loopback: send through one datagram portal, receive on
+// another bound to the same port, pull the bytes with APPEARIFY.
+import portal RX("datagram", 9876);
+import portal TX("datagram");
+
+BIRTH out WITH STRING_TO_BUFFER("portaltest");
+UTTER(SENDIFICATE(TX, out, "127.0.0.1", 9876));
+
+import timer T(30ms);
+~ATH(T) {
+} EXECUTE(
+    BIRTH buf WITH BUFFER(64);
+    BIRTH n WITH APPEARIFY(RX, buf);
+    UTTER(n, BUFFER_TO_STRING(buf, n));
+    RX.DIE();
+    TX.DIE();
+);
+
+THIS.DIE();

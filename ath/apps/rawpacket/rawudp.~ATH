@@ -1,0 +1,84 @@
+// rawudp.~ATH -- hand-craft a complete IPv4 + UDP packet with !^CAKE and cast it
+// through a raw portal to 127.0.0.1:9999. Requires CAP_NET_RAW (run as root),
+// because SOCK_RAW is privileged. Verify with, in another terminal:
+//     nc -u -l 9999           (or: tcpdump -i lo -X udp port 9999)
+//
+// This demonstrates the whole crafting pipeline: BAKE/SPRINKLE fill header
+// buffers, RECKON computes the IPv4 header checksum and the UDP transport
+// checksum (over the 12-byte pseudo-header + UDP header + payload), and
+// SENDIFICATE puts the bytes on the wire.
+
+import watcher Net("./net.^CAKE");
+
+ENTOMB PAYLOAD WITH "hi";
+ENTOMB PLEN    WITH 2;          // LENGTH(PAYLOAD)
+ENTOMB UDPLEN  WITH 10;         // 8 (UDP header) + PLEN
+ENTOMB TOTLEN  WITH 30;         // 20 (IPv4) + UDPLEN
+
+// Copy n bytes src[soff..] -> dst[doff..] (synchronous recursion).
+RITE blit(dst, doff, src, soff, n) {
+    SHOULD n > 0 {
+        SET_BYTE(dst, doff, BYTE_AT(src, soff));
+        blit(dst, doff + 1, src, soff + 1, n - 1);
+    }
+}
+
+// Write 127.0.0.1 into a 4 OF PINCH address field at <base>.N of <recipe>.
+RITE loopback(buf, recipe, base) {
+    SPRINKLE(buf, recipe, base + ".0", 127);
+    SPRINKLE(buf, recipe, base + ".1", 0);
+    SPRINKLE(buf, recipe, base + ".2", 0);
+    SPRINKLE(buf, recipe, base + ".3", 1);
+}
+
+BIRTH pay WITH STRING_TO_BUFFER(PAYLOAD);
+
+// ---- IPv4 header ----
+BIRTH ip WITH BAKE(Net.IPv4);
+SPRINKLE(ip, Net.IPv4, "ver_ihl",   69);      // version 4, IHL 5  (0x45)
+SPRINKLE(ip, Net.IPv4, "total_len", TOTLEN);
+SPRINKLE(ip, Net.IPv4, "flags_off", 16384);   // 0x4000 Don't Fragment
+SPRINKLE(ip, Net.IPv4, "ttl",       64);
+SPRINKLE(ip, Net.IPv4, "protocol",  17);      // UDP
+loopback(ip, Net.IPv4, "src");
+loopback(ip, Net.IPv4, "dst");
+// checksum field starts zeroed; RECKON the 20 header bytes, then store it.
+SPRINKLE(ip, Net.IPv4, "checksum", RECKON(ip, 0, 20));
+
+// ---- UDP header ----
+BIRTH udp WITH BAKE(Net.UDP);
+SPRINKLE(udp, Net.UDP, "src_port", 4321);
+SPRINKLE(udp, Net.UDP, "dst_port", 9999);
+SPRINKLE(udp, Net.UDP, "length",   UDPLEN);
+
+// ---- UDP checksum over pseudo-header + UDP header + payload ----
+BIRTH ps WITH BAKE(Net.Pseudo);
+loopback(ps, Net.Pseudo, "src");
+loopback(ps, Net.Pseudo, "dst");
+SPRINKLE(ps, Net.Pseudo, "protocol", 17);
+SPRINKLE(ps, Net.Pseudo, "seg_len",  UDPLEN);
+
+BIRTH stage WITH BUFFER(12 + UDPLEN);   // pseudo(12) + udp(8) + payload
+blit(stage, 0,  ps,  0, 12);
+blit(stage, 12, udp, 0, 8);
+blit(stage, 20, pay, 0, PLEN);
+BIRTH uck WITH RECKON(stage);
+SHOULD uck == 0 { uck = 65535; }        // UDP: a computed 0 is transmitted as 0xFFFF
+SPRINKLE(udp, Net.UDP, "checksum", uck);
+
+// ---- assemble the datagram and cast it ----
+BIRTH pkt WITH BUFFER(TOTLEN);
+blit(pkt, 0,  ip,  0, 20);
+blit(pkt, 20, udp, 0, 8);
+blit(pkt, 28, pay, 0, PLEN);
+
+ATTEMPT {
+    import portal P("raw");
+    BIRTH sent WITH SENDIFICATE(P, pkt, "127.0.0.1", 0);
+    UTTER("cast", sent, "bytes to 127.0.0.1:9999");
+    P.DIE();
+} SALVAGE err {
+    UTTER("portal failed (raw sockets need root/CAP_NET_RAW):", err);
+}
+
+THIS.DIE();

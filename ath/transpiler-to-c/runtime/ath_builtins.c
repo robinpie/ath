@@ -18,6 +18,7 @@
 #include "ath_eventloop.h"
 #include "ath_sylladex.h"
 #include "ath_buffer.h"
+#include "ath_entity.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,6 +101,9 @@ static struct { const char *name; AthBuiltinFn fn; } _builtins[] = {
     {"SET_BYTE",          ath_builtin_SET_BYTE},
     {"BUFFER_TO_STRING",  ath_builtin_BUFFER_TO_STRING},
     {"STRING_TO_BUFFER",  ath_builtin_STRING_TO_BUFFER},
+    {"RECKON",            ath_builtin_RECKON},
+    {"SENDIFICATE",       ath_builtin_SENDIFICATE},
+    {"APPEARIFY",         ath_builtin_APPEARIFY},
     {"CAPTCHA",           ath_builtin_CAPTCHA},
     {"SIZEOF",            ath_builtin_SIZEOF},
     {"BAKE",              ath_builtin_BAKE},
@@ -859,4 +863,86 @@ AthValue ath_builtin_STRING_TO_BUFFER(AthScope *s, int argc, AthValue *argv) {
     if (str && str->length > 0)
         memcpy(b->bytes, str->data, (size_t)str->length);
     return ath_buffer_val(b);
+}
+
+/* ===== Portals (raw / datagram sockets) ===== */
+
+/* RFC 1071 internet checksum over a BUFFER (or a [off, off+len) slice of it).
+   Returns the folded one's-complement 16-bit value to store in the checksum
+   field. Protocol-agnostic: for a TCP/UDP transport checksum the caller stages
+   the 12-byte pseudo-header + segment (checksum field zeroed) in one BUFFER and
+   passes the whole thing. Note the UDP-only rule that a computed 0x0000 is
+   transmitted as 0xFFFF is the caller's responsibility (it must NOT be applied
+   to the IPv4 header checksum, where 0 is a legal value). */
+AthValue ath_builtin_RECKON(AthScope *s, int argc, AthValue *argv) {
+    AthBuffer *b;
+    long off, len, i, end;
+    unsigned long sum = 0;
+    (void)s;
+    if (argc != 1 && argc != 3)
+        ath_runtime_error_fmt("RECKON: expected 1 or 3 args, got %d", argc);
+    if (argv[0].type != ATH_BUFFER)
+        ath_runtime_error_fmt("RECKON: first argument must be BUFFER, got %s",
+                              ath_typeof_str(argv[0]));
+    b = argv[0].as.buffer;
+    if (argc == 3) {
+        REQUIRE_INT(argv[1], "RECKON", "offset");
+        REQUIRE_INT(argv[2], "RECKON", "length");
+        off = argv[1].as.integer;
+        len = argv[2].as.integer;
+    } else {
+        off = 0;
+        len = b ? b->length : 0;
+    }
+    if (off < 0 || len < 0 || (b && off + len > b->length) || (!b && (off || len)))
+        ath_runtime_error_fmt("RECKON: range [%ld, %ld) out of buffer bounds", off, off + len);
+    end = off + len;
+    for (i = off; i + 1 < end; i += 2)
+        sum += ((unsigned long)b->bytes[i] << 8) | (unsigned long)b->bytes[i + 1];
+    if ((end - off) & 1)                       /* trailing odd byte, zero-padded */
+        sum += (unsigned long)b->bytes[end - 1] << 8;
+    while (sum >> 16) sum = (sum & 0xFFFF) + (sum >> 16);
+    return ath_int((long)((~sum) & 0xFFFF));
+}
+
+AthValue ath_builtin_SENDIFICATE(AthScope *s, int argc, AthValue *argv) {
+    AthEntity *e;
+    AthBuffer *b;
+    char *host;
+    long port;
+    int sent, len;
+    (void)s; REQUIRE_ARGC(4, "SENDIFICATE");
+    e = ath_extract_entity(argv[0]);
+    if (!e || e->kind != ATH_ENTITY_PORTAL)
+        ath_runtime_error("SENDIFICATE: first argument must be a portal", 0, 0);
+    if (argv[1].type != ATH_BUFFER)
+        ath_runtime_error_fmt("SENDIFICATE: second argument must be BUFFER, got %s",
+                              ath_typeof_str(argv[1]));
+    REQUIRE_STRING(argv[2], "SENDIFICATE", "host");
+    REQUIRE_INT(argv[3], "SENDIFICATE", "port");
+    b = argv[1].as.buffer;
+    port = argv[3].as.integer;
+    host = ath_stringify(argv[2]);
+    len = b ? b->length : 0;
+    sent = ath_portal_send(e, (b && b->bytes) ? b->bytes : (const unsigned char *)"",
+                           len, host, (int)port);
+    free(host);
+    return ath_int((long)sent);
+}
+
+AthValue ath_builtin_APPEARIFY(AthScope *s, int argc, AthValue *argv) {
+    AthEntity *e;
+    AthBuffer *b;
+    int got;
+    (void)s; REQUIRE_ARGC(2, "APPEARIFY");
+    e = ath_extract_entity(argv[0]);
+    if (!e || e->kind != ATH_ENTITY_PORTAL)
+        ath_runtime_error("APPEARIFY: first argument must be a portal", 0, 0);
+    if (argv[1].type != ATH_BUFFER)
+        ath_runtime_error_fmt("APPEARIFY: second argument must be BUFFER, got %s",
+                              ath_typeof_str(argv[1]));
+    b = argv[1].as.buffer;
+    got = ath_portal_recv(e, (b && b->bytes) ? b->bytes : (unsigned char *)"",
+                          b ? b->length : 0);
+    return ath_int((long)got);
 }

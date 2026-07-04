@@ -44,8 +44,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <fcntl.h>
+#include <errno.h>
 #endif
 
 /* ===== pollable entity registry ===== */
@@ -141,9 +144,20 @@ void ath_entity_die(AthEntity *e) {
         free(w);
         w = next;
     }
+    /* A portal is polled for liveness but never hits an EOF-close branch (unlike
+       connection), so close its fd here to avoid leaking it. Guard double-close. */
+    if (e->kind == ATH_ENTITY_PORTAL && e->sockfd >= 0) {
+#if defined(_WIN32)
+        closesocket((SOCKET)e->sockfd);
+#elif !defined(ATH_WASM)
+        close((int)e->sockfd);
+#endif
+        e->sockfd = -1;
+    }
     if (e->kind == ATH_ENTITY_PROCESS ||
         e->kind == ATH_ENTITY_CONNECTION ||
-        e->kind == ATH_ENTITY_WATCHER) {
+        e->kind == ATH_ENTITY_WATCHER ||
+        e->kind == ATH_ENTITY_PORTAL) {
         ath_entity_unregister_pollable(e);
     }
 }
@@ -459,6 +473,103 @@ AthEntity *ath_entity_connection_new(const char *name, const char *host, int por
 }
 #endif
 
+/* ===== Portal (raw / datagram socket) ===== */
+
+/* mode: "raw" -> SOCK_RAW + IP_HDRINCL (caller supplies the whole IPv4 header;
+   needs CAP_NET_RAW). "datagram" -> SOCK_DGRAM (unprivileged UDP). bind_port > 0
+   binds a datagram portal to INADDR_ANY:bind_port so it can receive. Raw sockets
+   and non-loopback datagram traffic exist only on POSIX; Windows/WASM stub-error. */
+#if defined(_WIN32) || defined(ATH_WASM)
+AthEntity *ath_entity_portal_new(const char *name, const char *mode, int bind_port) {
+    (void)name; (void)mode; (void)bind_port;
+    ath_runtime_error("portal entities are not supported on this platform", 0, 0);
+    return NULL;
+}
+int ath_portal_send(AthEntity *e, const unsigned char *bytes, int len, const char *host, int port) {
+    (void)e; (void)bytes; (void)len; (void)host; (void)port;
+    ath_runtime_error("portal entities are not supported on this platform", 0, 0);
+    return 0;
+}
+int ath_portal_recv(AthEntity *e, unsigned char *buf, int cap) {
+    (void)e; (void)buf; (void)cap;
+    ath_runtime_error("portal entities are not supported on this platform", 0, 0);
+    return 0;
+}
+#else
+AthEntity *ath_entity_portal_new(const char *name, const char *mode, int bind_port) {
+    AthEntity *e = ath_entity_alloc(ATH_ENTITY_PORTAL, name);
+    int sock, is_raw;
+    e->sockfd = -1;   /* so a failed open is never mistaken for a live fd */
+    if (strcmp(mode, "raw") == 0)           is_raw = 1;
+    else if (strcmp(mode, "datagram") == 0) is_raw = 0;
+    else {
+        ath_entity_decref(e);
+        ath_runtime_error_fmt("portal: mode must be \"raw\" or \"datagram\", got \"%s\"", mode);
+        return NULL;
+    }
+    if (is_raw) {
+        int one = 1;
+        sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+        if (sock < 0) { ath_eventloop_schedule_entity_die(e); return e; }
+        if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0) {
+            close(sock); ath_eventloop_schedule_entity_die(e); return e;
+        }
+    } else {
+        sock = socket(AF_INET, SOCK_DGRAM, 0);
+        if (sock < 0) { ath_eventloop_schedule_entity_die(e); return e; }
+        if (bind_port > 0) {
+            struct sockaddr_in ba;
+            memset(&ba, 0, sizeof(ba));
+            ba.sin_family      = AF_INET;
+            ba.sin_addr.s_addr = htonl(INADDR_ANY);
+            ba.sin_port        = htons((unsigned short)bind_port);
+            if (bind(sock, (struct sockaddr*)&ba, (socklen_t)sizeof(ba)) < 0) {
+                close(sock); ath_eventloop_schedule_entity_die(e); return e;
+            }
+        }
+    }
+    fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
+    e->sockfd = (intptr_t)sock;
+    e->portal_mode = is_raw ? 0 : 1;
+    e->next_poll_ms = ath_eventloop_now_ms() + 100;
+    ath_entity_register_pollable(e);
+    return e;
+}
+
+int ath_portal_send(AthEntity *e, const unsigned char *bytes, int len, const char *host, int port) {
+    struct sockaddr_in dst;
+    ssize_t n;
+    if (!e || e->is_dead || e->sockfd < 0)
+        ath_runtime_error("SENDIFICATE: portal is dead", 0, 0);
+    memset(&dst, 0, sizeof(dst));
+    dst.sin_family = AF_INET;
+    dst.sin_port   = htons((unsigned short)port);  /* ignored by IP_HDRINCL raw */
+    dst.sin_addr.s_addr = inet_addr(host);
+    if (dst.sin_addr.s_addr == INADDR_NONE && strcmp(host, "255.255.255.255") != 0)
+        ath_runtime_error_fmt("SENDIFICATE: bad destination address \"%s\"", host);
+    n = sendto((int)e->sockfd, bytes, (size_t)len, 0,
+               (struct sockaddr*)&dst, (socklen_t)sizeof(dst));
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
+        ath_runtime_error_fmt("SENDIFICATE: send failed: %s", strerror(errno));
+    }
+    return (int)n;
+}
+
+int ath_portal_recv(AthEntity *e, unsigned char *buf, int cap) {
+    ssize_t n;
+    if (!e || e->is_dead || e->sockfd < 0)
+        ath_runtime_error("APPEARIFY: portal is dead", 0, 0);
+    if (cap <= 0) return 0;
+    n = recv((int)e->sockfd, buf, (size_t)cap, 0);
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
+        ath_runtime_error_fmt("APPEARIFY: recv failed: %s", strerror(errno));
+    }
+    return (int)n;
+}
+#endif
+
 /* ===== Watcher ===== */
 
 AthEntity *ath_entity_watcher_new(const char *name, const char *filepath) {
@@ -540,6 +651,23 @@ void ath_entity_poll(AthEntity *e, unsigned long now_ms) {
         e->next_poll_ms = now_ms + 100;
         if (stat(e->filepath, &st) != 0)
             ath_entity_die(e);
+        break;
+    }
+    case ATH_ENTITY_PORTAL: {
+        /* RX is pull-based (APPEARIFY); polling only watches for a hard socket
+           error so ~ATH(P) can fire on death. Registering keeps the loop alive. */
+#if defined(_WIN32) || defined(ATH_WASM)
+        /* unreachable: portal entities never construct on Windows/WASM */
+#else
+        int err = 0;
+        socklen_t elen = sizeof(err);
+        if (now_ms < e->next_poll_ms) break;
+        e->next_poll_ms = now_ms + 100;
+        if (e->sockfd >= 0 &&
+            getsockopt((int)e->sockfd, SOL_SOCKET, SO_ERROR, &err, &elen) == 0 &&
+            err != 0)
+            ath_entity_die(e);
+#endif
         break;
     }
     default: break;

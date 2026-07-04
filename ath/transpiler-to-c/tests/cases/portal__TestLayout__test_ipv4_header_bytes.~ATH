@@ -1,0 +1,19 @@
+// net.^CAKE header recipes lay out packed, big-endian (network order).
+import watcher Net("./net.^CAKE");
+
+BIRTH ip WITH BAKE(Net.IPv4);
+SPRINKLE(ip, Net.IPv4, "ver_ihl",   69);
+SPRINKLE(ip, Net.IPv4, "total_len", 30);   // DASH, big-endian -> 00 1E
+SPRINKLE(ip, Net.IPv4, "ttl",       64);
+SPRINKLE(ip, Net.IPv4, "protocol",  17);
+SPRINKLE(ip, Net.IPv4, "src.0",     127);
+SPRINKLE(ip, Net.IPv4, "src.3",     1);
+
+UTTER(SIZEOF(Net.IPv4));
+UTTER(BYTE_AT(ip, 0));
+UTTER(BYTE_AT(ip, 2), BYTE_AT(ip, 3));
+UTTER(BYTE_AT(ip, 8), BYTE_AT(ip, 9));
+UTTER(BYTE_AT(ip, 12), BYTE_AT(ip, 15));
+UTTER(SIZEOF(Net.UDP), SIZEOF(Net.Pseudo));
+
+THIS.DIE();

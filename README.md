@@ -31,6 +31,8 @@ import process P("cmd");   // dies when process exits
 import connection C("host", 80); // dies when connection closes
 import watcher W("file.txt");    // dies when file is deleted
 import watcher Lib("lib.~ATH");  // loads .~ATH file as module
+import portal Raw("raw");        // raw IPv4 socket (craft whole packets; needs root)
+import portal Sock("datagram", 9000); // UDP socket, bound to :9000 to receive
 ```
 
 `THIS` is an implicit entity representing the program itself. Kill entities manually with `.DIE()`. The program ends when `THIS.DIE();` is called.
@@ -327,6 +329,17 @@ STRING_TO_BUFFER(s)       // FFI: copy string bytes to fresh buffer
 BANISH x;                 // FFI: free a RELIC (run destructor) or BUFFER
 ```
 
+##### Portals (raw networking)
+
+`portal` entities are raw/datagram sockets for crafting and sending your own packets (POSIX-only). Header layouts are best described as `DENSE IMPERIAL` !^CAKE recipes (packed, network byte order); see `ath/apps/rawpacket/` for a full IPv4+UDP crafting example.
+
+```ath
+SENDIFICATE(P, buf, host, port)   // send buf's bytes to host:port; returns bytes sent
+APPEARIFY(P, buf)                 // pull-based receive into buf; returns bytes read
+RECKON(buf)                       // RFC 1071 internet checksum over whole buffer
+RECKON(buf, offset, length)       // ...or over a slice (for pseudo-header checksums)
+```
+
 ## Usage
 
 All commands run from `ath/transpiler-to-c/`:
@@ -390,6 +403,7 @@ Current limitations of the implementation (may be worked around in the future):
 - The FFI supports at most 16 parameters per transcription; `BUFFER` and `CALLBACK` as return types are not supported
 - On Windows: FFI INTEGER maps to C `long` (4 bytes, not pointer-sized); use `RELIC` for pointer-sized Windows API arguments (HWND, HANDLE, etc.), and `SCOOP` a zeroed `RELIC` field out of a baked !^CAKE recipe when you need a NULL pointer. See `ath/apps/winbox/winBoxDemo.~ATH`, which calls `user32.dll`'s `MessageBoxA` directly with no wrapper.
 - On WASM: no FFI/sessions, no `process`/`connection` entities, and `watcher` is limited to `--dir`-granted paths
+- `portal` entities (raw/datagram sockets; `SENDIFICATE`/`APPEARIFY`/`RECKON`) are POSIX-only; `"raw"` mode needs `CAP_NET_RAW`/root. On Windows and WASM `import portal` raises a catchable runtime error
 
 ### Windows
 
