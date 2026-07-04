@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+
+// Spec: EJECT SLOT n FROM a bottle with n out of range is a runtime error.
+ATTEMPT {
+    BIRTH B WITH BOTTLE(3);
+    BIRTH v WITH EJECT SLOT 3 FROM B;
+    UTTER("no error");
+} SALVAGE err { UTTER("caught"); }
+THIS.DIE();
