@@ -62,7 +62,8 @@ WIN64_CFLAGS = -std=c89 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter
                -Wno-unused-variable -Wno-pedantic-ms-format
 
 .PHONY: all bin bin-i686 bin-win64 bin-wasm lib lib-win64 lib-wasm \
-        test test-linux test-win64 test-wasm verify-wasm-selfhost smoke clean
+        test test-linux test-win64 test-wasm verify-wasm-selfhost smoke \
+        check-license clean
 
 # Default target: rebuild athtoc-bin from the latest .~ATH source files, using the existing athtoc-bin to transpile itself.
 all: $(BIN)
@@ -201,6 +202,16 @@ smoke: $(BIN)
 	    | ./$(BIN) > /tmp/_ath_smoke.c
 	$(CC) $(CFLAGS) /tmp/_ath_smoke.c $(SRCS) -I$(RUNTIME_DIR) -ldl -lffi -o /tmp/_ath_smoke
 	/tmp/_ath_smoke
+
+# Lint every tracked .c/.h/.~ATH/.^CAKE file (outside ath/deprecated/,
+# vendor/win64/, tests/work/, and ath/apps/golf/) for an SPDX-License-Identifier
+# line and the GPLv2 "This program is free software" boilerplate. The linter itself is
+# tools/check-spdx.~ATH; it shells out to `find` and reads via SCRY, so it
+# must be run with the repo root as its working directory.
+check-license: $(BIN)
+	./$(BIN) < ../../tools/check-spdx.~ATH > /tmp/_ath_check_spdx.c
+	$(CC) $(CFLAGS) /tmp/_ath_check_spdx.c $(SRCS) -I$(RUNTIME_DIR) -ldl -lffi -o /tmp/_ath_check_spdx
+	cd ../.. && /tmp/_ath_check_spdx
 
 # Note: clean does NOT remove the pre-built binaries (athtoc-bin, athtoc-bin-i686).
 # Remove them manually only if you have another way to rebuild them.

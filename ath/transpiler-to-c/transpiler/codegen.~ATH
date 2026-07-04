@@ -55,7 +55,21 @@ RITE mkCtx(asyncRites, syncRites, branchNames, pipeline) {
     // prm: current sync rite's parameter names (for tail-call param rebind)
     // ia:  truthy while emitting inside an ATTEMPT/SALVAGE block (disables TCO,
     //      since a backward goto out of the setjmp region would corrupt it)
-    BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],pre:[],defs:[],pm:DEAD,ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline,cb:DEAD,srn:"",prm:[],ia:DEAD};
+    // efs: names of AthErrorFrame locals for currently-open enclosing ATTEMPT
+    //      bodies (outermost first). A BEQUEATH from inside one of these jumps
+    //      straight to `_done` (skipping ATH_ATTEMPT_END), so it must restore
+    //      _ath_error_top itself or the rite leaves a dangling frame pointer
+    //      that a later CONDEMN will longjmp into after this call has returned.
+    BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],pre:[],defs:[],pm:DEAD,ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline,cb:DEAD,srn:"",prm:[],ia:DEAD,efs:[]};
+}
+
+// The C statement (possibly empty) that restores _ath_error_top before a
+// BEQUEATH escapes out of any open ATTEMPT bodies via `goto _done`. Only the
+// outermost open frame's .prev is needed: it already points at whatever
+// _ath_error_top was before the first of these nested frames was pushed.
+RITE genAttemptUnwind(ctx) {
+    SHOULD LENGTH(ctx.efs) == 0 { BEQUEATH ""; }
+    BEQUEATH "_ath_error_top = "+ctx.efs[0]+".prev; ";
 }
 
 // If we're emitting a segment inside a branch frame (ctx.cb is truthy), produce the prologue line that re-installs current_branch on resume. Otherwise empty.
@@ -536,15 +550,15 @@ RITE genSyncStmt(stmt, depth, ctx) {
         }
         SHOULD TYPEOF(stmt.val) == "VOID" {
             SHOULD inAsync {
-                BEQUEATH {ctx:ctx, s:p+"{ if(f->base.next)ath_cont_resume(f->base.next,ath_void()); "+ctx.fn+"_free(f); return; }\n"};
+                BEQUEATH {ctx:ctx, s:p+"{ "+genAttemptUnwind(ctx)+"if(f->base.next)ath_cont_resume(f->base.next,ath_void()); "+ctx.fn+"_free(f); return; }\n"};
             }
-            BEQUEATH {ctx:ctx, s:p+"{ _ret=ath_void(); goto _done; }\n"};
+            BEQUEATH {ctx:ctx, s:p+"{ "+genAttemptUnwind(ctx)+"_ret=ath_void(); goto _done; }\n"};
         }
         BIRTH re WITH genExpr(stmt.val, ctx); ctx = re.ctx;
         SHOULD inAsync {
-            BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+"if(f->base.next)ath_cont_resume(f->base.next,"+re.t+"); "+ctx.fn+"_free(f); return;\n"+p+"}\n"};
+            BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+genAttemptUnwind(ctx)+"if(f->base.next)ath_cont_resume(f->base.next,"+re.t+"); "+ctx.fn+"_free(f); return;\n"+p+"}\n"};
         }
-        BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+"_ret="+re.t+"; goto _done;\n"+p+"}\n"};
+        BEQUEATH {ctx:ctx, s:p+"{\n"+p+re.stmts+p+genAttemptUnwind(ctx)+"_ret="+re.t+"; goto _done;\n"+p+"}\n"};
     }
 
     SHOULD nt == "Condemn" {
@@ -577,8 +591,15 @@ RITE genSyncStmt(stmt, depth, ctx) {
         BIRTH ef WITH "_ef"+STRING(rn.v);
         // Mark the bodies as inside an attempt so a tail self-call here is NOT
         // turned into a goto (which would escape the setjmp region); restore after.
+        // The attempt body also gets `ef` pushed onto efs: a BEQUEATH in there
+        // escapes via `goto _done` past ATH_ATTEMPT_END, so genAttemptUnwind
+        // needs to know this frame is open. The salvage body does not get `ef`
+        // pushed -- ATH_SALVAGE_BEGIN already resets _ath_error_top to this
+        // frame's .prev before the salvage body runs.
         BIRTH oia WITH ctx.ia;
-        BIRTH rt WITH genSyncStmtList(stmt.attempt, 0, depth+2, SET(ctx,"ia",ALIVE)); ctx = SET(rt.ctx,"ia",oia);
+        BIRTH oefs WITH ctx.efs;
+        BIRTH rt WITH genSyncStmtList(stmt.attempt, 0, depth+2, SET(SET(ctx,"ia",ALIVE),"efs",APPEND(ctx.efs,ef)));
+        ctx = SET(SET(rt.ctx,"ia",oia),"efs",oefs);
         BIRTH rs WITH genSyncStmtList(stmt.salvage, 0, depth+2, SET(ctx,"ia",ALIVE)); ctx = SET(rs.ctx,"ia",oia);
         // _sm marks the sink before the attempt; a CONDEMN/runtime error
         // longjmps here past the normal flush points, so SALVAGE releases the
@@ -1036,7 +1057,7 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
         ctx2 = emitDef(ctx2, "        ATH_ATTEMPT_BEGIN("+ef+") {");
         BIRTH postAttempt WITH SLICE(node.attempt, j+1, LENGTH(node.attempt));
         BIRTH execAndRest WITH CONCAT(asyncLoop.exec, postAttempt);
-        BIRTH ictx WITH SET(resetTc(ctx2),"sv",sv);
+        BIRTH ictx WITH SET(SET(resetTc(ctx2),"sv",sv),"efs",APPEND(ctx2.efs,ef));
         BIRTH ri WITH genSyncStmtList(execAndRest, 0, 3, ictx);
         ctx2 = SET(ctx2,"n",ri.ctx.n); ctx2 = SET(ctx2,"tc",ri.ctx.tc);
         ctx2 = emitDef(ctx2, ri.s);

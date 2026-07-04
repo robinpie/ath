@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// check-spdx.~ATH -- license header linter.
+//
+// Walks the repo (from the current working directory, which must be the
+// repo root) for .c/.h/.~ATH/.^CAKE files, skipping ath/deprecated/,
+// vendor/win64/, tests/work/ (generated output), and ath/apps/golf/
+// (golfed one-offs, deliberately headerless), and verifies each one
+// contains both an "SPDX-License-Identifier" line and the "This program is
+// free software" GPLv2 boilerplate line. Prints every offender and CONDEMNs
+// (process exit code 1) if any are found; otherwise reports OK and exits
+// cleanly. Run via `make check-license` from ath/transpiler-to-c.
+
+ENTOMB FILELIST WITH "/tmp/athdev_spdx_filelist.txt";
+
+RITE contains(haystack, needle) {
+    BEQUEATH LENGTH(SPLIT(haystack, needle)) > 1;
+}
+
+RITE checkFile(path) {
+    ATTEMPT {
+        BIRTH content WITH SCRY(path);
+        BIRTH hasSpdx WITH contains(content, "SPDX-License-Identifier");
+        BIRTH hasBoilerplate WITH contains(content, "This program is free software");
+        SHOULD (NOT hasSpdx) OR (NOT hasBoilerplate) {
+            BEQUEATH DEAD;
+        }
+        BEQUEATH ALIVE;
+    } SALVAGE err {
+        UTTER("  (could not read", path, "-", err, ")");
+        BEQUEATH DEAD;
+    }
+}
+
+RITE scanFrom(lines, idx, failures) {
+    SHOULD idx >= LENGTH(lines) {
+        BEQUEATH failures;
+    }
+    BIRTH path WITH TRIM(lines[idx]);
+    SHOULD LENGTH(path) == 0 {
+        BEQUEATH scanFrom(lines, idx + 1, failures);
+    }
+    BIRTH ok WITH checkFile(path);
+    SHOULD ok {
+        BEQUEATH scanFrom(lines, idx + 1, failures);
+    } LEST {
+        BEQUEATH scanFrom(lines, idx + 1, APPEND(failures, path));
+    }
+}
+
+RITE reportFrom(list, idx) {
+    SHOULD idx >= LENGTH(list) {
+        BEQUEATH VOID;
+    }
+    UTTER("  missing SPDX header/boilerplate:", list[idx]);
+    reportFrom(list, idx + 1);
+}
+
+import process Find("sh", "-c",
+    "find . \\( -name '*.c' -o -name '*.h' -o -name '*.~ATH' -o -name '*.^CAKE' \\) " +
+    "-not -path '*/deprecated/*' -not -path '*/vendor/*' -not -path '*/work/*' " +
+    "-not -path '*/golf/*' " +
+    "> " + FILELIST);
+
+~ATH(Find) {
+} EXECUTE(
+    BIRTH raw WITH SCRY(FILELIST);
+    BIRTH lines WITH SPLIT(raw, "\n");
+    BIRTH failures WITH scanFrom(lines, 0, []);
+
+    SHOULD LENGTH(failures) == 0 {
+        UTTER("check-spdx: OK -", LENGTH(lines), "files checked");
+        THIS.DIE();
+    } LEST {
+        UTTER("check-spdx: missing header/boilerplate in", LENGTH(failures), "file(s):");
+        reportFrom(failures, 0);
+        CONDEMN "SPDX/license header check failed";
+    }
+);
