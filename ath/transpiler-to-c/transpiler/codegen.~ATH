@@ -223,7 +223,7 @@ RITE genExpr(expr, ctx) {
         BIRTH vt WITH expr.vt;
         SHOULD vt == "INT" { BEQUEATH {ctx:ctx, stmts:t+"=ath_int("+STRING(expr.v)+"L);\n", t:t}; }
         SHOULD vt == "FLT" { BEQUEATH {ctx:ctx, stmts:t+"=ath_float("+STRING(expr.v)+");\n", t:t}; }
-        SHOULD vt == "STR" { BEQUEATH {ctx:ctx, stmts:t+"=ath_str_cstr(\""+escStr(expr.v)+"\");\n", t:t}; }
+        SHOULD vt == "STR" { BEQUEATH {ctx:ctx, stmts:t+"=ath_sink(ath_str_cstr(\""+escStr(expr.v)+"\"));\n", t:t}; }
         SHOULD vt == "BOOL" {
             SHOULD expr.v { BEQUEATH {ctx:ctx, stmts:t+"=ath_bool(1);\n", t:t}; }
             LEST           { BEQUEATH {ctx:ctx, stmts:t+"=ath_bool(0);\n", t:t}; }
@@ -256,6 +256,12 @@ RITE genExpr(expr, ctx) {
         BIRTH rr WITH genExpr(expr.right, ctx); ctx = rr.ctx;
         BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
         SHOULD HAS(BINOPS, op) {
+            // "+" is the only binop that can allocate (string concatenation),
+            // so its owned result goes to the sink; the rest return scalars.
+            SHOULD op == "+" {
+                BEQUEATH {ctx:ctx, stmts:rl.stmts+rr.stmts+
+                    t+"=ath_sink(ath_add("+rl.t+","+rr.t+"));\n", t:t};
+            }
             BEQUEATH {ctx:ctx, stmts:rl.stmts+rr.stmts+
                 t+"="+BINOPS[op]+"("+rl.t+","+rr.t+");\n", t:t};
         }
@@ -276,14 +282,14 @@ RITE genExpr(expr, ctx) {
     SHOULD et == "Member" {
         BIRTH ro WITH genExpr(expr.obj, ctx); ctx = ro.ctx;
         BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
-        BEQUEATH {ctx:ctx, stmts:ro.stmts+t+"=ath_member("+ro.t+",\""+expr.mem+"\");\n", t:t};
+        BEQUEATH {ctx:ctx, stmts:ro.stmts+t+"=ath_sink(ath_member("+ro.t+",\""+expr.mem+"\"));\n", t:t};
     }
 
     SHOULD et == "Index" {
         BIRTH ro WITH genExpr(expr.obj, ctx); ctx = ro.ctx;
         BIRTH ri WITH genExpr(expr.idx, ctx); ctx = ri.ctx;
         BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
-        BEQUEATH {ctx:ctx, stmts:ro.stmts+ri.stmts+t+"=ath_index("+ro.t+","+ri.t+");\n", t:t};
+        BEQUEATH {ctx:ctx, stmts:ro.stmts+ri.stmts+t+"=ath_sink(ath_index("+ro.t+","+ri.t+"));\n", t:t};
     }
 
     SHOULD et == "Array" { BEQUEATH genArrayExpr(expr, ctx); }
@@ -314,7 +320,7 @@ RITE genEjectExpr(expr, ctx) {
     BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
     BIRTH chk WITH "if(("+rt.t+").type!=ATH_SYLLADEX){ath_runtime_error(\"EJECT target is not a sylladex\",0,0);}\n";
     BEQUEATH {ctx:ctx, stmts:stmts+chk+
-        t+"=ath_syl_eject(("+rt.t+").as.sylladex,"+EJECT_MODS[expr.mod]+","+aRef+","+bRef+");\n", t:t};
+        t+"=ath_sink(ath_syl_eject(("+rt.t+").as.sylladex,"+EJECT_MODS[expr.mod]+","+aRef+","+bRef+"));\n", t:t};
 }
 
 // !~ATH 2.0: Sylladex constructor (STACK(n), HASHMAP(n, rite), etc.)
@@ -365,7 +371,7 @@ RITE genSylladexExpr(expr, ctx) {
                    ra.tmps_arr[2]+").as.rite,("+ra.tmps_arr[3]+").as.rite";
     }
     BEQUEATH {ctx:ctx, stmts:stmts+
-        t+"=ath_sylladex_val("+ctor+"("+callArgs+"));\n", t:t};
+        t+"=ath_sink(ath_sylladex_val("+ctor+"("+callArgs+")));\n", t:t};
 }
 
 RITE checkInt(t, what) {
@@ -393,7 +399,7 @@ RITE genCallExpr(expr, ctx) {
 
     BIRTH raa WITH ra.stmts+ra.assigns;
     SHOULD callee.t == "Ident" AND HAS(BUILTINS, callee.name) {
-        BEQUEATH {ctx:ctx, stmts:raa+t+"=ath_builtin_"+callee.name+"("+ctx.sv+","+STRING(argc)+",_args);\n", t:t};
+        BEQUEATH {ctx:ctx, stmts:raa+t+"=ath_sink(ath_builtin_"+callee.name+"("+ctx.sv+","+STRING(argc)+",_args));\n", t:t};
     }
     SHOULD callee.t == "Ident" AND HAS(ctx.ar, callee.name) {
         // Async rite called from sync context: fire-and-forget with NULL continuation
@@ -407,10 +413,10 @@ RITE genCallExpr(expr, ctx) {
         // reachable only via that chain.
         BIRTH clo WITH ctx.sv;
         SHOULD ctx.sv == "_sc" AND callee.name == ctx.srn { clo = "_closure"; }
-        BEQUEATH {ctx:ctx, stmts:raa+t+"=_rite_"+callee.name+"("+clo+","+STRING(argc)+",_args);\n", t:t};
+        BEQUEATH {ctx:ctx, stmts:raa+t+"=ath_sink(_rite_"+callee.name+"("+clo+","+STRING(argc)+",_args));\n", t:t};
     }
     BIRTH rc WITH genExpr(callee, ctx); ctx = rc.ctx;
-    BEQUEATH {ctx:ctx, stmts:raa+rc.stmts+t+"=ath_call_sync("+ctx.sv+","+rc.t+","+STRING(argc)+",_args);\n", t:t};
+    BEQUEATH {ctx:ctx, stmts:raa+rc.stmts+t+"=ath_sink(ath_call_sync("+ctx.sv+","+rc.t+","+STRING(argc)+",_args));\n", t:t};
 }
 
 // Evaluate all args first (stmts), then assign _args[i] (assigns) separately.
@@ -426,7 +432,7 @@ RITE genArgsList(args, i, ctx) {
 // Array literal: use APPEND builtin
 RITE genArrayExpr(expr, ctx) {
     BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
-    BIRTH s WITH t+"=ath_array_val(ath_array_new(0));\n";
+    BIRTH s WITH t+"=ath_sink(ath_array_val(ath_array_new(0)));\n";
     BIRTH ra WITH genArrayAppends(expr.elems, 0, t, ctx); ctx = ra.ctx;
     BEQUEATH {ctx:ctx, stmts:s+ra.stmts, t:t};
 }
@@ -436,14 +442,14 @@ RITE genArrayAppends(elems, i, t, ctx) {
     BIRTH re WITH genExpr(elems[i], ctx); ctx = re.ctx;
     BIRTH rest WITH genArrayAppends(elems, i+1, t, ctx); ctx = rest.ctx;
     BIRTH s WITH re.stmts+"_args[0]="+t+";_args[1]="+re.t+";\n"+
-        t+"=ath_builtin_APPEND("+ctx.sv+",2,_args);\n"+rest.stmts;
+        t+"=ath_sink(ath_builtin_APPEND("+ctx.sv+",2,_args));\n"+rest.stmts;
     BEQUEATH {ctx:ctx, stmts:s};
 }
 
 // Map literal: use SET builtin
 RITE genMapExpr(expr, ctx) {
     BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
-    BIRTH s WITH t+"=ath_map_val(ath_map_new(0));\n";
+    BIRTH s WITH t+"=ath_sink(ath_map_val(ath_map_new(0)));\n";
     BIRTH rm WITH genMapSets(expr.entries, 0, t, ctx); ctx = rm.ctx;
     BEQUEATH {ctx:ctx, stmts:s+rm.stmts, t:t};
 }
@@ -454,9 +460,9 @@ RITE genMapSets(entries, i, t, ctx) {
     BIRTH rv WITH genExpr(entry.val, ctx); ctx = rv.ctx;
     BIRTH rk WITH freshT(ctx); ctx = rk.ctx; BIRTH kt WITH rk.t;
     BIRTH rest WITH genMapSets(entries, i+1, t, ctx); ctx = rest.ctx;
-    BIRTH s WITH rv.stmts+kt+"=ath_str_cstr(\""+escStr(entry.key)+"\");\n"+
+    BIRTH s WITH rv.stmts+kt+"=ath_sink(ath_str_cstr(\""+escStr(entry.key)+"\"));\n"+
         "_args[0]="+t+";_args[1]="+kt+";_args[2]="+rv.t+";\n"+
-        t+"=ath_builtin_SET("+ctx.sv+",3,_args);\n"+rest.stmts;
+        t+"=ath_sink(ath_builtin_SET("+ctx.sv+",3,_args));\n"+rest.stmts;
     BEQUEATH {ctx:ctx, stmts:s};
 }
 
@@ -515,11 +521,16 @@ RITE genSyncStmt(stmt, depth, ctx) {
             // Evaluate args (reading the current _sc), then install a fresh scope
             // BEFORE releasing the old one: rebind increfs the args, so a borrowed
             // pass-through arg cannot be freed out from under us by the decref.
+            // After the rebind increfs the args into the fresh scope, flush the
+            // sink to the rite-entry mark: this iteration's expression garbage
+            // (and the pool's refs on the just-passed args) dies here, keeping
+            // the loop O(1) in memory.
             BIRTH s WITH p+"{\n"+p+ra.stmts+ra.assigns+
                 p+"{ AthScope *_old=_sc;\n"+
                 p+"  _sc=ath_scope_new(_closure);\n"+
                 genTailRebind(ctx.prm, cargc, 0)+
                 p+"  ath_scope_decref(_old); }\n"+
+                p+"ath_sink_flush(_sink0);\n"+
                 p+"goto _tailtop;\n"+p+"}\n";
             BEQUEATH {ctx:ctx, s:s};
         }
@@ -569,12 +580,19 @@ RITE genSyncStmt(stmt, depth, ctx) {
         BIRTH oia WITH ctx.ia;
         BIRTH rt WITH genSyncStmtList(stmt.attempt, 0, depth+2, SET(ctx,"ia",ALIVE)); ctx = SET(rt.ctx,"ia",oia);
         BIRTH rs WITH genSyncStmtList(stmt.salvage, 0, depth+2, SET(ctx,"ia",ALIVE)); ctx = SET(rs.ctx,"ia",oia);
+        // _sm marks the sink before the attempt; a CONDEMN/runtime error
+        // longjmps here past the normal flush points, so SALVAGE releases the
+        // attempt body's stranded expression garbage before handling.
+        BIRTH sm WITH "_sm"+STRING(rn.v);
         BIRTH s WITH p+"{\n"+
             p+"    AthErrorFrame "+ef+";\n"+
+            p+"    int "+sm+" = ath_sink_mark();\n"+
             p+"    ATH_ATTEMPT_BEGIN("+ef+") {\n"+rt.s+
             p+"        ATH_ATTEMPT_END("+ef+");\n"+
             p+"    } ATH_SALVAGE_BEGIN("+ef+") {\n"+
-            p+"        AthValue _err_v = ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\");\n"+
+            p+"        AthValue _err_v;\n"+
+            p+"        ath_sink_flush("+sm+");\n"+
+            p+"        _err_v = ath_sink(ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\"));\n"+
             p+"        ath_scope_define("+ctx.sv+",\""+stmt.errname+"\",_err_v,0);\n"+
             rs.s+
             p+"        ATH_SALVAGE_END("+ef+");\n"+
@@ -598,7 +616,7 @@ RITE genSyncStmt(stmt, depth, ctx) {
                 ctx = SET(SET(pmCtx,"pm",ctx.pm),"sr",SET(pmCtx.sr,stmt.name,ALIVE));
             }
             BIRTH s WITH p+"ath_scope_define("+ctx.sv+",\""+stmt.name+"\","+
-                "ath_rite_val(ath_rite_new_async("+ctx.sv+",_rite_async_"+stmt.name+","+STRING(np)+")),0);\n";
+                "ath_sink(ath_rite_val(ath_rite_new_async("+ctx.sv+",_rite_async_"+stmt.name+","+STRING(np)+"))),0);\n";
             BEQUEATH {ctx:ctx, s:s};
         }
         // If not already generated at top level, generate now (use pre-mode to avoid nesting)
@@ -608,7 +626,7 @@ RITE genSyncStmt(stmt, depth, ctx) {
             ctx = SET(SET(pmCtx,"pm",ctx.pm),"sr",SET(pmCtx.sr,stmt.name,ALIVE));
         }
         BIRTH s WITH p+"ath_scope_define("+ctx.sv+",\""+stmt.name+"\","+
-            "ath_rite_val(ath_rite_new_sync("+ctx.sv+",_rite_"+stmt.name+","+STRING(np)+")),0);\n";
+            "ath_sink(ath_rite_val(ath_rite_new_sync("+ctx.sv+",_rite_"+stmt.name+","+STRING(np)+"))),0);\n";
         BEQUEATH {ctx:ctx, s:s};
     }
 
@@ -886,18 +904,25 @@ RITE genSyncRite(stmt, ctx) {
     BIRTH topLabel WITH "";
     SHOULD bodyHasTailSelfCall(stmt.body, 0, name) { topLabel = "    _tailtop:\n"; }
 
+    // _sink0 marks the value sink at entry; _done increfs _ret (so it survives
+    // the flush and the scope release, making every rite return a +1 the
+    // caller sinks) then flushes this rite's expression garbage.
     BIRTH fn WITH "static AthValue _rite_"+name+"(AthScope *_closure,int _argc,AthValue *_argv) {\n"+
         "    AthScope *_sc;\n"+
         "    AthValue *_t; AthValue _args[16]; AthValue _ret;\n"+
+        "    int _sink0;\n"+
         "    (void)_argc;\n"+
         "    _sc = ath_scope_new(_closure);\n"+
         "    _t = (AthValue*)calloc(128, sizeof(AthValue));\n"+
+        "    _sink0 = ath_sink_mark();\n"+
         genParamBinds(params, 0, "_sc") +
         "    _ret = ath_void();\n"+
         topLabel +
         rb.s +
         "    _done:\n"+
         "    free(_t);\n"+
+        "    ath_value_incref(_ret);\n"+
+        "    ath_sink_flush(_sink0);\n"+
         "    ath_scope_decref(_sc);\n"+
         "    return _ret;\n"+
         "}\n";
@@ -991,6 +1016,7 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
         BIRTH ef WITH "_ef"+STRING(efn.v);
         ctx2 = emitDef(ctx2, "    {");
         ctx2 = emitDef(ctx2, "        AthErrorFrame "+ef+";");
+        ctx2 = emitDef(ctx2, "        int _sm"+STRING(efn.v)+" = ath_sink_mark();");
         ctx2 = emitDef(ctx2, "        ATH_ATTEMPT_BEGIN("+ef+") {");
         BIRTH postAttempt WITH SLICE(node.attempt, j+1, LENGTH(node.attempt));
         BIRTH execAndRest WITH CONCAT(asyncLoop.exec, postAttempt);
@@ -1000,7 +1026,9 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
         ctx2 = emitDef(ctx2, ri.s);
         ctx2 = emitDef(ctx2, "            ATH_ATTEMPT_END("+ef+");");
         ctx2 = emitDef(ctx2, "        } ATH_SALVAGE_BEGIN("+ef+") {");
-        ctx2 = emitDef(ctx2, "            AthValue _err_v = ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\");");
+        ctx2 = emitDef(ctx2, "            AthValue _err_v;");
+        ctx2 = emitDef(ctx2, "            ath_sink_flush(_sm"+STRING(efn.v)+");");
+        ctx2 = emitDef(ctx2, "            _err_v = ath_sink(ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\"));");
         ctx2 = emitDef(ctx2, "            ath_scope_define("+sv+",\""+node.errname+"\",_err_v,0);");
         BIRTH sctx WITH SET(resetTc(ctx2),"sv",sv);
         BIRTH rs WITH genSyncStmtList(node.salvage, 0, 3, sctx);
@@ -1041,7 +1069,7 @@ RITE genModuleFrame(frameName, modName, exports, stmts, modAsyncRites, outerCtx)
         "    "+frameName+" *f=("+frameName+"*)_self;\n"+
         "    AthMap *_exp=ath_map_new(8);\n"+
         genExportCollects(exports, 0)+
-        "    ath_scope_define(f->parent_scope,\""+modName+"\",ath_module_val(_exp),0);\n"+
+        "    ath_scope_define(f->parent_scope,\""+modName+"\",ath_sink(ath_module_val(_exp)),0);\n"+
         "    if(f->base.next)ath_eventloop_schedule(f->base.next,ath_void());\n"+
         "    "+frameName+"_free(f);\n"+
         "}\n";

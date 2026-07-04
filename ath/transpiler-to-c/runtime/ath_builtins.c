@@ -461,6 +461,8 @@ AthValue ath_builtin_FIRST(AthScope *s, int argc, AthValue *argv) {
     REQUIRE_ARRAY(argv[0], "FIRST", "array");
     if (argv[0].as.array->length == 0)
         ath_runtime_error("FIRST: array is empty", 0, 0);
+    /* +1: builtins always return an owned reference (sunk by codegen) */
+    ath_value_incref(argv[0].as.array->data[0]);
     return argv[0].as.array->data[0];
 }
 
@@ -469,6 +471,8 @@ AthValue ath_builtin_LAST(AthScope *s, int argc, AthValue *argv) {
     REQUIRE_ARRAY(argv[0], "LAST", "array");
     if (argv[0].as.array->length == 0)
         ath_runtime_error("LAST: array is empty", 0, 0);
+    /* +1: builtins always return an owned reference (sunk by codegen) */
+    ath_value_incref(argv[0].as.array->data[argv[0].as.array->length - 1]);
     return argv[0].as.array->data[argv[0].as.array->length - 1];
 }
 
@@ -706,7 +710,10 @@ AthValue ath_builtin_REPLACE(AthScope *s, int argc, AthValue *argv) {
     old_len = argv[1].as.string->length;
     new_    = argv[2].as.string->data;
     new_len = argv[2].as.string->length;
-    if (old_len == 0) return argv[0]; /* no-op for empty old */
+    if (old_len == 0) { /* no-op for empty old; +1 like every builtin return */
+        ath_value_incref(argv[0]);
+        return argv[0];
+    }
     result_cap = src_len + 64;
     result = (char*)malloc(result_cap);
     for (i = 0; i <= src_len - old_len; ) {

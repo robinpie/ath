@@ -208,6 +208,18 @@ AthValue ath_member(AthValue obj, const char *member);
 void     ath_index_set(AthValue obj, AthValue idx, AthValue val);
 void     ath_member_set(AthValue obj, const char *member, AthValue val);
 
+/* ---- Value sink (deferred-release pool for expression temporaries) ----
+ * Generated code has no per-temp decrefs; instead every owning (+1) producer
+ * result is pushed onto a global sink stack via ath_sink(), and the stack is
+ * flushed back to a saved mark at deterministic points: sync-rite return,
+ * tail-call loop iteration, SALVAGE entry, and each event-loop dispatch.
+ * Values that must outlive a flush hold their own reference (scopes, sylladex
+ * slots, and _ret all incref on store). Single-threaded, LIFO discipline;
+ * marks stay valid across the longjmp of CONDEMN/runtime errors. */
+int      ath_sink_mark(void);
+AthValue ath_sink(AthValue v);
+void     ath_sink_flush(int mark);
+
 /* ---- Type checks / conversions ---- */
 int      ath_is_truthy(AthValue v);
 char    *ath_stringify(AthValue v);   /* malloc'd; caller frees */

@@ -305,7 +305,7 @@ void ath_banish_value(AthValue v) {
             AthValue arg = ath_relic_val(r);
             ath_value_incref(dv);
             ath_value_incref(arg);
-            ath_call_sync(NULL, dv, 1, &arg);
+            ath_value_decref(ath_call_sync(NULL, dv, 1, &arg));
             ath_value_decref(arg);
             ath_value_decref(dv);
         }
