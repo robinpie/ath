@@ -26,6 +26,29 @@
 #include <string.h>
 #include <stdio.h>
 
+/* ===== Value sink ===== */
+
+static AthValue *_sink       = NULL;
+static int       _sink_depth = 0;
+static int       _sink_cap   = 0;
+
+int ath_sink_mark(void) { return _sink_depth; }
+
+AthValue ath_sink(AthValue v) {
+    if (_sink_depth >= _sink_cap) {
+        _sink_cap = _sink_cap ? _sink_cap * 2 : 256;
+        _sink = (AthValue *)realloc(_sink, sizeof(AthValue) * _sink_cap);
+        if (!_sink) ath_fatal("out of memory");
+    }
+    _sink[_sink_depth++] = v;
+    return v;
+}
+
+void ath_sink_flush(int mark) {
+    while (_sink_depth > mark)
+        ath_value_decref(_sink[--_sink_depth]);
+}
+
 /* ===== String ===== */
 
 AthString *ath_string_new(const char *data, int len) {
@@ -890,6 +913,8 @@ AthValue ath_index(AthValue obj, AthValue idx) {
         i = (int)idx.as.integer;
         if (i < 0 || i >= obj.as.array->length)
             ath_runtime_error("array index out of bounds", 0, 0);
+        /* +1: ath_index always returns an owned reference (sunk by codegen) */
+        ath_value_incref(obj.as.array->data[i]);
         return obj.as.array->data[i];
     }
     case ATH_STRING: {
@@ -908,6 +933,7 @@ AthValue ath_index(AthValue obj, AthValue idx) {
         char *key = ath_stringify(idx);
         AthValue v = ath_map_get(obj.as.map, key);
         free(key);
+        ath_value_incref(v);
         return v;
     }
     case ATH_SYLLADEX:
@@ -922,14 +948,22 @@ AthValue ath_index(AthValue obj, AthValue idx) {
 AthValue ath_member(AthValue obj, const char *member) {
     switch (obj.type) {
     case ATH_MAP:
-    case ATH_MODULE:
-        return ath_map_get(obj.as.map, member);
-    case ATH_SESSION:
+    case ATH_MODULE: {
+        /* +1: ath_member always returns an owned reference (sunk by codegen) */
+        AthValue v = ath_map_get(obj.as.map, member);
+        ath_value_incref(v);
+        return v;
+    }
+    case ATH_SESSION: {
+        AthValue v;
         if (!obj.as.session) {
             ath_runtime_error_fmt("session has no member '%s'", member);
             return ath_void();
         }
-        return ath_map_get(obj.as.session->rites, member);
+        v = ath_map_get(obj.as.session->rites, member);
+        ath_value_incref(v);
+        return v;
+    }
     case ATH_SYLLADEX:
         ath_runtime_error_fmt("sylladex has no member '%s'", member);
         return ath_void();

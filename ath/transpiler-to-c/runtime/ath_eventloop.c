@@ -91,6 +91,9 @@ static void fifo_enqueue(AthCont *cont, AthValue result) {
     if (!t) ath_fatal("out of memory");
     t->cont   = cont;
     t->result = result;
+    /* The queue holds its own reference: the enqueuer's value may be
+     * sink-flushed before this task is dispatched. */
+    ath_value_incref(result);
     t->next   = NULL;
     if (_fifo_tail) _fifo_tail->next = t;
     else            _fifo_head = t;
@@ -275,8 +278,24 @@ void ath_eventloop_run(void) {
         while (!fifo_empty()) {
             AthCont  *cont;
             AthValue  result;
-            if (fifo_dequeue(&cont, &result))
+            if (fifo_dequeue(&cont, &result)) {
+                int _sm = ath_sink_mark();
                 cont->resume(cont, result);
+                ath_sink_flush(_sm);
+                ath_value_decref(result);   /* release the queue's reference */
+            }
+            /* Move already-expired timers to the FIFO as we go. A chain of
+             * immediately-ready continuations (e.g. the ~ATH(!T) idiom) can
+             * keep this drain busy indefinitely; without this, expired timers
+             * would pile up in the bounded heap until it overflows, since
+             * phase 3 below is only reached when the FIFO is empty. */
+            if (!heap_empty() && _heap[0].abs_ms <= get_now_ms()) {
+                unsigned long now = get_now_ms();
+                while (!heap_empty() && _heap[0].abs_ms <= now) {
+                    TimerEntry e = heap_pop();
+                    fifo_enqueue(e.cont, e.result);
+                }
+            }
         }
 
         /* Per spec: THIS.DIE() terminates the program. After draining all ready continuations, if THIS has died, exit -- don't wait on pending timers or poll other entities. */

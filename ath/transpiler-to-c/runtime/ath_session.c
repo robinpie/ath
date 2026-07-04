@@ -144,7 +144,7 @@ static void _session_teardown(AthCont *self, AthValue unused) {
                 ATH_ATTEMPT_BEGIN(ef) {
                     AthValue dv_local  = dv;
                     AthValue arg_local = arg;
-                    ath_call_sync(NULL, dv_local, 1, &arg_local);
+                    ath_value_decref(ath_call_sync(NULL, dv_local, 1, &arg_local));
                     ATH_ATTEMPT_END(ef);
                 } ATH_SALVAGE_BEGIN(ef) {
                     if (ef.error_msg) free(ef.error_msg);
