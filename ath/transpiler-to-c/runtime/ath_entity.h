@@ -32,7 +32,8 @@ typedef enum {
     ATH_ENTITY_AND        = 6,
     ATH_ENTITY_OR         = 7,
     ATH_ENTITY_NOT        = 8,
-    ATH_ENTITY_SESSION    = 9
+    ATH_ENTITY_SESSION    = 9,
+    ATH_ENTITY_PORTAL     = 10
 } AthEntityKind;
 
 typedef struct AthWaiter {
@@ -50,7 +51,7 @@ typedef struct AthEntity {
     unsigned long  deadline_ms;
     /* process -- pid_t on POSIX, HANDLE (cast to intptr_t) on Windows */
     intptr_t       pid;
-    /* connection -- fd on POSIX, SOCKET (cast to intptr_t) on Windows */
+    /* connection/portal -- fd on POSIX, SOCKET (cast to intptr_t) on Windows */
     intptr_t       sockfd;
     /* watcher */
     char          *filepath;
@@ -62,6 +63,9 @@ typedef struct AthEntity {
     int             and_right_dead;
     /* session (weak back-ref; session owns the entity strongly) */
     struct AthSession *session;
+    /* portal -- 0 = raw (SOCK_RAW + IP_HDRINCL), 1 = datagram (SOCK_DGRAM).
+       Kept last so appending it never shifts existing field offsets. */
+    int            portal_mode;
 } AthEntity;
 
 AthEntity *ath_entity_this_new(void);
@@ -70,10 +74,15 @@ AthEntity *ath_entity_branch_new(const char *name);
 AthEntity *ath_entity_process_new(const char *name, const char *cmd, char *const argv[]);
 AthEntity *ath_entity_connection_new(const char *name, const char *host, int port);
 AthEntity *ath_entity_watcher_new(const char *name, const char *filepath);
+AthEntity *ath_entity_portal_new(const char *name, const char *mode, int bind_port);
 AthEntity *ath_entity_and_new(AthEntity *a, AthEntity *b);
 AthEntity *ath_entity_or_new(AthEntity *a, AthEntity *b);
 AthEntity *ath_entity_not_new(AthEntity *inner);
 AthEntity *ath_entity_session_new(const char *name);
+
+/* Portal (raw / datagram socket) send + receive. Return bytes moved, 0 on EAGAIN/EWOULDBLOCK; raise a catchable runtime error on hard failure or a dead portal. */
+int ath_portal_send(AthEntity *e, const unsigned char *bytes, int len, const char *host, int port);
+int ath_portal_recv(AthEntity *e, unsigned char *buf, int cap);
 
 void ath_entity_die(AthEntity *e);
 void ath_entity_on_death(AthEntity *e, struct AthCont *k);

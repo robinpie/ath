@@ -1,0 +1,52 @@
+// net.^CAKE -- IPv4 / UDP / TCP header layouts for hand-crafted packets.
+//
+// Every recipe is DENSE IMPERIAL: packed (no padding, so offsets match the wire
+// exactly) and big-endian (so multi-byte fields are already in network order --
+// you SPRINKLE a host integer and the bytes land correctly, no htons needed).
+//
+// Addresses are 4 OF PINCH (four octets) rather than a SPOON, so you SPRINKLE
+// them octet-by-octet in wire order and never have to think about byte order.
+// The built-in RECKON computes the internet checksum over a BUFFER range.
+
+DENSE IMPERIAL RECIPE IPv4 {
+    INGREDIENT ver_ihl:   PINCH;      // version<<4 | IHL   (0x45 for a 20-byte header)
+    INGREDIENT tos:       PINCH;      // DSCP / ECN
+    INGREDIENT total_len: DASH;       // whole datagram length in bytes
+    INGREDIENT id:        DASH;
+    INGREDIENT flags_off: DASH;       // flags<<13 | fragment offset
+    INGREDIENT ttl:       PINCH;
+    INGREDIENT protocol:  PINCH;      // 6 = TCP, 17 = UDP
+    INGREDIENT checksum:  DASH;       // RECKON over these 20 bytes, field zeroed
+    INGREDIENT src:       4 OF PINCH;
+    INGREDIENT dst:       4 OF PINCH;
+}
+
+DENSE IMPERIAL RECIPE UDP {
+    INGREDIENT src_port:  DASH;
+    INGREDIENT dst_port:  DASH;
+    INGREDIENT length:    DASH;       // UDP header + payload
+    INGREDIENT checksum:  DASH;       // 0 = "no checksum" (legal over IPv4)
+}
+
+DENSE IMPERIAL RECIPE TCP {
+    INGREDIENT src_port:  DASH;
+    INGREDIENT dst_port:  DASH;
+    INGREDIENT seq:       SPOON;
+    INGREDIENT ack:       SPOON;
+    INGREDIENT data_off:  PINCH;      // data offset<<4 | reserved
+    INGREDIENT flags:     PINCH;      // FIN/SYN/RST/PSH/ACK/URG bits
+    INGREDIENT window:    DASH;
+    INGREDIENT checksum:  DASH;
+    INGREDIENT urgent:    DASH;
+}
+
+// The 12-byte transport pseudo-header. Never transmitted -- it exists only to be
+// summed together with the UDP/TCP header + payload when RECKON-ing the transport
+// checksum. `seg_len` is the UDP length (header+payload) or the TCP segment length.
+DENSE IMPERIAL RECIPE Pseudo {
+    INGREDIENT src:      4 OF PINCH;
+    INGREDIENT dst:      4 OF PINCH;
+    INGREDIENT zero:     PINCH;
+    INGREDIENT protocol: PINCH;       // 6 = TCP, 17 = UDP
+    INGREDIENT seg_len:  DASH;
+}

@@ -756,6 +756,22 @@ RITE genSyncImport(stmt, depth, ctx) {
         BEQUEATH {ctx:ctx, s:s};
     }
 
+    SHOULD et == "portal" {
+        BIRTH rm WITH genExpr(stmt.args[0], ctx); ctx = rm.ctx;
+        BIRTH portStmts WITH "";
+        BIRTH portExpr WITH "0";
+        SHOULD LENGTH(stmt.args) > 1 {
+            BIRTH rp WITH genExpr(stmt.args[1], ctx); ctx = rp.ctx;
+            portStmts = rp.stmts;
+            portExpr = "(int)"+rp.t+".as.integer";
+        }
+        BIRTH s WITH p+"{ "+rm.stmts+portStmts+
+            "{ char *_m=ath_stringify("+rm.t+"); int _bp="+portExpr+";\n"+
+            p+"  AthEntity *_e=ath_entity_portal_new(\""+name+"\",_m,_bp); free(_m);\n"+
+            p+"  ath_scope_define("+sv+",\""+name+"\",ath_entity_val(_e),0); } }\n";
+        BEQUEATH {ctx:ctx, s:s};
+    }
+
     SHOULD et == "session" {
         BEQUEATH genSessionImport(stmt, depth, ctx);
     }

@@ -1,0 +1,17 @@
+// RECKON: RFC 1071 internet checksum.
+// Canonical IPv4 header (checksum field zeroed) -> 0xB861.
+BIRTH hdr WITH [69,0,0,115,0,0,64,0,64,17,0,0,192,168,0,1,192,168,0,199];
+BIRTH b WITH BUFFER(20);
+RITE fill(i) {
+    SHOULD i < 20 { SET_BYTE(b, i, hdr[i]); fill(i + 1); }
+}
+fill(0);
+UTTER(RECKON(b));
+UTTER(HEX(RECKON(b)));
+
+// Odd-length range: bytes [1,2,3] -> 0x0102 + 0x0300 = 0x0402 -> ~ = 0xFBFD.
+BIRTH c WITH BUFFER(3);
+SET_BYTE(c, 0, 1); SET_BYTE(c, 1, 2); SET_BYTE(c, 2, 3);
+UTTER(RECKON(c));
+
+THIS.DIE();

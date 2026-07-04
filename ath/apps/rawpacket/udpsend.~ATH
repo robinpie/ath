@@ -1,0 +1,26 @@
+// udpsend.~ATH -- send and receive a UDP datagram over loopback, no privileges.
+//
+// A "datagram" portal is an ordinary SOCK_DGRAM socket: the kernel builds the
+// IP/UDP headers, so you only supply the payload and SENDIFICATE names the
+// destination. This is the unprivileged counterpart to rawudp.~ATH.
+//
+// Here one portal binds :9876 to receive; another sends to it; APPEARIFY pulls
+// the bytes back out inside a short ~ATH timer wait.
+
+import portal RX("datagram", 9876);
+import portal TX("datagram");
+
+BIRTH out WITH STRING_TO_BUFFER("ping through the portal");
+UTTER("sent", SENDIFICATE(TX, out, "127.0.0.1", 9876), "bytes");
+
+import timer T(30ms);
+~ATH(T) {
+} EXECUTE(
+    BIRTH buf WITH BUFFER(2048);
+    BIRTH n WITH APPEARIFY(RX, buf);
+    UTTER("received", n, "bytes:", BUFFER_TO_STRING(buf, n));
+    RX.DIE();
+    TX.DIE();
+);
+
+THIS.DIE();

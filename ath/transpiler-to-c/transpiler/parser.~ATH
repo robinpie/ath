@@ -114,7 +114,7 @@ RITE parseImport(toks, pos) {
     pos = pos + 1; // consume 'import'
     BIRTH ety WITH toks[pos].t;
     SHOULD ety != "timer" AND ety != "process" AND ety != "connection"
-       AND ety != "watcher" AND ety != "session" {
+       AND ety != "watcher" AND ety != "session" AND ety != "portal" {
         CONDEMN "Expected entity type at line " + STRING(toks[pos].l);
     }
     pos = pos + 1;

@@ -94,7 +94,7 @@ ENTOMB KW WITH {
     "import": "import", "bifurcate": "bifurcate", "EXECUTE": "EXECUTE",
     "DIE": "DIE", "THIS": "THIS",
     "timer": "timer", "process": "process", "connection": "connection", "watcher": "watcher",
-    "session": "session",
+    "session": "session", "portal": "portal",
     "BIRTH": "BIRTH", "ENTOMB": "ENTOMB", "WITH": "WITH",
     "ALIVE": "ALIVE", "DEAD": "DEAD", "VOID": "VOID",
     "SHOULD": "SHOULD", "LEST": "LEST", "RITE": "RITE",

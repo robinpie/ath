@@ -461,3 +461,6 @@ cake__TestErrors__test_raw_flavor_nonunion|exact|0
 cake__TestErrors__test_overbaked_unplate|exact|0
 ffi__TestRecipe__test_struct_return|exact|0|linux
 ffi__TestRecipe__test_struct_roundtrip|exact|0|linux
+portal__TestReckon__test_internet_checksum|exact|0|linux
+portal__TestLayout__test_ipv4_header_bytes|exact|0|linux
+portal__TestDatagram__test_udp_roundtrip|exact|0|linux

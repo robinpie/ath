@@ -47,7 +47,7 @@ Reserved words (cannot be used as identifiers):
 import bifurcate EXECUTE DIE THIS
 
 // Entity types
-timer process connection watcher session
+timer process connection watcher session portal
 
 // Expression language
 BIRTH ENTOMB WITH ALIVE DEAD VOID
@@ -351,6 +351,35 @@ UTTER(SIZEOF(Geo.Point));    // its byte size
 - Each top-level `RECIPE` becomes an export of type `RECIPE` (a first-class, inert value, like a rite reference); each `MEASURE` becomes an `INTEGER` export. Both are reached via `ModuleName.Name`.
 - `TYPEOF(Geo.Point)` returns `"RECIPE"`.
 - A parse or semantic error in the schema (`CURDLED`, `COLLAPSED SOUFFLÉ`, `STALE`, ...) raises a catchable runtime error at import time.
+
+#### portal
+
+A raw or datagram socket for crafting and sending your own packets. A portal is a mortal conduit onto the network; the socket's lifetime is tied to the entity (`~ATH(P)`, `P.DIE()`).
+
+Syntax:
+```
+import portal <identifier>(<mode>);
+import portal <identifier>(<mode>, <bind-port>);
+```
+
+`<mode>` is a string:
+- `"raw"`: a `SOCK_RAW` socket with `IP_HDRINCL`. You supply the entire IPv4 header (and everything after it); the kernel touches nothing. Raw sockets are privileged (they need `CAP_NET_RAW` / root).
+- `"datagram"`: an ordinary `SOCK_DGRAM` (UDP) socket. The kernel builds the IP/UDP headers; you supply only the payload. Unprivileged.
+
+The optional second argument binds a `"datagram"` portal to `INADDR_ANY:<bind-port>` so it can receive (see `APPEARIFY`). A `"raw"` portal ignores it.
+
+Examples:
+```
+import portal Raw("raw");
+import portal Sock("datagram");
+import portal Listen("datagram", 9000);
+```
+
+Data crosses a portal through the `SENDIFICATE`, `APPEARIFY`, and `RECKON` built-in rites (see *Built-in Rites*). Portals pair naturally with !^CAKE recipes, which describe the IPv4/UDP/TCP header layouts (see `ath/apps/rawpacket/`).
+
+A portal dies when you call `.DIE()` on it (which closes the socket) or when the socket hits a hard error. If the socket cannot be opened -- for instance a `"raw"` portal without privileges -- the entity's death is scheduled immediately via the event loop, and any `SENDIFICATE`/`APPEARIFY` on it raises a catchable error.
+
+Portals are currently POSIX-only. On Windows and WASM, `import portal` raises a catchable runtime error (no raw sockets / no sockets, respectively).
 
 ### Entity Operations
 
@@ -1084,6 +1113,25 @@ BIRTH r WITH RANDOM_INT(1, 6);   // e.g., 4
 TIME() -- Current Unix timestamp in milliseconds
 ```
 BIRTH now WITH TIME();
+```
+
+#### Portals (networking)
+
+These operate on `portal` entities (see *portal* under Built-in Entity Types) and `BUFFER`s. They let you craft and send raw TCP segments and UDP datagrams; the header layouts are best described with !^CAKE recipes (see `ath/apps/rawpacket/`).
+
+`SENDIFICATE(portal, buffer, host, port)`: Send the buffer's bytes through the portal to `host`:`port` (a `sendto`). Returns the number of bytes sent (an INTEGER), or `0` if the non-blocking socket would block. For a `"raw"` portal the `port` is ignored (raw IP has no ports), but `host` must equal the packet's IP destination so the kernel routes it. A hard failure or a dead portal raises a catchable error.
+```
+BIRTH n WITH SENDIFICATE(P, packet, "127.0.0.1", 9999);
+```
+
+`APPEARIFY(portal, buffer)`: Receive into the buffer (a `recv`), up to its length. Returns the number of bytes read (an INTEGER), or `0` if nothing is waiting. Pull-based: call it inside your own `~ATH` loop. The portal should have been bound (a `"datagram"` portal with a bind port) to receive.
+```
+BIRTH got WITH APPEARIFY(P, buf);
+```
+
+`RECKON(buffer) / RECKON(buffer, offset, length)`: The RFC 1071 internet checksum (one's-complement 16-bit sum) over the whole buffer, or a `[offset, offset+length)` slice. Returns the folded value to store in a checksum field (an INTEGER). Zero the checksum field before computing. For a TCP/UDP transport checksum, stage the 12-byte pseudo-header followed by the transport header and payload contiguously in one buffer and `RECKON` the whole thing. (The UDP-only rule that a computed `0x0000` is transmitted as `0xFFFF` is the caller's responsibility; never apply it to the IPv4 header checksum, where `0` is legal.)
+```
+SPRINKLE(ip, Net.IPv4, "checksum", RECKON(ip, 0, 20));
 ```
 
 #### !^CAKE Schema Rites
