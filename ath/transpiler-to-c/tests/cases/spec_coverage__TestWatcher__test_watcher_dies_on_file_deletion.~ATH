@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+
+// Regression: a plain (non-module) watcher entity must die when its
+// watched file is deleted out from under it.
+INSCRIBE("../work/watcher_delete_target.txt", "x");
+import watcher W("../work/watcher_delete_target.txt");
+import process P("sh", "-c", "sleep 0.3 && rm -f ../work/watcher_delete_target.txt");
+
+~ATH(W) {
+} EXECUTE(UTTER("watcher fired"));
+
+THIS.DIE();

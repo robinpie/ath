@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+
+// Spec edge case: if the watched file does not exist at import time, the
+// entity's death is scheduled immediately via the event loop (not
+// synchronous), so ~ATH(W) must still resolve.
+import watcher W("../work/watcher_does_not_exist_at_all.txt");
+
+~ATH(W) {
+} EXECUTE(UTTER("watcher fired"));
+
+THIS.DIE();

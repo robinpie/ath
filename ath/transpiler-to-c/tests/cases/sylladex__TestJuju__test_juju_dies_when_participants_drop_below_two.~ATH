@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+
+// Spec: a JUJU dies once fewer than two of its participants remain alive.
+// ALICE and BOB both participate then die; OBSERVER outlives them and
+// finds the JUJU dead on a later operation.
+BIRTH J WITH JUJU(2);
+
+bifurcate THIS[AB, OBSERVER];
+bifurcate AB[ALICE, BOB];
+
+~ATH(ALICE) {
+    CAPTCHALOGUE "hi" INTO J SLOT 0;
+} EXECUTE(VOID);
+
+~ATH(BOB) {
+    import timer TB(5ms);
+    ~ATH(TB) {
+    } EXECUTE(
+        BIRTH msg WITH EJECT SLOT 0 FROM J;
+        UTTER(msg);
+    );
+} EXECUTE(VOID);
+
+~ATH(OBSERVER) {
+    import timer TO(20ms);
+    ~ATH(TO) {
+    } EXECUTE(
+        ATTEMPT {
+            CAPTCHALOGUE "late" INTO J SLOT 1;
+            UTTER("no error");
+        } SALVAGE err {
+            UTTER("caught");
+        }
+    );
+} EXECUTE(VOID);
+
+[[ALICE, BOB], OBSERVER].DIE();
