@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// A successful module import inside ATTEMPT: exports must be usable in the
+// rest of the attempt body, and a later CONDEMN in the body must still be
+// caught by the same SALVAGE.
+ATTEMPT {
+    import watcher M("module_import_e2e__test_attempt_import_success.mod0.~ATH");
+    UTTER("ok:", M.double(21), M.version);
+    CONDEMN "post-import boom";
+} SALVAGE e {
+    UTTER("caught:", e);
+}
+UTTER("after");
+THIS.DIE();

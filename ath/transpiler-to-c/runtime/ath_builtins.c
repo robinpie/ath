@@ -125,10 +125,20 @@ AthBuiltinFn ath_builtin_lookup(const char *name) {
 
 void ath_scope_define_builtins(AthScope *s) {
     int i;
+    AthScope *target = s;
+    /* Put the ~55 builtins in a scope of their own above the program root,
+     * so ordinary global-variable lookups don't linearly scan past them.
+     * Shadowing still works: a user global with a builtin's name lands in
+     * `s` and is found first. */
+    if (s->parent == NULL) {
+        target = ath_scope_new(NULL);   /* refcount 1, owned by s below */
+        target->is_builtins = 1;
+        s->parent = target;
+    }
     for (i = 0; _builtins[i].name; i++) {
-        AthRite  *r = ath_rite_new_sync(s, _builtins[i].fn, -1);
+        AthRite  *r = ath_rite_new_sync(target, _builtins[i].fn, -1);
         AthValue  v = ath_rite_val(r);
-        ath_scope_define(s, _builtins[i].name, v, 1);
+        ath_scope_define(target, _builtins[i].name, v, 1);
         ath_rite_decref(r);
     }
 }

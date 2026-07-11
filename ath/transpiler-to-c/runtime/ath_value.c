@@ -158,8 +158,6 @@ static void ath_array_push(AthArray *a, AthValue v) {
 
 /* ===== Map ===== */
 
-#define MAP_LOAD_FACTOR 0.7
-
 static unsigned int ath_map_hash(const char *key, int len) {
     unsigned int h = 5381;
     int i;
@@ -198,7 +196,7 @@ static void ath_map_rehash(AthMap *m) {
 void ath_map_set_str(AthMap *m, AthString *key, AthValue val) {
     unsigned int h;
     int idx, i;
-    if ((double)m->count / m->capacity > MAP_LOAD_FACTOR) ath_map_rehash(m);
+    if (m->count * 10 > m->capacity * 7) ath_map_rehash(m); /* load factor 0.7 */
     h = ath_map_hash(key->data, key->length);
     idx = (int)(h % (unsigned int)m->capacity);
     for (i = 0; i < m->capacity; i++) {
@@ -763,6 +761,9 @@ static char *stringify_map(AthMap *m) {
 /* ===== Operators ===== */
 
 AthValue ath_add(AthValue a, AthValue b) {
+    /* both already strings: concat directly, no stringify round-trip */
+    if (a.type == ATH_STRING && b.type == ATH_STRING)
+        return ath_str_val(ath_string_concat(a.as.string, b.as.string));
     /* string coercion: if either is string, convert both */
     if (a.type == ATH_STRING || b.type == ATH_STRING) {
         char *sa = ath_stringify(a), *sb = ath_stringify(b);

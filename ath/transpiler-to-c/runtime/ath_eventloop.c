@@ -86,9 +86,22 @@ typedef struct FifoTask {
 static FifoTask *_fifo_head = NULL;
 static FifoTask *_fifo_tail = NULL;
 
+/* Freelist of dispatched tasks; the loop allocates/frees one task per
+ * continuation dispatch, so recycling avoids a malloc/free per event. */
+static FifoTask *_fifo_free = NULL;
+static int       _fifo_free_count = 0;
+#define FIFO_FREE_MAX 256
+
 static void fifo_enqueue(AthCont *cont, AthValue result) {
-    FifoTask *t = (FifoTask *)malloc(sizeof(FifoTask));
-    if (!t) ath_fatal("out of memory");
+    FifoTask *t;
+    if (_fifo_free) {
+        t = _fifo_free;
+        _fifo_free = t->next;
+        _fifo_free_count--;
+    } else {
+        t = (FifoTask *)malloc(sizeof(FifoTask));
+        if (!t) ath_fatal("out of memory");
+    }
     t->cont   = cont;
     t->result = result;
     /* The queue holds its own reference: the enqueuer's value may be
@@ -108,7 +121,13 @@ static int fifo_dequeue(AthCont **cont, AthValue *result) {
     if (!_fifo_head) _fifo_tail = NULL;
     *cont   = t->cont;
     *result = t->result;
-    free(t);
+    if (_fifo_free_count < FIFO_FREE_MAX) {
+        t->next = _fifo_free;
+        _fifo_free = t;
+        _fifo_free_count++;
+    } else {
+        free(t);
+    }
     return 1;
 }
 

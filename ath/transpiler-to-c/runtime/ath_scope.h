@@ -19,10 +19,12 @@
 #include "ath_value.h"
 
 typedef struct AthBinding {
-    const char *name;  /* interned C string literal or malloc'd -- owned by entry */
+    const char *name;  /* interned -- owned by the intern table, never freed */
     AthValue    value;
     int         is_const;
 } AthBinding;
+
+#define ATH_SCOPE_INLINE 8
 
 typedef struct AthScope {
     int           refcount;
@@ -30,6 +32,11 @@ typedef struct AthScope {
     int           count;
     int           capacity;
     AthBinding   *bindings;
+    /* small scopes (rite frames) live here, avoiding a malloc per frame */
+    AthBinding    inline_bindings[ATH_SCOPE_INLINE];
+    /* 1 on the builtins scope spliced above the program root; a define in
+     * its direct child must not silently shadow a builtin */
+    int           is_builtins;
 } AthScope;
 
 AthScope *ath_scope_new(AthScope *parent);

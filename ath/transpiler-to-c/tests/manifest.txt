@@ -218,6 +218,8 @@ ffi__TestSession__test_multiple_destructors_flush|exact|0|linux
 ffi__TestSession__test_no_block|exact|0|linux
 ffi__TestSession__test_typeof_session|exact|0|linux
 ffi__TestSession__test_unsafe_keyword|exact|0|linux
+module_import_e2e__test_attempt_catches_module_error|exact|0
+module_import_e2e__test_attempt_import_success|exact|0
 module_import_e2e__test_basic_rite_import|exact|0
 module_import_e2e__test_constant_export|exact|0
 module_import_e2e__test_module_typeof|exact|0
