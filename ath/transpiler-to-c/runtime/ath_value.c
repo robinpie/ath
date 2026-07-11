@@ -266,20 +266,44 @@ int ath_map_has(AthMap *m, const char *key) {
 
 void ath_map_delete(AthMap *m, const char *key) {
     unsigned int h;
-    int idx, i, klen;
+    int idx, i, klen, cap, found = -1;
+    if (!m) return;
+    cap = m->capacity;
     klen = (int)strlen(key);
     h = ath_map_hash(key, klen);
-    idx = (int)(h % (unsigned int)m->capacity);
-    for (i = 0; i < m->capacity; i++) {
-        int slot = (idx + i) % m->capacity;
+    idx = (int)(h % (unsigned int)cap);
+    for (i = 0; i < cap; i++) {
+        int slot = (idx + i) % cap;
         AthMapEntry *e = &m->entries[slot];
-        if (!e->used) return;
+        if (!e->used) return;                 /* key not present */
         if (e->key->length == klen && memcmp(e->key->data, key, klen) == 0) {
-            ath_string_decref(e->key);
-            ath_value_decref(e->value);
-            e->used = 0;
-            m->count--;
-            return;
+            found = slot;
+            break;
+        }
+    }
+    if (found < 0) return;
+    ath_string_decref(m->entries[found].key);
+    ath_value_decref(m->entries[found].value);
+    m->count--;
+    /* Backward-shift deletion (Knuth Alg. R): a plain tombstone would sever the
+       probe chain, hiding keys that collided and probed past this slot. Walk
+       forward from the hole; any entry whose home slot is not cyclically within
+       (hole, j] is moved back to fill the hole, then it becomes the new hole. */
+    i = found;
+    for (;;) {
+        int j = i;
+        for (;;) {
+            unsigned int hk;
+            int k;
+            j = (j + 1) % cap;
+            if (!m->entries[j].used) { m->entries[i].used = 0; return; }
+            hk = ath_map_hash(m->entries[j].key->data, m->entries[j].key->length);
+            k = (int)(hk % (unsigned int)cap);
+            if (i <= j) { if (i < k && k <= j) continue; }
+            else        { if (i < k || k <= j) continue; }
+            m->entries[i] = m->entries[j];    /* move entry back to fill hole */
+            i = j;                            /* hole moves to j */
+            break;
         }
     }
 }

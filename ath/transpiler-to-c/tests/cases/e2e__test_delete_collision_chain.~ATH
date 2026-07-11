@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Regression: deleting a key at its home slot must not sever the linear-probe
+// chain for a later key that collided into the same bucket. "k0" and "k8" hash
+// to the same bucket (mod 8); deleting "k0" must keep "k8" reachable.
+BIRTH m WITH {};
+m = SET(m, "k0", 1);
+m = SET(m, "k8", 2);
+m = DELETE(m, "k0");
+UTTER(HAS(m, "k8"));
+UTTER(m["k8"]);
+UTTER(HAS(m, "k0"));
+THIS.DIE();

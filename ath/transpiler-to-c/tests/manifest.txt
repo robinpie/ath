@@ -65,6 +65,7 @@ e2e__test_concat|exact|0
 e2e__test_condemn_caught|exact|0
 e2e__test_deeply_nested_array|exact|0
 e2e__test_delete|exact|0
+e2e__test_delete_collision_chain|exact|0
 e2e__test_die_already_dead|exact|0
 e2e__test_division|exact|0
 e2e__test_empty_array|exact|0
