@@ -1076,7 +1076,93 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
         ctx2 = emitDef(ctx2, "    }");
         BEQUEATH genAsyncSegments(post, fname, resetTc(ctx2));
     }
-    BEQUEATH ctx2;
+    // Module import inside ATTEMPT: run the module's init frame synchronously
+    // under an error frame so a module-load error is catchable by this
+    // ATTEMPT's SALVAGE. On failure the next segment is resumed with the
+    // message as a STRING (success always resumes with VOID via _done), and
+    // the next segment re-CONDEMNs it inside its own error frame so the
+    // salvage handles both module errors and postAttempt errors uniformly.
+    // A module error after the module's own first ~ATH yield is still an
+    // unhandled CONDEMN
+    SHOULD isModuleImport(asyncLoop) {
+        BIRTH path WITH asyncLoop.args[0].v;
+        BIRTH modName WITH asyncLoop.name;
+        BIRTH frameName WITH "";
+        BIRTH seg0 WITH "";
+        SHOULD HAS(ctx2.mc, path) {
+            frameName = ctx2.mc[path].fn;
+            seg0 = ctx2.mc[path].s0;
+        } LEST {
+            BIRTH src WITH SCRY(path);
+            BIRTH tokens WITH ctx2.pl.tokenize(src);
+            BIRTH modAst WITH ctx2.pl.parse(tokens);
+            BIRTH modAnn WITH ctx2.pl.analyze(modAst, {});
+            BIRTH exports WITH collectModuleExports(modAnn.ast.stmts, 0);
+            BIRTH rnm WITH freshN(ctx2); ctx2 = rnm.ctx;
+            frameName = "_FMod"+STRING(rnm.v);
+            BIRTH pmCtx WITH SET(ctx2,"pm",ALIVE);
+            pmCtx = genAllRites(modAnn.ast.stmts, 0, modAnn.asyncRites, pmCtx);
+            pmCtx = genModuleFrame(frameName, modName, exports, modAnn.ast.stmts, modAnn.asyncRites, pmCtx);
+            ctx2 = SET(pmCtx,"pm",ctx2.pm);
+            seg0 = ctx2.ms0;
+            ctx2 = SET(ctx2,"mc",SET(ctx2.mc, path, {fn:frameName, s0:seg0}));
+        }
+        BIRTH rn WITH freshN(ctx2); ctx2 = rn.ctx;
+        BIRTH nextName WITH "_s"+STRING(rn.v)+"_"+fname;
+        BIRTH efn0 WITH freshN(ctx2); ctx2 = efn0.ctx;
+        BIRTH ef0 WITH "_ef"+STRING(efn0.v);
+        ctx2 = emitDef(ctx2, "    f->base.resume="+nextName+";");
+        ctx2 = emitDef(ctx2, "    {");
+        ctx2 = emitDef(ctx2, "        AthErrorFrame "+ef0+";");
+        ctx2 = emitDef(ctx2, "        ATH_ATTEMPT_BEGIN("+ef0+") {");
+        ctx2 = emitDef(ctx2, "            "+frameName+" *_mf="+frameName+"_new((AthCont*)f,f->scope);");
+        ctx2 = emitDef(ctx2, "            "+seg0+"((AthCont*)_mf,ath_void());");
+        ctx2 = emitDef(ctx2, "            ATH_ATTEMPT_END("+ef0+");");
+        ctx2 = emitDef(ctx2, "        } ATH_SALVAGE_BEGIN("+ef0+") {");
+        ctx2 = emitDef(ctx2, "            ath_eventloop_schedule((AthCont*)f,ath_sink(ath_str_cstr("+ef0+".error_msg?"+ef0+".error_msg:\"module import failed\")));");
+        ctx2 = emitDef(ctx2, "            ATH_SALVAGE_END("+ef0+");");
+        ctx2 = emitDef(ctx2, "        }");
+        ctx2 = emitDef(ctx2, "    }");
+        ctx2 = emitDef(ctx2, "    return;");
+        ctx2 = emitDef(ctx2, "}");
+        ctx2 = emitFwd(ctx2, "static void "+nextName+"(AthCont*,AthValue);");
+        ctx2 = emitDef(ctx2, "static void "+nextName+"(AthCont *_self, AthValue _result) {");
+        ctx2 = emitDef(ctx2, "    "+fname+" *f = ("+fname+"*)_self;");
+        ctx2 = emitDef(ctx2, "    AthValue _t[512]; AthValue _args[16];");
+        ctx2 = emitDef(ctx2, "    (void)_result; memset(_t,0,sizeof(_t));");
+        SHOULD ctx2.cb { ctx2 = emitDef(ctx2, "    ath_eventloop_set_current_branch(f->branch);"); }
+        ctx2 = resetTc(ctx2);
+        BIRTH efn WITH freshN(ctx2); ctx2 = efn.ctx;
+        BIRTH ef WITH "_ef"+STRING(efn.v);
+        ctx2 = emitDef(ctx2, "    {");
+        ctx2 = emitDef(ctx2, "        AthErrorFrame "+ef+";");
+        ctx2 = emitDef(ctx2, "        int _sm"+STRING(efn.v)+" = ath_sink_mark();");
+        ctx2 = emitDef(ctx2, "        ATH_ATTEMPT_BEGIN("+ef+") {");
+        ctx2 = emitDef(ctx2, "            if (_result.type==ATH_STRING) ath_condemn(ath_string_cstr(_result.as.string),0,0);");
+        BIRTH postAttempt WITH SLICE(node.attempt, j+1, LENGTH(node.attempt));
+        BIRTH ictx WITH SET(SET(resetTc(ctx2),"sv",sv),"efs",APPEND(ctx2.efs,ef));
+        BIRTH ri WITH genSyncStmtList(postAttempt, 0, 3, ictx);
+        ctx2 = SET(ctx2,"n",ri.ctx.n); ctx2 = SET(ctx2,"tc",ri.ctx.tc);
+        ctx2 = emitDef(ctx2, ri.s);
+        ctx2 = emitDef(ctx2, "            ATH_ATTEMPT_END("+ef+");");
+        ctx2 = emitDef(ctx2, "        } ATH_SALVAGE_BEGIN("+ef+") {");
+        ctx2 = emitDef(ctx2, "            AthValue _err_v;");
+        ctx2 = emitDef(ctx2, "            ath_sink_flush(_sm"+STRING(efn.v)+");");
+        ctx2 = emitDef(ctx2, "            _err_v = ath_sink(ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\"));");
+        ctx2 = emitDef(ctx2, "            ath_scope_define("+sv+",\""+node.errname+"\",_err_v,0);");
+        BIRTH sctx WITH SET(resetTc(ctx2),"sv",sv);
+        BIRTH rs WITH genSyncStmtList(node.salvage, 0, 3, sctx);
+        ctx2 = SET(ctx2,"n",rs.ctx.n); ctx2 = SET(ctx2,"tc",rs.ctx.tc);
+        ctx2 = emitDef(ctx2, rs.s);
+        ctx2 = emitDef(ctx2, "            ATH_SALVAGE_END("+ef+");");
+        ctx2 = emitDef(ctx2, "        }");
+        ctx2 = emitDef(ctx2, "    }");
+        BEQUEATH genAsyncSegments(post, fname, resetTc(ctx2));
+    }
+    // Anything else async inside ATTEMPT used to fall through here and be
+    // silently dropped from the generated C (attempt remainder, salvage, and
+    // all following statements). Fail the transpile loudly instead.
+    CONDEMN "ATTEMPT containing async construct '"+asyncLoop.t+"' is not supported";
 }
 
 // genModuleFrame: generates the complete module init frame in pre-mode.
@@ -1084,6 +1170,9 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
 RITE genModuleFrame(frameName, modName, exports, stmts, modAsyncRites, outerCtx) {
     BIRTH rn WITH freshN(outerCtx); outerCtx = rn.ctx;
     BIRTH seg0 WITH "_s"+STRING(rn.v)+"_"+frameName;
+    // Expose the entry segment's name to callers (ctx.ms0): ATTEMPT-wrapped
+    // imports call it synchronously to make module-load errors catchable.
+    outerCtx = SET(outerCtx, "ms0", seg0);
 
     outerCtx = emitFwd(outerCtx, "typedef struct "+frameName+" "+frameName+";");
     outerCtx = emitFwd(outerCtx, "static void "+seg0+"(AthCont*,AthValue);");
@@ -1174,8 +1263,8 @@ RITE genModuleImport(stmt, post, fname, ctx) {
     pmCtx = genModuleFrame(frameName, modName, exports, modAnn.ast.stmts, modAnn.asyncRites, pmCtx);
     ctx = SET(pmCtx,"pm",ctx.pm);
 
-    // Cache the module
-    ctx = SET(ctx,"mc",SET(ctx.mc, path, {fn:frameName}));
+    // Cache the module (s0 = entry segment, for ATTEMPT-wrapped imports)
+    ctx = SET(ctx,"mc",SET(ctx.mc, path, {fn:frameName, s0:ctx.ms0}));
 
     // Emit the CPS split in the parent frame
     BIRTH rn2 WITH freshN(ctx); ctx = rn2.ctx;

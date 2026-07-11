@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// A module that errors during init, imported inside ATTEMPT: the error
+// must land in SALVAGE and execution must continue after the ATTEMPT.
+UTTER("before");
+ATTEMPT {
+    import watcher M("module_import_e2e__test_attempt_catches_module_error.mod0.~ATH");
+    UTTER("not reached");
+} SALVAGE e {
+    UTTER("caught:", e);
+}
+UTTER("after");
+THIS.DIE();

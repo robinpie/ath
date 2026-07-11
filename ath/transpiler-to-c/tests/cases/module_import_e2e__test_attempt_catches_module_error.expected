@@ -1,0 +1,3 @@
+before
+caught: cannot reassign constant 'TRIM'
+after
