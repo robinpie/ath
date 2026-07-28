@@ -5,3 +5,12 @@ GEMINI.md
 *.py[cod]
 ath/apps/quicproject/cwnd_log.csv
 *.kate-swp
+
+# Build artifacts. The committed bootstrap binaries (athtoc-bin*, athtoc.wasm,
+# tests/athtoc-stable) and vendored vendor/win64/libffi/lib/libffi.a are NOT
+# artifacts -- they stay tracked.
+ath/transpiler-to-c/runtime/*.o
+ath/transpiler-to-c/libath_runtime.a
+ath/transpiler-to-c/libath_runtime_win64.a
+ath/transpiler-to-c/libath_runtime_wasm.a
+ath/transpiler-to-c/tests/work/

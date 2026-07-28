@@ -1,0 +1,210 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2026 robinpie
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch cancels the previous run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Native Linux: self-host rebuild, bootstrap-drift check, full suite
+  # ---------------------------------------------------------------------------
+  linux:
+    name: linux (x86_64)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ath/transpiler-to-c
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y build-essential libffi-dev
+
+      # libath_runtime.a is not tracked, but `make clean` also clears any stale
+      # objects and forces every runtime TU to be recompiled against the current
+      # headers (the Makefile has no header-dependency tracking).
+      - name: Clean
+        run: make clean
+
+      # The committed athtoc-bin is the bootstrap seed. If someone edits
+      # transpiler/*.~ATH without refreshing it, the seed and the rebuilt
+      # transpiler disagree -- catch that here rather than at the next bootstrap.
+      - name: Rebuild transpiler and check bootstrap drift
+        run: |
+          set -euo pipefail
+          cp athtoc-bin /tmp/athtoc-committed
+          (cd transpiler && /tmp/athtoc-committed < main.~ATH > /tmp/committed.c)
+          make
+          (cd transpiler && ../athtoc-bin < main.~ATH > /tmp/rebuilt.c)
+          if ! cmp -s /tmp/committed.c /tmp/rebuilt.c; then
+            echo "FAIL: committed athtoc-bin does not reproduce the current transpiler source."
+            echo "      Rebuild it ('make' in ath/transpiler-to-c) and commit the new binary."
+            diff /tmp/committed.c /tmp/rebuilt.c | head -50
+            exit 1
+          fi
+          echo "OK: committed athtoc-bin is in sync with transpiler/*.~ATH"
+
+      - name: Build runtime library
+        run: make lib
+
+      - name: Smoke test
+        run: make smoke
+
+      - name: Test suite (native)
+        run: make test-linux
+
+      - name: SPDX header lint
+        run: make check-license
+
+  # ---------------------------------------------------------------------------
+  # Windows target, cross-compiled with MinGW-w64 and exercised under Wine.
+  # The harness itself is a native ELF; only the per-case toolchain is win64.
+  # ---------------------------------------------------------------------------
+  win64:
+    name: win64 (mingw + wine)
+    runs-on: ubuntu-latest
+    env:
+      WINEPREFIX: /home/runner/.wine-ath
+      WINEDEBUG: "-all"
+    defaults:
+      run:
+        working-directory: ath/transpiler-to-c
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libffi-dev mingw-w64 wine wine64
+
+      # First boot creates the prefix and is slow; do it once, up front, so a
+      # test-case timeout is never really a wineboot in disguise.
+      - name: Initialize Wine prefix
+        run: wineboot --init && wineserver -w
+
+      - name: Build native runtime library
+        run: make clean && make lib
+
+      - name: Cross-compile transpiler and runtime for win64
+        run: make bin-win64 lib-win64
+
+      - name: Test suite (win64 under wine)
+        run: make test-win64
+
+  # ---------------------------------------------------------------------------
+  # WebAssembly / WASI: self-host fixpoint proof plus the full suite under
+  # wasmtime. FFI/session, process, and connection cases report 'skip'.
+  # ---------------------------------------------------------------------------
+  wasm:
+    name: wasm (wasi-sdk + wasmtime)
+    runs-on: ubuntu-latest
+    env:
+      # Bump this to move to a newer wasi-sdk; the asset name is derived below.
+      WASI_SDK_VERSION: "24"
+      WASI_SDK: /opt/wasi-sdk
+    defaults:
+      run:
+        working-directory: ath/transpiler-to-c
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y build-essential libffi-dev
+
+      - name: Cache wasi-sdk
+        id: cache-wasi-sdk
+        uses: actions/cache@v4
+        with:
+          path: /opt/wasi-sdk-${{ env.WASI_SDK_VERSION }}.0-x86_64-linux
+          key: wasi-sdk-${{ env.WASI_SDK_VERSION }}-x86_64-linux
+
+      - name: Install wasi-sdk
+        run: |
+          set -euo pipefail
+          V="$WASI_SDK_VERSION"
+          DIR="/opt/wasi-sdk-${V}.0-x86_64-linux"
+          if [ ! -d "$DIR" ]; then
+            URL="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${V}/wasi-sdk-${V}.0-x86_64-linux.tar.gz"
+            curl -fsSL "$URL" -o /tmp/wasi-sdk.tar.gz
+            sudo tar -xzf /tmp/wasi-sdk.tar.gz -C /opt
+          fi
+          sudo ln -sfn "$DIR" /opt/wasi-sdk
+          /opt/wasi-sdk/bin/clang --version
+
+      - name: Install wasmtime
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+
+      - name: Build native runtime library
+        run: make clean && make lib
+
+      - name: Build wasm transpiler and runtime library
+        run: make bin-wasm lib-wasm
+
+      # Proves the committed athtoc.wasm is a faithful self-host: it reproduces
+      # its own C output, byte-identical to the native athtoc-bin's.
+      - name: Verify wasm self-host
+        run: ulimit -s unlimited; make verify-wasm-selfhost
+
+      - name: Test suite (wasm under wasmtime)
+        run: ulimit -s unlimited; make test-wasm
+
+  # ---------------------------------------------------------------------------
+  # i686
+  # ---------------------------------------------------------------------------
+  i686:
+    name: i686 (32-bit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ath/transpiler-to-c
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install 32-bit toolchain
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib libffi-dev libffi-dev:i386
+
+      - name: Build i686 transpiler
+        run: make clean && make bin-i686
+
+      - name: Smoke test (i686)
+        run: |
+          set -euo pipefail
+          echo 'import timer T(1ms); ~ATH(T){} EXECUTE(UTTER("Hello")); THIS.DIE();' \
+            | ./athtoc-bin-i686 > /tmp/_ath_smoke32.c
+          gcc -std=c89 -m32 /tmp/_ath_smoke32.c \
+            $(ls runtime/*.c | grep -v test_runtime.c) \
+            -Iruntime -L/usr/lib32 -ldl -lffi -o /tmp/_ath_smoke32
+          test "$(/tmp/_ath_smoke32)" = "Hello"
+          echo "OK"
+
+  # ---------------------------------------------------------------------------
+  # Licensing metadata (REUSE.toml + .reuse/).
+  # ---------------------------------------------------------------------------
+  reuse:
+    name: reuse lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: fsfe/reuse-action@v5
