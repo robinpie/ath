@@ -131,6 +131,7 @@ void ath_scope_decref(AthScope *s) {
 
 void ath_scope_define(AthScope *s, const char *name, AthValue v, int is_const) {
     int i;
+    AthValue old;
     const char *iname = intern_query(name);
     /* Check if already defined in this scope (allow re-define for ~ATH re-imports).
        All binding names are interned, so pointer equality suffices. */
@@ -138,9 +139,13 @@ void ath_scope_define(AthScope *s, const char *name, AthValue v, int is_const) {
         if (s->bindings[i].name == iname) {
             if (s->bindings[i].is_const)
                 ath_runtime_error_fmt("cannot reassign constant '%s'", name);
-            ath_value_decref(s->bindings[i].value);
-            s->bindings[i].value = v;
+            /* Incref before releasing the old value: they may be the same
+               object, and the binding may hold its only reference, in which
+               case decref-first would free it out from under the incref. */
+            old = s->bindings[i].value;
             ath_value_incref(v);
+            s->bindings[i].value = v;
+            ath_value_decref(old);
             s->bindings[i].is_const = is_const;
             return;
         }
@@ -192,6 +197,7 @@ AthValue ath_scope_get(AthScope *s, const char *name) {
 
 void ath_scope_set(AthScope *s, const char *name, AthValue v) {
     int i;
+    AthValue old;
     const char *iname = intern_query(name);
     AthScope *cur = s;
     while (cur) {
@@ -199,9 +205,14 @@ void ath_scope_set(AthScope *s, const char *name, AthValue v) {
             if (cur->bindings[i].name == iname) {
                 if (cur->bindings[i].is_const)
                     ath_runtime_error_fmt("cannot reassign constant '%s'", name);
-                ath_value_decref(cur->bindings[i].value);
-                cur->bindings[i].value = v;
+                /* Self-assignment (`x = x;`) hands us the binding's own value
+                   as a borrowed reference, so incref before releasing the old
+                   one -- otherwise the decref frees it and the incref reads
+                   freed memory. */
+                old = cur->bindings[i].value;
                 ath_value_incref(v);
+                cur->bindings[i].value = v;
+                ath_value_decref(old);
                 return;
             }
         }

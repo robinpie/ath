@@ -1002,6 +1002,22 @@ RITE findFirstAsync(stmts, i, bn) {
     BEQUEATH findFirstAsync(stmts, i+1, bn);
 }
 
+// checkWaitBody: enforce the spec's wait-mode body restriction. A wait-mode
+// ~ATH body may hold nothing but nested ~ATH loops (athSpec.md, "Wait Mode
+// Semantics", and Grammar semantic note 1); all computation belongs in
+// EXECUTE. Branch-mode bodies are unrestricted and never reach here -- every
+// caller has already established that the awaited entity is not a branch.
+RITE checkWaitBody(stmts, i) {
+    SHOULD i >= LENGTH(stmts) { BEQUEATH VOID; }
+    BIRTH s WITH stmts[i];
+    SHOULD s.t != "AthLoop" {
+        CONDEMN "Semantic error at line " + STRING(s.l) +
+            ": a wait-mode ~ATH body may only contain nested ~ATH loops, got " +
+            s.t + " (put it in the EXECUTE clause)";
+    }
+    BEQUEATH checkWaitBody(stmts, i+1);
+}
+
 // genAsyncBodyStmts: emit sync statements directly into defs (async segment context)
 // sv = "f->scope"
 RITE genAsyncBodyStmts(stmts, i, fname, ctx) {
@@ -1036,6 +1052,15 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
     BIRTH ctx2 WITH genAsyncBodyStmts(preAttempt, 0, fname, ctx);
     BIRTH asyncLoop WITH node.attempt[j];
     SHOULD asyncLoop.t == "AthLoop" {
+        // Wait mode. This loop's continuation is emitted as a *sync* statement
+        // list inside the ATTEMPT's setjmp region, so the nested ~ATH loops a
+        // wait-mode body may hold have nowhere to go. Refuse instead of
+        // dropping them silently (cf. the CONDEMN closing this rite).
+        SHOULD LENGTH(asyncLoop.body) > 0 {
+            checkWaitBody(asyncLoop.body, 0);
+            CONDEMN "ATTEMPT containing a ~ATH loop with a non-empty body is not supported (line "+
+                STRING(asyncLoop.l)+")";
+        }
         BIRTH ep WITH genEntityC(asyncLoop.entity, sv);
         BIRTH rn WITH freshN(ctx2); ctx2 = rn.ctx;
         BIRTH nextName WITH "_s"+STRING(rn.v)+"_"+fname;
@@ -1305,6 +1330,9 @@ RITE genAsyncSegments(stmts, fname, ctx) {
 
     // AthLoop: entity death wait (original behavior)
     SHOULD node.t == "AthLoop" {
+        // Wait mode. The body is not dead weight: it holds nested ~ATH loops
+        // that run once the awaited entity dies, ahead of the EXECUTE clause
+        // (body ++ exec, the same order genBranchFrame uses in branch mode).
         BIRTH ep WITH genEntityC(node.entity, "f->scope");
         BIRTH rn WITH freshN(ctx2); ctx2 = rn.ctx;
         BIRTH nextName WITH "_s"+STRING(rn.v)+"_"+fname;
@@ -1319,6 +1347,10 @@ RITE genAsyncSegments(stmts, fname, ctx) {
         SHOULD ctx2.cb { ctx2 = emitDef(ctx2, "    ath_eventloop_set_current_branch(f->branch);"); }
         BIRTH post WITH SLICE(stmts, k+1, LENGTH(stmts));
         BIRTH execAndPost WITH CONCAT(node.exec, post);
+        SHOULD LENGTH(node.body) > 0 {
+            checkWaitBody(node.body, 0);
+            execAndPost = CONCAT(node.body, execAndPost);
+        }
         BEQUEATH genAsyncSegments(execAndPost, fname, resetTc(ctx2));
     }
 

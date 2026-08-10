@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// A CUP is 8 bytes on every target, but `long` is only 4 on i686/win64/wasm.
+// Assert the actual bytes, not just a round-trip: a round-trip can agree with
+// itself while writing the low word twice. Every value here fits a 32-bit long,
+// so the expected bytes (sign-extended above byte 3) are identical on every
+// target -- which is the point of a fixed-width recipe.
+
+import watcher M("./cake_more.^CAKE");
+
+RITE hex2(b) {
+    SHOULD b < 16 {
+        BEQUEATH "0" + HEX(b);
+    }
+    BEQUEATH HEX(b);
+}
+
+RITE dump(buf, off, n, acc) {
+    SHOULD n <= 0 {
+        BEQUEATH acc;
+    }
+    BIRTH h WITH hex2(BYTE_AT(buf, off));
+    SHOULD LENGTH(acc) == 0 {
+        BEQUEATH dump(buf, off + 1, n - 1, h);
+    }
+    BEQUEATH dump(buf, off + 1, n - 1, acc + " " + h);
+}
+
+// Scalars.d is an unsigned CUP at offset 8.
+RITE showUnsigned(v) {
+    BIRTH s WITH BAKE(M.Scalars);
+    SPRINKLE(s, M.Scalars, "d", v);
+    UTTER("CUP", v, "->", dump(s, 8, 8, ""), "->", SCOOP(s, M.Scalars, "d"));
+}
+
+// Node.value is a SIGNED CUP at offset 0.
+RITE showSigned(v) {
+    BIRTH n WITH BAKE(M.Node);
+    SPRINKLE(n, M.Node, "value", v);
+    UTTER("SIGNED CUP", v, "->", dump(n, 0, 8, ""), "->", SCOOP(n, M.Node, "value"));
+}
+
+// Packed.data is an unaligned CUP at offset 1 of a DENSE recipe.
+RITE showPacked(v) {
+    BIRTH p WITH BAKE(M.Packed);
+    SPRINKLE(p, M.Packed, "tag", 255);
+    SPRINKLE(p, M.Packed, "data", v);
+    UTTER("DENSE CUP", v, "->", dump(p, 0, 9, ""), "->", SCOOP(p, M.Packed, "data"));
+}
+
+showUnsigned(0);
+showUnsigned(305419896);
+showUnsigned(2147483647);
+
+showSigned(305419896);
+showSigned(-42);
+showSigned(-305419896);
+
+showPacked(305419896);
+
+THIS.DIE();

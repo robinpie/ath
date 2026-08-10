@@ -252,48 +252,83 @@ static void tree_inorder_collect(AthTreeNode *n, AthValue *out, int *idx) {
     tree_inorder_collect(n->right, out, idx);
 }
 
+/* One BFS visit record: a node plus how it hangs off its parent. */
+typedef struct {
+    AthTreeNode *node;
+    AthTreeNode *parent;
+    int          dir;    /* 0=left, 1=right, -1=root */
+    int          depth;
+} AthTreeVisit;
+
+/* Append to the BFS queue, doubling its capacity when it fills up. */
+static void tree_visit_push(AthTreeVisit **q, int *cap, int *tail,
+                            AthTreeNode *node, AthTreeNode *parent,
+                            int dir, int depth) {
+    if (*tail >= *cap) {
+        AthTreeVisit *grown;
+        int ncap = *cap * 2;
+        if (ncap <= *cap) ath_fatal("out of memory"); /* int overflow */
+        grown = (AthTreeVisit *)realloc(*q,
+                                        sizeof(AthTreeVisit) * (size_t)ncap);
+        if (!grown) ath_fatal("out of memory");
+        *q = grown;
+        *cap = ncap;
+    }
+    (*q)[*tail].node   = node;
+    (*q)[*tail].parent = parent;
+    (*q)[*tail].dir    = dir;
+    (*q)[*tail].depth  = depth;
+    (*tail)++;
+}
+
 /* Max-depth walk, returns leftmost leaf at max depth. */
 static AthTreeNode *tree_find_leftmost_max_leaf(AthTreeNode *root,
+                                                int hint_count,
                                                 AthTreeNode **parent_out,
                                                 int *is_left_child) {
-    /* BFS to find deepest level; among deepest nodes, return leftmost leaf. */
-    AthTreeNode *queue[1024];
-    AthTreeNode *parents[1024];
-    int        parent_dirs[1024]; /* 0=left,1=right,-1=root */
-    int        depths[1024];
-    int head = 0, tail = 0, max_depth = 0, max_idx = -1, i;
-    queue[tail] = root;       parents[tail] = NULL;
-    parent_dirs[tail] = -1;   depths[tail] = 1; tail++;
+    /* BFS to find deepest level; among deepest nodes, return leftmost leaf.
+     * Trees are unbounded, so the queue lives on the heap: hint_count (the
+     * sylladex's node count) is only a starting size, never a limit -- the
+     * queue grows on demand, so a stale count cannot overflow it. */
+    AthTreeVisit *q;
+    AthTreeNode *found;
+    int cap, head = 0, tail = 0, max_depth = 0, max_idx = -1, i;
+    if (!root) return NULL;
+    cap = hint_count > 0 ? hint_count : 16;
+    q = (AthTreeVisit *)malloc(sizeof(AthTreeVisit) * (size_t)cap);
+    if (!q) ath_fatal("out of memory");
+    tree_visit_push(&q, &cap, &tail, root, NULL, -1, 1);
     while (head < tail) {
-        AthTreeNode *n = queue[head];
-        int d = depths[head];
+        AthTreeNode *n = q[head].node;
+        int d = q[head].depth;
         int is_leaf = (n->left == NULL && n->right == NULL);
         if (is_leaf && (d > max_depth || max_idx < 0)) {
             max_depth = d;
             max_idx = head;
         }
-        if (n->left) {
-            queue[tail] = n->left; parents[tail] = n;
-            parent_dirs[tail] = 0; depths[tail] = d + 1; tail++;
-        }
-        if (n->right) {
-            queue[tail] = n->right; parents[tail] = n;
-            parent_dirs[tail] = 1; depths[tail] = d + 1; tail++;
-        }
+        if (n->left)
+            tree_visit_push(&q, &cap, &tail, n->left, n, 0, d + 1);
+        if (n->right)
+            tree_visit_push(&q, &cap, &tail, n->right, n, 1, d + 1);
         head++;
     }
     if (max_idx < 0) {
         /* No leaf? Root itself is a leaf only if root && both children NULL, which was handled. Fall through to root case. */
         for (i = 0; i < tail; i++) {
-            if (queue[i]->left == NULL && queue[i]->right == NULL) {
+            if (q[i].node->left == NULL && q[i].node->right == NULL) {
                 max_idx = i; break;
             }
         }
     }
-    if (max_idx < 0) return NULL;
-    *parent_out = parents[max_idx];
-    *is_left_child = parent_dirs[max_idx] == 0 ? 1 : 0;
-    return queue[max_idx];
+    if (max_idx < 0) {
+        free(q);
+        return NULL;
+    }
+    *parent_out    = q[max_idx].parent;
+    *is_left_child = q[max_idx].dir == 0 ? 1 : 0;
+    found          = q[max_idx].node;
+    free(q);
+    return found;
 }
 
 /* ===== Refcount / free ===== */
@@ -1011,7 +1046,8 @@ static AthValue eject_tree_leaf(AthSylladex *s) {
     int is_left = 0;
     AthValue v;
     if (!s->as.tree.root) return ath_void();
-    leaf = tree_find_leftmost_max_leaf(s->as.tree.root, &parent, &is_left);
+    leaf = tree_find_leftmost_max_leaf(s->as.tree.root, s->as.tree.count,
+                                       &parent, &is_left);
     if (!leaf) return ath_void();
     v = leaf->value;
     ath_value_incref(v);

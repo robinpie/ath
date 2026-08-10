@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Regression: <, >, <=, >= must compare two INTEGERs as C longs. Routing them
+// through double collapses adjacent values above 2^53, which used to produce an
+// ordering where none of <, > or == held. 64-bit `long` only, hence |linux.
+
+BIRTH big WITH 9007199254740993;    // 2^53 + 1
+BIRTH lil WITH 9007199254740992;    // 2^53
+
+UTTER("gt", big > lil);
+UTTER("eq", big == lil);
+UTTER("le", big <= lil);
+UTTER("lt", big < lil);
+UTTER("ge", big >= lil);
+UTTER("ne", big != lil);
+
+// Trichotomy: for two unequal integers exactly one of < and > holds.
+UTTER("rev-lt", lil < big);
+UTTER("rev-gt", lil > big);
+UTTER("rev-ge", lil >= big);
+
+// Reflexivity is unaffected by the fast path.
+UTTER("self-le", big <= big);
+UTTER("self-ge", big >= big);
+UTTER("self-lt", big < big);
+
+// A sum computed near 2^62 must still order against its own operand.
+BIRTH huge WITH 4611686018427387904;    // 2^62
+UTTER("huge-gt", huge + 1 > huge);
+UTTER("huge-lt", huge < huge + 1);
+UTTER("huge-ge", huge >= huge + 1);
+
+// Negative large integers order the same way.
+BIRTH nbig WITH -9007199254740993;
+BIRTH nlil WITH -9007199254740992;
+UTTER("neg-lt", nbig < nlil);
+UTTER("neg-gt", nbig > nlil);
+UTTER("neg-eq", nbig == nlil);
+
+// Mixed INTEGER/FLOAT comparison is unchanged: it still goes through double.
+UTTER("mix-a", 1 < 1.5);
+UTTER("mix-b", 1.5 < 2);
+UTTER("mix-c", 2.5 > 2);
+UTTER("mix-d", 3 <= 3.0);
+UTTER("mix-e", 3.0 >= 3);
+UTTER("mix-f", 2.5 < 2);
+
+THIS.DIE();

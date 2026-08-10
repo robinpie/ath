@@ -1,0 +1,12 @@
+count 40
+bad 0
+first value0
+last value39
+has39 ALIVE
+has40 DEAD
+afterdelete 20
+afterbad 0
+original 40
+regrown 60
+regrownbad 0
+survivor value21

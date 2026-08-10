@@ -176,18 +176,33 @@ AthMap *ath_map_new(int capacity) {
     return m;
 }
 
+/* Grow to twice the capacity, moving each live entry across whole. The entry
+   carries the old table's reference on its key and value straight into the new
+   table, so no refcount changes hands and m->count is already correct. Probing
+   is inlined rather than deferred to ath_map_set_str: the old table's keys are
+   distinct, so the first free slot is the right one (no overwrite case), it
+   would otherwise incref a second time with nothing to release it, and staying
+   out of it keeps a rehash from ever recursing into another rehash. */
 static void ath_map_rehash(AthMap *m) {
     int old_cap = m->capacity;
     AthMapEntry *old = m->entries;
-    int i;
+    int i, j;
     m->capacity = old_cap * 2;
     m->entries = (AthMapEntry *)calloc(m->capacity, sizeof(AthMapEntry));
     if (!m->entries) ath_fatal("out of memory");
-    m->count = 0;
     for (i = 0; i < old_cap; i++) {
-        if (old[i].used) {
-            ath_map_set_str(m, old[i].key, old[i].value);
-            /* key was already incref'd; don't double-free */
+        unsigned int h;
+        int idx;
+        if (!old[i].used) continue;
+        h = ath_map_hash(old[i].key->data, old[i].key->length);
+        idx = (int)(h % (unsigned int)m->capacity);
+        /* count <= old_cap < m->capacity, so a free slot always exists */
+        for (j = 0; j < m->capacity; j++) {
+            int slot = (idx + j) % m->capacity;
+            if (!m->entries[slot].used) {
+                m->entries[slot] = old[i];   /* moves both references */
+                break;
+            }
         }
     }
     free(old);
@@ -877,6 +892,13 @@ AthValue ath_rshift(AthValue a, AthValue b) {
 }
 
 static int ath_values_equal(AthValue a, AthValue b) {
+    /* Containers compare structurally, so a cyclic one (ath_index_set allows
+       arr[0] = arr) would recurse forever; cap the depth and call anything
+       deeper "not equal" rather than smashing the C stack. Single-threaded
+       runtime, and nothing on this path longjmps, so a static counter is safe. */
+    enum { ATH_EQ_MAX_DEPTH = 256 };
+    static int depth = 0;
+
     if (a.type != b.type) {
         /* int/float cross comparison */
         if ((a.type==ATH_INTEGER||a.type==ATH_FLOAT) &&
@@ -910,6 +932,63 @@ static int ath_values_equal(AthValue a, AthValue b) {
         if (a.as.recipe == b.as.recipe) return 1;
         if (!a.as.recipe || !b.as.recipe) return 0;
         return strcmp(a.as.recipe->code, b.as.recipe->code) == 0;
+    case ATH_ARRAY: {
+        int i, eq;
+        if (a.as.array == b.as.array) return 1;
+        if (!a.as.array || !b.as.array) return 0;
+        if (a.as.array->length != b.as.array->length) return 0;
+        if (depth >= ATH_EQ_MAX_DEPTH) return 0;
+        depth++;
+        eq = 1;
+        for (i = 0; i < a.as.array->length; i++) {
+            if (!ath_values_equal(a.as.array->data[i], b.as.array->data[i])) {
+                eq = 0;
+                break;
+            }
+        }
+        depth--;
+        return eq;
+    }
+    case ATH_MAP:
+    case ATH_MODULE: {
+        AthMap *ma = a.as.map, *mb = b.as.map;
+        int i, eq;
+        if (ma == mb) return 1;
+        if (!ma || !mb) return 0;
+        if (ma->count != mb->count) return 0;
+        if (depth >= ATH_EQ_MAX_DEPTH) return 0;
+        depth++;
+        eq = 1;
+        /* Open addressing: slot order depends on insertion order and capacity,
+           so look each of ma's keys up in mb instead of comparing slot by slot.
+           Probe by hand rather than via ath_map_get(): keys are length-counted
+           AthStrings and may hold bytes strlen() would stop at. Equal counts
+           plus every key of ma matching in mb gives set equality. */
+        for (i = 0; i < ma->capacity && eq; i++) {
+            AthMapEntry *e = &ma->entries[i];
+            unsigned int h;
+            int j, home, match = 0;
+            if (!e->used) continue;
+            h = ath_map_hash(e->key->data, e->key->length);
+            home = (int)(h % (unsigned int)mb->capacity);
+            for (j = 0; j < mb->capacity; j++) {
+                AthMapEntry *f = &mb->entries[(home + j) % mb->capacity];
+                if (!f->used) break;   /* probe chain ends: key absent */
+                if (f->key->length == e->key->length &&
+                    memcmp(f->key->data, e->key->data, e->key->length) == 0) {
+                    match = ath_values_equal(e->value, f->value);
+                    break;
+                }
+            }
+            if (!match) eq = 0;
+        }
+        depth--;
+        return eq;
+    }
+    case ATH_RITE:
+        /* Identity: the spec's "same rite definition", not a structural or
+           closure comparison. */
+        return a.as.rite == b.as.rite;
     default: return 0;
     }
 }
@@ -917,17 +996,35 @@ static int ath_values_equal(AthValue a, AthValue b) {
 AthValue ath_eq(AthValue a, AthValue b) { return ath_bool(ath_values_equal(a,b)); }
 AthValue ath_ne(AthValue a, AthValue b) { return ath_bool(!ath_values_equal(a,b)); }
 
-static double ath_to_num(AthValue v, const char *op) {
-    if (v.type == ATH_INTEGER) return (double)v.as.integer;
-    if (v.type == ATH_FLOAT)   return v.as.float_;
-    ath_runtime_error_fmt("'%s' requires numeric operands", op);
-    return 0;
+/* Order two numeric operands for the relational operators. Returns -1/0/1, or
+   ATH_CMP_UNORDERED if a FLOAT operand is NaN (every relational operator is
+   false then, as with a plain double comparison). Two INTEGERs are compared as
+   longs: routing them through double loses precision past 2^53, which broke
+   the ordering (neither <, > nor == held for adjacent large integers). */
+#define ATH_CMP_UNORDERED 2
+
+static int ath_num_cmp(AthValue a, AthValue b, const char *op) {
+    double fa, fb;
+    if ((a.type != ATH_INTEGER && a.type != ATH_FLOAT) ||
+        (b.type != ATH_INTEGER && b.type != ATH_FLOAT))
+        ath_runtime_error_fmt("'%s' requires numeric operands", op);
+    if (a.type == ATH_INTEGER && b.type == ATH_INTEGER) {
+        if (a.as.integer < b.as.integer) return -1;
+        if (a.as.integer > b.as.integer) return 1;
+        return 0;
+    }
+    fa = (a.type == ATH_FLOAT) ? a.as.float_ : (double)a.as.integer;
+    fb = (b.type == ATH_FLOAT) ? b.as.float_ : (double)b.as.integer;
+    if (fa < fb)  return -1;
+    if (fa > fb)  return 1;
+    if (fa == fb) return 0;
+    return ATH_CMP_UNORDERED;
 }
 
-AthValue ath_lt(AthValue a, AthValue b) { return ath_bool(ath_to_num(a,"<") < ath_to_num(b,"<")); }
-AthValue ath_gt(AthValue a, AthValue b) { return ath_bool(ath_to_num(a,">") > ath_to_num(b,">")); }
-AthValue ath_le(AthValue a, AthValue b) { return ath_bool(ath_to_num(a,"<=") <= ath_to_num(b,"<=")); }
-AthValue ath_ge(AthValue a, AthValue b) { return ath_bool(ath_to_num(a,">=") >= ath_to_num(b,">=")); }
+AthValue ath_lt(AthValue a, AthValue b) { return ath_bool(ath_num_cmp(a,b,"<")  == -1); }
+AthValue ath_gt(AthValue a, AthValue b) { return ath_bool(ath_num_cmp(a,b,">")  ==  1); }
+AthValue ath_le(AthValue a, AthValue b) { int c = ath_num_cmp(a,b,"<="); return ath_bool(c == -1 || c == 0); }
+AthValue ath_ge(AthValue a, AthValue b) { int c = ath_num_cmp(a,b,">="); return ath_bool(c ==  1 || c == 0); }
 
 AthValue ath_index(AthValue obj, AthValue idx) {
     switch (obj.type) {

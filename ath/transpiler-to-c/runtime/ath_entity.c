@@ -53,13 +53,22 @@
 
 /* ===== pollable entity registry ===== */
 
-#define MAX_POLLABLE 1024
-static AthEntity *_pollable[MAX_POLLABLE];
+/* Raw, non-owning pointers to live process/connection/watcher/portal entities; the entity's own refcount is untouched by (un)registration. The array grows by doubling: a registration that silently failed would leave the entity unpolled (so it could never die and its ~ATH could never fire) and invisible to ath_entity_pending_count(), which would let the event loop exit early. */
+#define POLLABLE_INITIAL_CAP 1024
+static AthEntity **_pollable = NULL;
 static int _pollable_count = 0;
+static int _pollable_cap = 0;
 
 void ath_entity_register_pollable(AthEntity *e) {
-    if (_pollable_count < MAX_POLLABLE)
-        _pollable[_pollable_count++] = e;
+    if (_pollable_count == _pollable_cap) {
+        int cap = _pollable_cap ? _pollable_cap * 2 : POLLABLE_INITIAL_CAP;
+        AthEntity **grown = (AthEntity **)realloc(_pollable,
+                                                  (size_t)cap * sizeof(AthEntity *));
+        if (!grown) ath_fatal("out of memory");
+        _pollable     = grown;
+        _pollable_cap = cap;
+    }
+    _pollable[_pollable_count++] = e;
 }
 
 void ath_entity_unregister_pollable(AthEntity *e) {
@@ -73,10 +82,14 @@ void ath_entity_unregister_pollable(AthEntity *e) {
 }
 
 void ath_entity_poll_all(unsigned long now_ms) {
-    int i;
-    for (i = 0; i < _pollable_count; i++) {
-        if (!_pollable[i]->is_dead)
-            ath_entity_poll(_pollable[i], now_ms);
+    int i = 0;
+    while (i < _pollable_count) {
+        AthEntity *e = _pollable[i];
+        if (!e->is_dead)
+            ath_entity_poll(e, now_ms);
+        /* Polling can kill e, and unregistering swaps the last element down into slot i -- advancing blindly would skip that entity for this tick. Only step forward once slot i still holds the entity just polled; otherwise re-poll slot i, which is safe because the swap strictly shrank the registry. */
+        if (i < _pollable_count && _pollable[i] == e)
+            i++;
     }
 }
 

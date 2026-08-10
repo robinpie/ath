@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Alchemized recipes and the layout modifiers. Everything here is fixed-width,
+// so the layouts (and codes) are the same on every target.
+
+DENSE IMPERIAL RECIPE HdrA {
+    INGREDIENT magic: SPOON;    // @0, big-endian u32
+    INGREDIENT tag:   PINCH;    // @4
+}
+// align 1, size 5
+
+DENSE IMPERIAL RECIPE HdrB {
+    INGREDIENT seq: CUP;        // @0, big-endian u64
+}
+// align 1, size 8
+
+// Both operands are DENSE IMPERIAL, so the merge is too: seq lands at @5 with
+// no padding, for a total of 13 bytes. An unpacked host-order merge would put
+// it at @8 and total 16.
+RECIPE Wire = HdrA && HdrB;
+
+// RISE TO is a floor on alignment, so a merge honours the larger of the two.
+RECIPE RiseA { INGREDIENT p: PINCH; RISE TO 8; }
+RECIPE RiseB { INGREDIENT q: PINCH; }
+RECIPE Risen = RiseA && RiseB;
+// align 8, size 8
+
+// A marble cake keeps each arm's own recipe, so the arms keep their own
+// modifiers: the payload of these DENSE arms starts at 1 (not 4), and their
+// fields stay big-endian.
+DENSE IMPERIAL RECIPE ArmA { INGREDIENT a: DASH; }
+DENSE IMPERIAL RECIPE ArmB { INGREDIENT b: SPOON; }
+RECIPE Marble = ArmA || ArmB;
+// align 1, size 5

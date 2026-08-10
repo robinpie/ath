@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// A wait-mode ~ATH body may hold nested ~ATH loops (and nothing else). They run
+// once the awaited entity dies, ahead of the EXECUTE clause, which in turn runs
+// ahead of whatever follows the loop.
+
+UTTER("start");
+
+import timer T1(20ms);
+import timer T2(60ms);
+
+~ATH(T1) {
+    ~ATH(T2) {
+    } EXECUTE(UTTER("body inner"));
+} EXECUTE(UTTER("outer execute"));
+
+UTTER("after loop");
+
+// Again, with the body's loop chaining a further wait out of its own EXECUTE:
+// the whole body subtree must resolve before the outer EXECUTE clause.
+import timer T3(20ms);
+import timer T4(40ms);
+
+~ATH(T3) {
+    ~ATH(T4) {
+    } EXECUTE(
+        UTTER("second body inner");
+        import timer T5(20ms);
+        ~ATH(T5) {
+        } EXECUTE(UTTER("second body inner deeper"));
+    );
+} EXECUTE(UTTER("second outer execute"));
+
+UTTER("second after loop");
+
+THIS.DIE();

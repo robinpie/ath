@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+import watcher M("./cake_alchemy_mods.^CAKE");
+// && inherits DENSE from both operands: seq packs in at @5, size 13 (an
+// unpacked merge would be 16).
+UTTER(SIZEOF(M.HdrA), SIZEOF(M.HdrB), SIZEOF(M.Wire));
+BIRTH w WITH BAKE(M.Wire);
+SPRINKLE(w, M.Wire, "magic", 305419896);
+SPRINKLE(w, M.Wire, "tag", 255);
+SPRINKLE(w, M.Wire, "seq", 258);
+// && inherits IMPERIAL too, so 0x12345678 is stored most-significant byte
+// first. Check the raw bytes: SCOOP alone would agree with a wrong SPRINKLE.
+UTTER(BYTE_AT(w, 0), BYTE_AT(w, 1), BYTE_AT(w, 2), BYTE_AT(w, 3));
+UTTER(BYTE_AT(w, 4));
+// seq @5, big-endian u64: 0x0102 lands in the last two bytes.
+UTTER(BYTE_AT(w, 11), BYTE_AT(w, 12));
+UTTER(SCOOP(w, M.Wire, "magic"), SCOOP(w, M.Wire, "seq"));
+// RISE TO is a floor, so the merge takes the larger of the two operands'.
+UTTER(SIZEOF(M.Risen));
+THIS.DIE();

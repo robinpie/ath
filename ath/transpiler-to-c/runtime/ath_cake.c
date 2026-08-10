@@ -697,6 +697,11 @@ static void ck_parse_recipe(Ck *ck) {
         ck->pos++;
     }
     if (is_punct(cur(ck), "=")) {
+        /* The alchemy form has no modifier slot: an alchemized recipe inherits
+           DENSE / IMPERIAL from its operands, so spelling them here would be a
+           claim the declaration cannot honour. */
+        if (rr.dense || rr.imperial)
+            ath_runtime_error_fmt("!^CAKE: DENSE / IMPERIAL may not be written on an alchemized RECIPE ('= expr;'); they are inherited from the operands", NULL);
         ck->pos++;
         rr.is_alchemy = 1;
         rr.alch = ck_parse_union_expr(ck);
@@ -967,9 +972,23 @@ static AthRecipe *ck_build_struct(Ck *ck, RawRecipe *rr) {
 static AthRecipe *ck_eval_alch(Ck *ck, AlchemyNode *n);
 
 static AthRecipe *ck_merge(AthRecipe *a, AthRecipe *b) {
-    AthRecipe *r = ck_recipe_new(CK_KIND_STRUCT);
+    AthRecipe *r;
     int total = a->n_ingredients + b->n_ingredients;
     int idx = 0, i, j;
+    /* The layout modifiers are part of each operand's identity, so the two
+       cakes must have been baked the same way; merging a packed cake into an
+       unpacked one (or a big-endian one into a host-order one) would silently
+       relocate and byte-swap fields that the source declared otherwise. */
+    if ((a->dense != 0) != (b->dense != 0))
+        ath_runtime_error_fmt("!^CAKE: CURDLED: && operands disagree on DENSE (one recipe is packed, the other is not)", NULL);
+    if ((a->imperial != 0) != (b->imperial != 0))
+        ath_runtime_error_fmt("!^CAKE: CURDLED: && operands disagree on IMPERIAL (one recipe is big-endian, the other is host order)", NULL);
+    r = ck_recipe_new(CK_KIND_STRUCT);
+    r->dense = a->dense;
+    r->imperial = a->imperial;
+    /* RISE TO is a floor on alignment, not a packing/byte-order commitment, so
+       the merged cake honours both operands' floors: the larger one wins. */
+    r->rise_to = a->rise_to > b->rise_to ? a->rise_to : b->rise_to;
     if (total > 0) {
         r->ingredients = (CkIngredient *)calloc((size_t)total, sizeof(CkIngredient));
         if (!r->ingredients) ath_fatal("out of memory");

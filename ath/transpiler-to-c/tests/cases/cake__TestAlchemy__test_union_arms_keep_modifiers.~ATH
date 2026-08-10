@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+import watcher M("./cake_alchemy_mods.^CAKE");
+// A marble cake holds its arms as whole recipes, so each arm keeps its own
+// DENSE (payload right after the 1-byte tag, not at 4) and IMPERIAL.
+UTTER(SIZEOF(M.Marble));
+BIRTH m WITH BAKE(M.Marble);
+SPRINKLE(m, M.Marble, "FLAVOR", 1);
+SPRINKLE(m, M.Marble, "ArmB.b", 305419896);
+// byte 0 is the tag; bytes 1..4 are ArmB.b, most-significant byte first.
+UTTER(BYTE_AT(m, 0), BYTE_AT(m, 1), BYTE_AT(m, 2), BYTE_AT(m, 3), BYTE_AT(m, 4));
+UTTER(SCOOP(m, M.Marble, "ArmB.b"));
+THIS.DIE();

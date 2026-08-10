@@ -1,0 +1,93 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// A map that grows past the 0.7 load factor several times (8 -> 16 -> 32 -> 64
+// slots for 40 keys) must carry every entry across each rehash intact.
+// KEYS() order follows the slot layout, so keys are looked up individually
+// rather than printed, keeping the output the same on every platform.
+
+RITE build(m, i, n) {
+    SHOULD i >= n {
+        BEQUEATH m;
+    }
+    BEQUEATH build(SET(m, "key" + STRING(i), "value" + STRING(i)), i + 1, n);
+}
+
+// Count keys that fail to resolve to their own value.
+RITE countBad(m, i, n, bad) {
+    SHOULD i >= n {
+        BEQUEATH bad;
+    }
+    SHOULD m["key" + STRING(i)] != "value" + STRING(i) {
+        BEQUEATH countBad(m, i + 1, n, bad + 1);
+    }
+    BEQUEATH countBad(m, i + 1, n, bad);
+}
+
+// Drop every even-numbered key, exercising delete on a rehashed table.
+RITE dropEvens(m, i, n) {
+    SHOULD i >= n {
+        BEQUEATH m;
+    }
+    BEQUEATH dropEvens(DELETE(m, "key" + STRING(i)), i + 2, n);
+}
+
+// Count keys whose presence disagrees with "odd survives, even deleted",
+// or which survived but lost their value.
+RITE countBadAfterDelete(m, i, n, bad) {
+    SHOULD i >= n {
+        BEQUEATH bad;
+    }
+    SHOULD HAS(m, "key" + STRING(i)) {
+        SHOULD i % 2 == 0 {
+            BEQUEATH countBadAfterDelete(m, i + 1, n, bad + 1);
+        }
+        SHOULD m["key" + STRING(i)] != "value" + STRING(i) {
+            BEQUEATH countBadAfterDelete(m, i + 1, n, bad + 1);
+        }
+        BEQUEATH countBadAfterDelete(m, i + 1, n, bad);
+    }
+    SHOULD i % 2 == 1 {
+        BEQUEATH countBadAfterDelete(m, i + 1, n, bad + 1);
+    }
+    BEQUEATH countBadAfterDelete(m, i + 1, n, bad);
+}
+
+BIRTH m WITH build({}, 0, 40);
+
+UTTER("count", LENGTH(KEYS(m)));
+UTTER("bad", countBad(m, 0, 40, 0));
+UTTER("first", m["key0"]);
+UTTER("last", m["key39"]);
+UTTER("has39", HAS(m, "key39"));
+UTTER("has40", HAS(m, "key40"));
+
+BIRTH d WITH dropEvens(m, 0, 40);
+
+UTTER("afterdelete", LENGTH(KEYS(d)));
+UTTER("afterbad", countBadAfterDelete(d, 0, 40, 0));
+UTTER("original", LENGTH(KEYS(m)));
+
+// Re-growing the pruned map must still find room for the survivors.
+BIRTH g WITH build(d, 40, 80);
+UTTER("regrown", LENGTH(KEYS(g)));
+UTTER("regrownbad", countBad(g, 40, 80, 0));
+UTTER("survivor", g["key21"]);
+
+// Drop the maps so their keys and values are actually released: a rehash that
+// takes fresh references instead of moving the old table's leaves them alive
+// forever, which this makes visible to a leak checker.
+m = 0;
+d = 0;
+g = 0;
+
+THIS.DIE();

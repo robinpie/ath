@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Structural equality of containers. Every line prints `<label> <==> <!=>`,
+// so `!=` is checked to be the exact negation of `==` in each case.
+
+RITE idf(x) {
+    BEQUEATH x;
+}
+
+RITE idg(x) {
+    BEQUEATH x;
+}
+
+// --- arrays -----------------------------------------------------------
+BIRTH a WITH [1, 2, 3];
+BIRTH b WITH a;                          // alias: same AthArray
+BIRTH c WITH [1, 2, 3];                  // independently built, same contents
+
+UTTER("arr-self", a == a, a != a);
+UTTER("arr-alias", a == b, a != b);
+UTTER("arr-struct", a == c, a != c);
+UTTER("arr-len", a == [1, 2], a != [1, 2]);
+UTTER("arr-elem", a == [1, 9, 3], a != [1, 9, 3]);
+UTTER("arr-empty", [] == [], [] != []);
+UTTER("arr-mixed", [1, "x", ALIVE] == [1, "x", ALIVE],
+                   [1, "x", ALIVE] != [1, "x", ALIVE]);
+UTTER("arr-numeric", [1] == [1.0], [1] != [1.0]);
+UTTER("arr-nested", [[1, 2], [3]] == [[1, 2], [3]],
+                    [[1, 2], [3]] != [[1, 2], [3]]);
+UTTER("arr-nested-ne", [[1, 2], [3]] == [[1, 2], [4]],
+                       [[1, 2], [3]] != [[1, 2], [4]]);
+
+// --- maps -------------------------------------------------------------
+// "a" and "i" land in the same home slot of an 8-slot table, so m1 and m2
+// hold the same two entries in *swapped* slots: a slot-order-dependent
+// comparison would call these unequal.
+BIRTH m1 WITH {a: 1, i: 2};
+BIRTH m2 WITH {i: 2, a: 1};
+BIRTH m3 WITH SET(SET({}, "i", 2), "a", 1);   // built through the copy path
+
+UTTER("map-self", m1 == m1, m1 != m1);
+UTTER("map-order", m1 == m2, m1 != m2);
+UTTER("map-copy", m1 == m3, m1 != m3);
+UTTER("map-val", m1 == {a: 1, i: 9}, m1 != {a: 1, i: 9});
+UTTER("map-key", m1 == {a: 1, j: 2}, m1 != {a: 1, j: 2});
+UTTER("map-count", m1 == {a: 1}, m1 != {a: 1});
+UTTER("map-empty", {} == {}, {} != {});
+UTTER("map-nested", {k: [1, 2]} == {k: [1, 2]}, {k: [1, 2]} != {k: [1, 2]});
+
+// --- rites (identity) -------------------------------------------------
+BIRTH r WITH idf;
+
+UTTER("rite-self", idf == idf, idf != idf);
+UTTER("rite-alias", r == idf, r != idf);
+UTTER("rite-other", idf == idg, idf != idg);
+UTTER("rite-in-arr", [idf] == [idf], [idf] != [idf]);
+
+// --- sylladices holding containers ------------------------------------
+BIRTH s1 WITH STACK(2);
+CAPTCHALOGUE [1] INTO s1;
+BIRTH s2 WITH STACK(2);
+CAPTCHALOGUE [1] INTO s2;
+BIRTH s3 WITH STACK(2);
+CAPTCHALOGUE [2] INTO s3;
+BIRTH q1 WITH QUEUE(2);
+CAPTCHALOGUE {a: 1} INTO q1;
+BIRTH q2 WITH QUEUE(2);
+CAPTCHALOGUE {a: 1} INTO q2;
+
+UTTER("syl-arr", s1 == s2, s1 != s2);
+UTTER("syl-arr-ne", s1 == s3, s1 != s3);
+UTTER("syl-map", q1 == q2, q1 != q2);
+
+// --- cyclic containers: the depth cap must bite, not the C stack ------
+BIRTH cyc1 WITH [1];
+cyc1[0] = cyc1;
+BIRTH cyc2 WITH [1];
+cyc2[0] = cyc2;
+BIRTH cm1 WITH {k: 0};
+cm1["k"] = cm1;
+BIRTH cm2 WITH {k: 0};
+cm2["k"] = cm2;
+
+UTTER("cyc-self", cyc1 == cyc1, cyc1 != cyc1);   // same pointer: short-circuits
+UTTER("cyc-pair", cyc1 == cyc2, cyc1 != cyc2);   // capped, reported unequal
+UTTER("cyc-plain", cyc1 == [1], cyc1 != [1]);
+UTTER("cyc-map", cm1 == cm2, cm1 != cm2);
+UTTER("done");
+
+THIS.DIE();

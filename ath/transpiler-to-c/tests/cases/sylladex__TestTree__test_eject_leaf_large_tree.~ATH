@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Trees are unbounded, so EJECT LEAF must survive a tree far larger than any
+// fixed internal walk buffer. Zero-padded keys make the tree's lexicographic
+// order match the numeric one, so the shape (and thus every leaf) is exact.
+
+RITE key(i) {
+    SHOULD i < 10 {
+        BEQUEATH "v000" + STRING(i);
+    }
+    SHOULD i < 100 {
+        BEQUEATH "v00" + STRING(i);
+    }
+    SHOULD i < 1000 {
+        BEQUEATH "v0" + STRING(i);
+    }
+    BEQUEATH "v" + STRING(i);
+}
+
+// Self-tail-recursive sync rite: compiles to an in-place loop, so 2000
+// insertions cost no C stack.
+RITE fill(T, i, n) {
+    SHOULD i > n {
+        BEQUEATH VOID;
+    }
+    CAPTCHALOGUE key(i) INTO T;
+    BEQUEATH fill(T, i + 1, n);
+}
+
+BIRTH T WITH TREE(ALIVE);
+fill(T, 1, 2000);
+UTTER(COUNT(T));
+
+// The AVL tree of v0001..v2000 is 11 deep with 977 leaves at that depth;
+// EJECT LEAF must pick the leftmost of them, three times running.
+BIRTH a WITH EJECT LEAF FROM T;
+UTTER(a);
+BIRTH b WITH EJECT LEAF FROM T;
+UTTER(b);
+BIRTH c WITH EJECT LEAF FROM T;
+UTTER(c);
+UTTER(COUNT(T));
+
+// The rest of the tree is still intact and still sorted.
+BIRTH dumped WITH EJECT ROOT FROM T;
+UTTER(LENGTH(dumped));
+UTTER(FIRST(dumped));
+UTTER(LAST(dumped));
+UTTER(COUNT(T));
+
+THIS.DIE();

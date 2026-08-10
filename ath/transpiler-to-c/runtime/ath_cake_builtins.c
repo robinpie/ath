@@ -143,10 +143,17 @@ static CkPath ck_resolve_path(AthRecipe *top, const char *path) {
 /* Scalar load/store (LE host for non-IMPERIAL; BE for IMPERIAL)         */
 /* ===================================================================== */
 
+/* A field may be wider than the host's long -- CUP is 8 bytes on every target,
+   but long is 4 on i686/Windows/wasm. Only the low sizeof(long) bytes are ever
+   shifted (a shift of >= the type's width is undefined), and the bytes above
+   them carry the value's sign extension, so a narrow-long host reads and writes
+   exactly the bytes a wide-long host would. */
+
 static long ck_load_int(const unsigned char *base, int width, int is_signed, int imperial) {
+    int low = width < (int)sizeof(long) ? width : (int)sizeof(long);
     unsigned long v = 0;
     int i;
-    for (i = 0; i < width; i++) {
+    for (i = 0; i < low; i++) {
         int b = imperial ? base[width - 1 - i] : base[i];
         v |= ((unsigned long)b) << (8 * i);
     }
@@ -154,13 +161,32 @@ static long ck_load_int(const unsigned char *base, int width, int is_signed, int
         unsigned long sign = 1UL << (width * 8 - 1);
         if (v & sign) v |= ~((sign << 1) - 1);
     }
+    if (width > (int)sizeof(long)) {
+        /* The discarded high bytes must be exactly the sign extension of the
+           long we are about to return; anything else does not fit an !~ATH
+           INTEGER here, and truncating it silently would corrupt the value. */
+        unsigned char fill =
+            (v & (1UL << (sizeof(long) * 8 - 1))) ? (unsigned char)0xFF : (unsigned char)0x00;
+        for (i = low; i < width; i++) {
+            int b = imperial ? base[width - 1 - i] : base[i];
+            if ((unsigned char)b != fill)
+                ath_runtime_error_fmt(
+                    "RAW: %d-byte field holds a value too wide for this platform's INTEGER",
+                    width);
+        }
+    }
     return (long)v;
 }
 
-static void ck_store_int(unsigned char *base, int width, unsigned long v, int imperial) {
+static void ck_store_int(unsigned char *base, int width, long v, int imperial) {
+    int low = width < (int)sizeof(long) ? width : (int)sizeof(long);
+    unsigned long uv = (unsigned long)v;
+    unsigned char fill = v < 0 ? (unsigned char)0xFF : (unsigned char)0x00;
     int i;
     for (i = 0; i < width; i++) {
-        unsigned char b = (unsigned char)((v >> (8 * i)) & 0xFFUL);
+        unsigned char b = i < low
+            ? (unsigned char)((uv >> (8 * i)) & 0xFFUL)
+            : fill;
         if (imperial) base[width - 1 - i] = b;
         else base[i] = b;
     }
@@ -416,20 +442,22 @@ AthValue ath_builtin_SPRINKLE(AthScope *s, int argc, AthValue *argv) {
             if (val.type != ATH_INTEGER && val.type != ATH_BOOLEAN)
                 ath_runtime_error("RAW: integer field needs an INTEGER", 0, 0);
             n = val.as.integer;
-            if (t->size < (int)sizeof(long)) {
-                /* range check */
-                if (ck_tag_signed(t)) {
-                    long lo = -(1L << (t->size * 8 - 1));
-                    long hi = (1L << (t->size * 8 - 1)) - 1;
-                    if (n < lo || n > hi)
-                        ath_runtime_error("RAW: value does not fit signed field", 0, 0);
-                } else {
-                    unsigned long umax = (1UL << (t->size * 8)) - 1;
-                    if (n < 0 || (unsigned long)n > umax)
-                        ath_runtime_error("RAW: value does not fit unsigned field", 0, 0);
-                }
+            /* range check -- only fields narrower than long can overflow; a
+               field at least that wide holds every long (the store sign-extends
+               across any bytes above sizeof(long)), so it rejects nothing. */
+            if (t->size >= (int)sizeof(long)) {
+                /* always in range */
+            } else if (ck_tag_signed(t)) {
+                long lo = -(1L << (t->size * 8 - 1));
+                long hi = (1L << (t->size * 8 - 1)) - 1;
+                if (n < lo || n > hi)
+                    ath_runtime_error("RAW: value does not fit signed field", 0, 0);
+            } else {
+                unsigned long umax = (1UL << (t->size * 8)) - 1;
+                if (n < 0 || (unsigned long)n > umax)
+                    ath_runtime_error("RAW: value does not fit unsigned field", 0, 0);
             }
-            ck_store_int(b->bytes + rp.offset, t->size, (unsigned long)n, rp.imperial);
+            ck_store_int(b->bytes + rp.offset, t->size, n, rp.imperial);
             return ath_void();
         }
         if (ck_is_float_tag(t->tag)) {

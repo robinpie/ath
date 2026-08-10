@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Regression: the pollable-entity registry must grow instead of silently
+// dropping registrations past a fixed cap. Past the old 1024-entry cap the
+// entity was never polled (so it never died and its ~ATH never fired) and was
+// invisible to ath_entity_pending_count(), truncating the program.
+//
+// Fill the registry with 1200 live watchers, then import a process entity --
+// registered well past the old cap -- and prove it still dies and still fires
+// its ~ATH. The process is `rm` on the watched file, so the fillers die too and
+// the program terminates (with truncated output) even when the bug is present.
+
+// cwd is cases/ when the case runs, so this lands beside this file and is
+// removed again by the process entity below.
+ENTOMB MARK WITH "./entity_many_pollable.tmp";
+INSCRIBE(MARK, "x");
+
+// Self-tail-recursive sync rite: compiles to an in-place C loop, so 1200
+// imports cost O(1) stack and O(1) scope depth.
+RITE fillRegistry(n) {
+    SHOULD n <= 0 {
+        BEQUEATH 0;
+    }
+    import watcher W(MARK);
+    BEQUEATH fillRegistry(n - 1);
+}
+
+fillRegistry(1200);
+UTTER("registry filled");
+
+import process P("rm", "-f", "./entity_many_pollable.tmp");
+
+~ATH(P) {
+} EXECUTE(UTTER("late pollable died"));
+
+THIS.DIE();

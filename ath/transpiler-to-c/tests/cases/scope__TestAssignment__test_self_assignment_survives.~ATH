@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Self-assignment hands the scope the binding's own value as a *borrowed*
+// reference. Once the value sink has been flushed the binding holds the only
+// reference, so releasing the old value before retaining the new one would
+// free it and then resurrect freed memory. Both `x = x;` (ath_scope_set) and a
+// same-scope re-`BIRTH x WITH x;` (ath_scope_define) take that path, so cover
+// both -- and for two refcounted value kinds, a STRING and an ARRAY.
+//
+// The sink is flushed once per event-loop dispatch, so each self-assignment
+// has to land on a later dispatch than the write that produced the value.
+
+BIRTH s WITH "seed";
+BIRTH a WITH [1];
+
+import timer T1(1ms);
+~ATH(T1) {
+} EXECUTE(
+    s = s + "!";
+    a = APPEND(a, 2);
+    UTTER(s);
+    UTTER(STRING(a));
+);
+
+// Later dispatch: the sink has been flushed, so `s` and `a` are sole owners.
+import timer T2(1ms);
+~ATH(T2) {
+} EXECUTE(
+    s = s;
+    a = a;
+    UTTER(s);
+    UTTER(STRING(a));
+);
+
+// Later dispatch again, now through the re-definition path. These stay at top
+// level, so they rebind the *same* scope slot rather than shadowing it.
+import timer T3(1ms);
+~ATH(T3) {
+} EXECUTE(VOID);
+BIRTH s WITH s;
+BIRTH a WITH a;
+UTTER(s);
+UTTER(STRING(a));
+
+// Still usable afterwards -- proves the values were never actually freed.
+import timer T4(1ms);
+~ATH(T4) {
+} EXECUTE(
+    s = s + "?";
+    a = APPEND(a, 3);
+    UTTER(s);
+    UTTER(STRING(a));
+    UTTER(LENGTH(s), LENGTH(a));
+);
+
+THIS.DIE();
