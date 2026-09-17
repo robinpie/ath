@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Integral FLOATs up to 1e15 print as "N.0". The check converted the double to
+// long, which overflows a 32-bit long (i686, wasm32, win64) for values past
+// 2^31: those targets printed 9876543128.0 as 9.87654e+09 (or other garbage)
+// while 64-bit targets printed 9876543128.0. Found by random-program
+// differential testing (fuzz/progfuzz).
+UTTER(9876543128.0);
+UTTER(-9876543128.0);
+UTTER(2147483648.0, -2147483649.0, 4294967296.0);
+UTTER(999999999999999.0, 1000000000000000.0, 1000000000000001.0);
+UTTER(9876543128.5, 0.5, -0.0);
+UTTER(FLOAT(123456) * 100000.0);
+THIS.DIE();

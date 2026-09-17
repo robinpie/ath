@@ -518,6 +518,13 @@ RITE genSyncStmt(stmt, depth, ctx) {
     BIRTH nt WITH stmt.t;
     BIRTH p WITH ind(depth);
 
+    // Synthetic (codegen-only) statement: hand control to a join segment of
+    // the same frame. genAsyncCond appends one to each branch of an async
+    // conditional so the statements after it are emitted once, not per branch.
+    SHOULD nt == "JoinJump" {
+        BEQUEATH {ctx:ctx, s:p+stmt.name+"((AthCont*)f,ath_void()); return;\n"};
+    }
+
     SHOULD nt == "VarDecl" OR nt == "ConstDecl" {
         BIRTH ic WITH 0; SHOULD nt == "ConstDecl" { ic = 1; }
         BIRTH re WITH genExpr(stmt.val, ctx); ctx = re.ctx;
@@ -1444,20 +1451,50 @@ RITE genAsyncCond(condNode, post, fname, ctx) {
     ctx = emitDef(ctx, rc.stmts +
         "    if (!ath_is_truthy("+rc.t+")) { "+elseName+"((AthCont*)f,ath_void()); return; }\n");
 
-    // True path: then ++ post continues the current open segment. Close it here, the same way the rite/branch caller would close a tail segment.
-    BIRTH thenAndPost WITH CONCAT(condNode.then, post);
-    ctx = genAsyncSegments(thenAndPost, fname, resetTc(ctx));
-    ctx = emitDef(ctx, ctx.cl + "    return;");
+    // The statements after the conditional (post) must be emitted once. They
+    // used to be appended to both branches, so n sequential async
+    // conditionals in one frame produced ~4^n copies of the frame's tail (12
+    // of them: 135k lines of C). Each branch instead ends by jumping to a join
+    // segment that runs post; the join is left open for the caller to close
+    // like any other tail segment. An empty post needs no join: the branches
+    // are the tail, and the true path closes here exactly as the caller would.
+    SHOULD LENGTH(post) == 0 {
+        ctx = genAsyncSegments(condNode.then, fname, resetTc(ctx));
+        ctx = emitDef(ctx, ctx.cl + "    return;");
+        ctx = emitDef(ctx, "}");
+        ctx = emitDef(ctx, "static void "+elseName+"(AthCont *_self,AthValue _result) {");
+        ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
+        ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
+        ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+        SHOULD ctx.cb { ctx = emitDef(ctx, "    ath_eventloop_set_current_branch(f->branch);"); }
+        BEQUEATH genAsyncSegments(elseStmts, fname, resetTc(ctx));
+    }
+
+    BIRTH rj WITH freshN(ctx); ctx = rj.ctx;
+    BIRTH joinName WITH "_s"+STRING(rj.v)+"_"+fname;
+    ctx = emitFwd(ctx, "static void "+joinName+"(AthCont*,AthValue);");
+    BIRTH jump WITH [{t:"JoinJump", name:joinName, l:condNode.l}];
+
+    // True path: then, then jump to the join, continuing the current open segment.
+    ctx = genAsyncSegments(CONCAT(condNode.then, jump), fname, resetTc(ctx));
     ctx = emitDef(ctx, "}");
 
-    // False path: a fresh segment running els ++ post, left open for the caller to close like any other tail segment.
+    // False path: a fresh segment running els, then the same jump.
     ctx = emitDef(ctx, "static void "+elseName+"(AthCont *_self,AthValue _result) {");
     ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
     ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
     ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
     SHOULD ctx.cb { ctx = emitDef(ctx, "    ath_eventloop_set_current_branch(f->branch);"); }
-    BIRTH elseAndPost WITH CONCAT(elseStmts, post);
-    BEQUEATH genAsyncSegments(elseAndPost, fname, resetTc(ctx));
+    ctx = genAsyncSegments(CONCAT(elseStmts, jump), fname, resetTc(ctx));
+    ctx = emitDef(ctx, "}");
+
+    // Join: post, emitted once.
+    ctx = emitDef(ctx, "static void "+joinName+"(AthCont *_self,AthValue _result) {");
+    ctx = emitDef(ctx, "    "+fname+" *f=("+fname+"*)_self;");
+    ctx = emitDef(ctx, "    AthValue _t[512]; AthValue _args[16];");
+    ctx = emitDef(ctx, "    (void)_result; memset(_t,0,sizeof(_t));");
+    SHOULD ctx.cb { ctx = emitDef(ctx, "    ath_eventloop_set_current_branch(f->branch);"); }
+    BEQUEATH genAsyncSegments(post, fname, resetTc(ctx));
 }
 
 // genAsyncCallSplit: async rite call in async context. If post is empty: tail-call optimization (pass f->base.next directly). Otherwise: split to new segment.

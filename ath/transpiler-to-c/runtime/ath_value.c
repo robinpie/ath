@@ -658,6 +658,20 @@ const char *ath_typeof_str(AthValue v) {
 static char *stringify_array(AthArray *a);
 static char *stringify_map(AthMap *m);
 
+/* Is d an integer with |d| <= 1e15 (printed as "%.1f")? Decided without
+   converting anything but in-range values to long: a NaN, infinite or
+   out-of-range double -> long conversion is undefined, and 1e15 does not fit a
+   32-bit long, where the old single cast printed 9876543128.0 differently on
+   i686, wasm32 and win64. The value is split into a multiple of 2^31 plus a
+   remainder that fits any long; both steps are exact below 2^53. */
+static int double_is_small_integer(double d) {
+    double q, r;
+    if (!(d >= -1e15 && d <= 1e15)) return 0;
+    q = (double)(long)(d / 2147483648.0);   /* |d / 2^31| < 465662 */
+    r = d - q * 2147483648.0;               /* |r| < 2^31 */
+    return r == (double)(long)r;
+}
+
 char *ath_stringify(AthValue v) {
     char *buf;
     switch (v.type) {
@@ -671,8 +685,7 @@ char *ath_stringify(AthValue v) {
     }
     case ATH_FLOAT: {
         char tmp[64];
-        /* range first: converting a NaN, infinite or out-of-range double to long is undefined */
-        if (v.as.float_ >= -1e15 && v.as.float_ <= 1e15 && v.as.float_ == (long)v.as.float_)
+        if (double_is_small_integer(v.as.float_))
             sprintf(tmp, "%.1f", v.as.float_);
         else
             sprintf(tmp, "%g", v.as.float_);

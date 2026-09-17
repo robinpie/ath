@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// A SHOULD/LEST with async content used to get the rest of its frame emitted
+// into BOTH branches, so n sequential async conditionals produced ~4^n copies
+// of the frame's tail (12 of them: 135k lines of C; 20 would never finish).
+// Each branch now jumps to a single join segment. Found by random-program
+// differential testing (fuzz/progfuzz, seed 400).
+import timer T(1ms);
+RITE step(p) {
+    ~ATH(T) { } EXECUTE(UTTER("async", p));
+}
+SHOULD ALIVE { step(0); } LEST { UTTER("sync", 0); }
+SHOULD DEAD { step(1); } LEST { UTTER("sync", 1); }
+SHOULD ALIVE { step(2); } LEST { UTTER("sync", 2); }
+SHOULD DEAD { step(3); } LEST { UTTER("sync", 3); }
+SHOULD ALIVE { step(4); } LEST { UTTER("sync", 4); }
+SHOULD DEAD { step(5); } LEST { UTTER("sync", 5); }
+SHOULD ALIVE { step(6); } LEST { UTTER("sync", 6); }
+SHOULD DEAD { step(7); } LEST { UTTER("sync", 7); }
+SHOULD ALIVE { step(8); } LEST { UTTER("sync", 8); }
+SHOULD DEAD { step(9); } LEST { UTTER("sync", 9); }
+SHOULD ALIVE { step(10); } LEST { UTTER("sync", 10); }
+SHOULD DEAD { step(11); } LEST SHOULD ALIVE { step(11); UTTER("elif", 11); } LEST { UTTER("sync", 11); }
+SHOULD ALIVE { step(12); } LEST { UTTER("sync", 12); }
+SHOULD DEAD { step(13); } LEST { UTTER("sync", 13); }
+SHOULD ALIVE { step(14); } LEST { UTTER("sync", 14); }
+SHOULD DEAD { step(15); } LEST { UTTER("sync", 15); }
+SHOULD ALIVE { step(16); } LEST { UTTER("sync", 16); }
+SHOULD DEAD { step(17); } LEST { UTTER("sync", 17); }
+SHOULD ALIVE { step(18); } LEST { UTTER("sync", 18); }
+SHOULD DEAD { step(19); } LEST { UTTER("sync", 19); }
+UTTER("end");
+THIS.DIE();

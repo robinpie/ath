@@ -509,3 +509,5 @@ regression__float_literal_precision|exact|0
 regression__nested_definitions_hoisted|sorted|0
 regression__module_rite_name_matches_program_rite|exact|0
 regression__duplicate_rite_name_rejected|exact|0
+regression__float_print_width_independent|exact|0
+regression__async_cond_join_no_blowup|exact|0

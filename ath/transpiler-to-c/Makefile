@@ -71,7 +71,7 @@ WIN64_LIBFFI = vendor/win64/libffi
 WIN64_CFLAGS = -std=c89 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter \
                -Wno-unused-variable -Wno-pedantic-ms-format
 
-.PHONY: all bin bin-i686 bin-win64 bin-wasm lib lib-win64 lib-wasm lib-san bin-san test-san fuzz-cake fuzz-cake-run fuzz-ops fuzz-ops-run afl-athtoc afl-athtoc-run afl-check fuzz-clean \
+.PHONY: all bin bin-i686 bin-win64 bin-wasm lib lib-win64 lib-wasm lib-san bin-san test-san fuzz-cake fuzz-cake-run fuzz-ops fuzz-ops-run afl-athtoc afl-athtoc-run afl-check progfuzz fuzz-clean \
         test test-linux test-win64 test-wasm verify-wasm-selfhost smoke \
         check-license clean
 
@@ -219,6 +219,16 @@ afl-athtoc-run: $(AFL_DIR)/athtoc-afl
 
 afl-check:
 	fuzz/afl_check_outputs.sh $(AFL_DIR)/out
+
+# ===== Random whole-program differential testing (fuzz/progfuzz) =====
+# gen.py writes random terminating !~ATH programs; run.py transpiles each once
+# and builds it six ways (gcc -O0, clang -O2, ASan+UBSan | i686, wasm32, win64),
+# requiring agreement within each long width. PROG_COUNT programs from seed
+# PROG_START; findings land in fuzz/work/progfuzz/findings/<seed>/.
+PROG_START ?= 1
+PROG_COUNT ?= 500
+progfuzz: $(BIN) $(LIB) $(LIB_SAN) $(LIB_WIN64) $(LIB_WASM)
+	python3 fuzz/progfuzz/run.py --start $(PROG_START) --count $(PROG_COUNT)
 
 fuzz-clean:
 	rm -rf fuzz/work
