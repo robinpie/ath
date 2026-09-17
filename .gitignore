@@ -6,7 +6,7 @@ GEMINI.md
 ath/apps/quicproject/cwnd_log.csv
 *.kate-swp
 ath/tmp/**
-ath/fuzz/README.md
+ath/transpiler-to-c/fuzz/README.md
 
 # Build artifacts. The committed bootstrap binaries (athtoc-bin*, athtoc.wasm,
 # tests/athtoc-stable) and vendored vendor/win64/libffi/lib/libffi.a are NOT
