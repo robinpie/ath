@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Indices and sizes wider than a C int must not be truncated to int: on a
+// 64-bit long, 4294967296 used to wrap to 0, so arr[4294967296] read arr[0],
+// SLICE(..., 4294967296) was empty and STACK(4294967298) was a STACK(2).
+// Linux-only: 4294967296 does not fit a 32-bit long.
+BIRTH big WITH 4294967296;
+BIRTH arr WITH [10, 20, 30];
+ATTEMPT { UTTER(arr[big]); } SALVAGE e { UTTER(e); }
+ATTEMPT { UTTER("abc"[big + 1]); } SALVAGE e { UTTER(e); }
+ATTEMPT { arr[big + 2] = 99; } SALVAGE e { UTTER(e); }
+UTTER(arr);
+UTTER(SLICE([1, 2, 3], 0, big));
+UTTER(SLICE([1, 2, 3], -big + 1, 2));
+UTTER(SUBSTRING("hello", 0, big + 2));
+ATTEMPT { BIRTH S WITH STACK(big + 2); UTTER(S); } SALVAGE e { UTTER(e); }
+ATTEMPT { BIRTH H WITH HASHMAP(big + 1); UTTER(H); } SALVAGE e { UTTER(e); }
+ATTEMPT { BIRTH B WITH BOTTLE(2); UTTER(EJECT SLOT big FROM B); } SALVAGE e { UTTER(e); }
+ATTEMPT { BIRTH b WITH BUFFER(big); UTTER(b); } SALVAGE e { UTTER(e); }
+THIS.DIE();

@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Width-independent (1 << 63 is LONG_MIN on 64- and 32-bit long alike):
+// - a HASHMAP hash rite returning LONG_MIN: abs() of it overflowed and the
+//   still-negative slot index wrote before the slot array;
+// - RANDOM_INT over a range wider than an int divided by zero, and over the
+//   full range computed max - min + 1 with signed overflow;
+// - RECKON with a huge length overflowed offset + length, slipped past the
+//   bounds check and read far outside the buffer;
+// - TECHHOP grooves * shades overflowed int and under-allocated its cells;
+// - INT() of an infinite or out-of-range FLOAT was an undefined conversion.
+RITE evil(k) { BEQUEATH 1 << 63; }
+BIRTH H WITH HASHMAP(3, evil);
+CAPTCHALOGUE "v" WITH "k" INTO H;
+UTTER(STRING(H));
+
+BIRTH lo WITH 1 << 63;
+BIRTH hi WITH lo - 1;
+BIRTH r WITH RANDOM_INT(lo, hi);
+UTTER(TYPEOF(r), r >= lo AND r <= hi);
+r = RANDOM_INT(0, hi);
+UTTER(r >= 0);
+r = RANDOM_INT(lo, -1);
+UTTER(r < 0);
+UTTER(RANDOM_INT(-3, -3));
+
+BIRTH buf WITH BUFFER(4);
+ATTEMPT { UTTER(RECKON(buf, 1, hi)); } SALVAGE e { UTTER("RECKON rejected"); }
+ATTEMPT { UTTER(RECKON(buf, hi, 1)); } SALVAGE e { UTTER("RECKON rejected"); }
+UTTER(RECKON(buf, 4, 0));
+
+RITE yes(v, i) { BEQUEATH ALIVE; }
+ATTEMPT { BIRTH T WITH TECHHOP(65536, 65536, yes, yes); UTTER(T); } SALVAGE e { UTTER(e); }
+
+ATTEMPT { UTTER(INT(PARSE_FLOAT("1e300"))); } SALVAGE e { UTTER(e); }
+ATTEMPT { UTTER(INT(PARSE_FLOAT("-inf"))); } SALVAGE e { UTTER(e); }
+UTTER(STRING(PARSE_FLOAT("1e300")));
+UTTER(INT(-2.5));
+THIS.DIE();

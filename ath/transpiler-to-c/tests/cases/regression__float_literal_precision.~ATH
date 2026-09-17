@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Float literals were emitted into the generated C via STRING(v), which keeps
+// only 6 significant digits: 3.14159265358979 compiled as 3.14159, and a
+// literal past DBL_MAX came out as the (non-C) token "inf". Found by AFL++.
+BIRTH pi WITH 3.14159265358979;
+UTTER(pi == PARSE_FLOAT("3.14159265358979"));
+UTTER(INT(pi * 100000000.0));
+BIRTH e WITH 2.718281828459045;
+UTTER(INT(e * 100000000.0));
+UTTER(0.1234567891 == PARSE_FLOAT("0.1234567891"));
+UTTER(-0.000001234567 == PARSE_FLOAT("-0.000001234567"));
+BIRTH huge WITH 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.5;
+UTTER(huge == PARSE_FLOAT("1e400"));
+THIS.DIE();

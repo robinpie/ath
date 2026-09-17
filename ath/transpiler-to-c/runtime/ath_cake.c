@@ -188,6 +188,13 @@ static AthRecipe *ck_recipe_new(CkRecipeKind kind) {
 /* Scalar layout table (fixed widths MANDATED; native widths host-ABI)   */
 /* ===================================================================== */
 
+/* Every size, offset and alignment is an int. Capping each at 1 GiB keeps all intermediate arithmetic (align_up's off + a - 1, a struct's running offset + field size, a union's payload offset + payload size) inside INT_MAX, so a hostile or mistaken schema is a catchable error instead of a silently wrapped layout (which would under-allocate BAKE buffers and let SPRINKLE write out of bounds). */
+#define CK_MAX_EXTENT (1L << 30)
+static void ck_check_extent(long v) {
+    if (v < 0 || v > CK_MAX_EXTENT)
+        ath_runtime_error_fmt("!^CAKE: recipe too large (sizes and alignments are limited to 1 GiB)", NULL);
+}
+
 static int align_up(int off, int a) {
     if (a <= 1) return off;
     return ((off + a - 1) / a) * a;
@@ -389,7 +396,7 @@ static void ck_lex(Ck *ck, const char *src) {
             if (!s) ath_fatal("out of memory");
             memcpy(s, src + start, (size_t)(i - start));
             s[i - start] = '\0';
-            v = atol(s);
+            v = strtol(s, NULL, 10); /* saturates to LONG_MIN/LONG_MAX on overflow (atol is UB) */
             free(s);
             tok_push(&arr, &n, &cap, TK_INT, NULL, v, line);
             continue;
@@ -410,7 +417,7 @@ static void ck_lex(Ck *ck, const char *src) {
                     sb_putc_(&tmp, src[i]); i++;
                 }
             }
-            if (i >= len) { free(tmp.buf); ck_err(ck, "!^CAKE: unterminated string", NULL); }
+            if (i >= len) { free(tmp.buf); ck->toks = arr; ck->ntoks = n; ck_err(ck, "!^CAKE: unterminated string", NULL); }
             i++; /* closing quote */
             tok_push(&arr, &n, &cap, TK_STR, tmp.buf, 0, line);
             free(tmp.buf);
@@ -434,6 +441,7 @@ static void ck_lex(Ck *ck, const char *src) {
         {
             char msg[64];
             sprintf(msg, "!^CAKE: unexpected character '%c'", c);
+            ck->toks = arr; ck->ntoks = n; /* hand tokens to ck so the error cleanup frees them */
             ath_runtime_error_fmt("%s", msg);
         }
     }
@@ -754,7 +762,7 @@ static void ck_parse_recipe(Ck *ck) {
 static void ck_skip_measure(Ck *ck) {
     /* MEASURE name = int ; (already captured in pre-scan) */
     expect_ident(ck, "MEASURE");
-    (void)take_ident(ck);
+    free(take_ident(ck));   /* the name was already recorded by the pre-scan */
     expect_punct(ck, "=");
     (void)ck_take_intval(ck);
     expect_punct(ck, ";");
@@ -840,6 +848,11 @@ static CkType *ck_resolve_type(Ck *ck, RawType *rt, int imperial) {
             ath_runtime_error_fmt("!^CAKE: array count must be non-negative", NULL);
         }
         stride = align_up(elem->size, elem->align);
+        /* the count itself is capped too: a zero-size element skips the product check, and array_count is an int */
+        if (rt->count > CK_MAX_EXTENT || (stride > 0 && rt->count > CK_MAX_EXTENT / stride)) {
+            ck_type_free(elem); free(t);
+            ck_check_extent(CK_MAX_EXTENT + 1L);
+        }
         t->tag = CK_T_ARRAY;
         t->array_count = rt->count;
         t->elem = elem;
@@ -862,13 +875,16 @@ static void ck_layout_struct(AthRecipe *r) {
         CkType *t = r->ingredients[i].type;
         int a = r->dense ? 1 : t->align;
         off = align_up(off, a);
+        ck_check_extent(off);
         r->ingredients[i].offset = off;
+        ck_check_extent((long)off + t->size);
         off += t->size;
         if (a > align) align = a;
     }
     if (r->rise_to > align) align = r->rise_to;
     r->align = align;
     r->size = align_up(off, align);
+    ck_check_extent(r->size);
 }
 
 static void ck_build_struct_descriptor(AthRecipe *r, char out[9]) {
@@ -940,6 +956,10 @@ static AthRecipe *ck_build_struct(Ck *ck, RawRecipe *rr) {
                 ath_recipe_decref(r);
                 ath_runtime_error_fmt("!^CAKE: RISE TO value must be a positive power of two", NULL);
             }
+            if (m->rise_val > CK_MAX_EXTENT) {
+                ath_recipe_decref(r);
+                ck_check_extent(m->rise_val);
+            }
             if ((int)m->rise_val > r->rise_to) r->rise_to = (int)m->rise_val;
             continue;
         }
@@ -956,9 +976,10 @@ static AthRecipe *ck_build_struct(Ck *ck, RawRecipe *rr) {
         for (j = i + 1; j < r->n_ingredients; j++) {
             if (!r->ingredients[j].is_reserved &&
                 strcmp(r->ingredients[i].name, r->ingredients[j].name) == 0) {
+                /* copy the name first: the decref frees the ingredient array it lives in */
+                char *nm = ck_strdup(r->ingredients[i].name);
                 ath_recipe_decref(r);
-                ath_runtime_error_fmt("!^CAKE: duplicate ingredient name '%s'",
-                                      r->ingredients[i].name);
+                ath_runtime_error_fmt("!^CAKE: duplicate ingredient name '%s'", nm);
             }
         }
     }
@@ -1090,6 +1111,7 @@ static AthRecipe *ck_build_union(CkArm *arms, int n) {
     payload_off = align_up(1, P);
     r->align = P;
     r->size = align_up(payload_off + payload_size, P);
+    ck_check_extent(r->size);
     for (i = 0; i < n; i++) arms[i].payload_offset = payload_off;
     r->arms = arms;
     r->n_arms = n;
@@ -1140,10 +1162,12 @@ static AthRecipe *ck_resolve_recipe(Ck *ck, RawRecipe *rr) {
         result = ck_build_struct(ck, rr);
     }
     if (rr->has_punch && strcmp(result->code, rr->punch) != 0) {
-        char msg[160];
-        sprintf(msg, "!^CAKE: STALE: '%s' is punched \"%s\" but computed \"%s\"",
-                rr->name, rr->punch, result->code);
-        ath_runtime_error_fmt("%s", msg);
+        /* formatted by the bounded error formatter: a fixed sprintf buffer overflowed on a long recipe name */
+        char code[9];
+        memcpy(code, result->code, sizeof code);
+        ath_recipe_decref(result);
+        ath_runtime_error_fmt("!^CAKE: STALE: '%s' is punched \"%s\" but computed \"%s\"",
+                              rr->name, rr->punch, code);
     }
     rr->result = result;        /* memo holds one ref */
     rr->resolved = 1;
@@ -1198,24 +1222,44 @@ static void ck_cleanup(Ck *ck) {
 }
 
 AthValue ath_cake_load(const char *path) {
+    char *src = ck_read_file(path);
+    AthValue mod;
+    /* ck_read_file raises (never returns NULL) on failure. If parsing raises, src leaks along with the rest of the parse state (see ath_cake_load_source). */
+    mod = ath_cake_load_source(src, path);
+    free(src);
+    return mod;
+}
+
+AthValue ath_cake_load_source(const char *src, const char *label) {
     Ck ck;
-    char *src;
+    AthErrorFrame ef;
     AthMap *m;
     int i;
     long mv;
 
     memset(&ck, 0, sizeof(ck));
-    ck.path = path;
-    src = ck_read_file(path);
-    ck_lex(&ck, src);
-    free(src);
-    ck_prescan_measures(&ck);
-    ck_parse_file(&ck);
+    ck.path = label;
+    /* Every schema error longjmps out of the parser. Catch it here so the token array and raw parse tree are freed, then re-raise the same message: without this, each rejected schema leaked its whole parse state (bounded fuzzing sessions ran out of memory within minutes). */
+    ATH_ATTEMPT_BEGIN(ef) {
+        ck_lex(&ck, src);
+        ck_prescan_measures(&ck);
+        ck_parse_file(&ck);
 
-    /* resolve every recipe */
-    for (i = 0; i < ck.n_recipes; i++) {
-        AthRecipe *r = ck_resolve_recipe(&ck, &ck.recipes[i]);
-        ath_recipe_decref(r); /* memo already holds a ref; drop the caller ref */
+        /* resolve every recipe */
+        for (i = 0; i < ck.n_recipes; i++) {
+            AthRecipe *r = ck_resolve_recipe(&ck, &ck.recipes[i]);
+            ath_recipe_decref(r); /* memo already holds a ref; drop the caller ref */
+        }
+        ATH_ATTEMPT_END(ef);
+    } ATH_SALVAGE_BEGIN(ef) {
+        char msg[512];
+        int line = ef.error_line, col = ef.error_col;
+        strncpy(msg, ef.error_msg ? ef.error_msg : "!^CAKE: error", sizeof msg - 1);
+        msg[sizeof msg - 1] = '\0';
+        free(ef.error_msg);
+        ck_cleanup(&ck);
+        ath_condemn(msg, line, col);
+        ATH_SALVAGE_END(ef);
     }
 
     m = ath_map_new(8);

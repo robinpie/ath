@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// A definition generated while another function was still being emitted used
+// to be spliced into the middle of it (a C function nested inside a function):
+// a branch-mode ~ATH inside a wait-mode EXECUTE, and an async rite defined in an
+// EXECUTE that itself defines a rite. Found by AFL++ (output did not compile).
+import timer T(1ms);
+~ATH(T) { } EXECUTE(
+    RITE outer(a) {
+        ~ATH(T) { } EXECUTE(
+            RITE inner(b) { BEQUEATH b * 10; }
+            UTTER("inner", inner(a))
+        );
+    }
+    outer(4);
+);
+
+bifurcate THIS[A, B];
+~ATH(A) { } EXECUTE(
+    ~ATH(B) { } EXECUTE(UTTER("branch B"));
+    UTTER("branch A")
+);
+[A, B].DIE();

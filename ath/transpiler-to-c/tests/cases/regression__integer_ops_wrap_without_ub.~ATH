@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Integer operators wrap (two's complement) and shift counts are taken modulo
+// the integer width, with no C undefined behaviour. Written width-independently:
+// 1 << 63 is LONG_MIN for both 64-bit and 32-bit long once the count is masked.
+BIRTH m WITH 1 << 63;
+UTTER(m < 0);
+UTTER(m / -1 == m);      // LONG_MIN / -1 used to trap with SIGFPE
+UTTER(m % -1);
+UTTER(-m == m);
+UTTER(m - 1 > 0);
+UTTER((m - 1) + 1 == m);
+UTTER(m * 2);
+UTTER(1 << 64);          // count masked to the width -> 1 << 0
+UTTER((1 << -1) == m);   // negative count masked too
+UTTER(-1 << 3);
+UTTER(-8 >> 1 > 0);      // >> is a logical shift
+UTTER(7 / -1, 7 % -1);
+THIS.DIE();

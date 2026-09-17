@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// CODE on a byte-truncated or malformed UTF-8 sequence returns the raw lead
+// byte instead of reading past the end of the string.
+BIRTH smile WITH "☺";               // E2 98 BA
+UTTER(CODE(smile));                 // 9786
+UTTER(CODE(SUBSTRING(smile, 0, 1))); // lone lead byte -> 226
+UTTER(CODE(SUBSTRING(smile, 0, 2))); // truncated 3-byte sequence -> 226
+UTTER(CODE(SUBSTRING(smile, 1, 3))); // stray continuation byte -> 152
+UTTER(CODE("é"));                   // 233
+THIS.DIE();

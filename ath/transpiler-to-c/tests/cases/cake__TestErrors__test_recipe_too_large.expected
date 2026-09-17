@@ -1,0 +1,6 @@
+at the limit: 1073741824
+count: !^CAKE: recipe too large (sizes and alignments are limited to 1 GiB)
+product: !^CAKE: recipe too large (sizes and alignments are limited to 1 GiB)
+literal: !^CAKE: recipe too large (sizes and alignments are limited to 1 GiB)
+struct: !^CAKE: recipe too large (sizes and alignments are limited to 1 GiB)
+rise: rejected

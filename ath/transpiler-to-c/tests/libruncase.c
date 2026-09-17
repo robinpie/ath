@@ -25,7 +25,9 @@
  *
  * Three targets, selected by the ATH_TARGET environment variable:
  *   "native" (default) -- transpile with athtoc (arg -> ATHTOC -> ../athtoc-bin),
- *                         compile with gcc, run the ELF directly.
+ *                         compile with gcc, run the ELF directly.  With
+ *                         ATH_SAN=1, compile with ASan+UBSan and link
+ *                         libath_runtime_san.a instead (make test-san).
  *   "win64"            -- transpile with the Windows transpiler under wine,
  *                         cross-compile with mingw + vendored libffi, run the
  *                         .exe under wine.  The win64 program emits CRLF line
@@ -212,6 +214,10 @@ long run_case(const char *name, const char *athtoc) {
     } else if (wasm) {
         transpiler = getenv("ATHTOC");
         if (!transpiler || !*transpiler) transpiler = "../athtoc.wasm";
+    } else if (getenv("ATH_SAN") && *getenv("ATH_SAN") && strcmp(getenv("ATH_SAN"), "0") != 0) {
+        /* sanitizer run: the harness's hardcoded arg is ignored in favour of the instrumented transpiler. */
+        transpiler = getenv("ATHTOC");
+        if (!transpiler || !*transpiler) transpiler = "../athtoc-bin-san";
     } else {
         transpiler = (athtoc && *athtoc) ? athtoc : getenv("ATHTOC");
         if (!transpiler || !*transpiler) transpiler = "../athtoc-bin";
@@ -335,7 +341,10 @@ long run_case(const char *name, const char *athtoc) {
         snprintf(runtime_inc, sizeof runtime_inc, "-I%s/../runtime", tests_dir);
         snprintf(lib_dir,     sizeof lib_dir,     "-L%s/..",         tests_dir);
 
-        char *argv[] = {
+        /* ATH_SAN=1: link against the ASan+UBSan runtime (make lib-san) with matching instrumentation. */
+        const char *san = getenv("ATH_SAN");
+        int use_san = san && *san && strcmp(san, "0") != 0;
+        char *plain_argv[] = {
             "gcc", "-std=c89", "-pedantic",
             "-Wno-unused-variable", "-Wno-declaration-after-statement",
             c_file, runtime_inc, lib_dir,
@@ -343,6 +352,16 @@ long run_case(const char *name, const char *athtoc) {
             "-o", bin_file,
             NULL
         };
+        char *san_argv[] = {
+            "gcc", "-std=c89", "-pedantic",
+            "-Wno-unused-variable", "-Wno-declaration-after-statement",
+            "-g", "-O1", "-fno-omit-frame-pointer", "-fsanitize=address,undefined",
+            c_file, runtime_inc, lib_dir,
+            "-lath_runtime_san", "-ldl", "-lffi",
+            "-o", bin_file,
+            NULL
+        };
+        char *const *argv = use_san ? san_argv : plain_argv;
         /* gcc resolves -I/-L paths itself, so cwd doesn't matter. */
         int rc = run_cmd(argv, NULL, NULL, err_file, tests_dir);
         if (rc != 0) {

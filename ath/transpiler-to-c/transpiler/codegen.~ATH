@@ -60,7 +60,10 @@ RITE mkCtx(asyncRites, syncRites, branchNames, pipeline) {
     //      straight to `_done` (skipping ATH_ATTEMPT_END), so it must restore
     //      _ath_error_top itself or the rite leaves a dangling frame pointer
     //      that a later CONDEMN will longjmp into after this call has returned.
-    BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],pre:[],defs:[],pm:DEAD,ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline,cb:DEAD,srn:"",prm:[],ia:DEAD,efs:[]};
+    // rp:  prefix for rite C names (_rite_<rp><name>): "" in the main program,
+    //      the module frame's name inside an imported module, so a module rite
+    //      and a program rite of the same name no longer collide in C
+    BEQUEATH {n:0,tc:0,sv:"_scope",fwds:[],hoist:[],pre:[],defs:[],pm:DEAD,rp:"",ar:asyncRites,sr:syncRites,bn:branchNames,cl:"",fn:"",mc:{},pl:pipeline,cb:DEAD,srn:"",prm:[],ia:DEAD,efs:[]};
 }
 
 // The C statement (possibly empty) that restores _ath_error_top before a
@@ -93,6 +96,33 @@ RITE emitFwd(ctx, line) { BEQUEATH SET(ctx,"fwds",APPEND(ctx.fwds,line)); }
 RITE emitDef(ctx, s) {
     SHOULD ctx.pm { BEQUEATH SET(ctx,"pre",APPEND(ctx.pre,s)); }
     BEQUEATH SET(ctx,"defs",APPEND(ctx.defs,s));
+}
+
+// A whole definition (a nested rite, a branch frame, a module frame) can be
+// generated while another function is still half-emitted -- e.g. an async rite
+// generated lazily from an EXECUTE, which itself defines a rite. Emitting both
+// into the same pre-mode list spliced the inner definition into the middle of
+// the outer function (invalid C: a function nested inside a function). Instead
+// the definition is generated into an empty pre list, and the finished block is
+// moved to `hoist`, which is emitted ahead of pre and defs; blocks refer to each
+// other only through the forward declarations, so hoisting them is safe.
+// A module's rites are generated with the module's own rite sets (so calls in
+// them bind to the module's rites, not the importing program's) and under a
+// per-module C-name prefix; leaveModule restores the importer's.
+RITE enterModule(ctx, frameName, modAnn) {
+    checkRiteNames(modAnn.ast.stmts, {});
+    BIRTH stmts WITH modAnn.ast.stmts;
+    BIRTH names WITH mergeIntoSr(collectSyncRites(stmts, 0, modAnn.asyncRites),
+                                 KEYS(collectAsyncRiteNames(stmts, 0, modAnn.asyncRites)), 0);
+    BEQUEATH SET(SET(SET(ctx,"rp",frameName+"_"),"ar",modAnn.asyncRites),"sr",names);
+}
+RITE leaveModule(inner, outer) {
+    BEQUEATH SET(SET(SET(inner,"rp",outer.rp),"ar",outer.ar),"sr",outer.sr);
+}
+
+RITE detachBegin(ctx) { BEQUEATH SET(SET(ctx,"pm",ALIVE),"pre",[]); }
+RITE detachEnd(inner, outer) {
+    BEQUEATH SET(SET(SET(inner,"hoist",CONCAT(inner.hoist,inner.pre)),"pre",outer.pre),"pm",outer.pm);
 }
 
 RITE ind(n) {
@@ -236,7 +266,9 @@ RITE genExpr(expr, ctx) {
         BIRTH r WITH freshT(ctx); ctx = r.ctx; BIRTH t WITH r.t;
         BIRTH vt WITH expr.vt;
         SHOULD vt == "INT" { BEQUEATH {ctx:ctx, stmts:t+"=ath_int("+STRING(expr.v)+"L);\n", t:t}; }
-        SHOULD vt == "FLT" { BEQUEATH {ctx:ctx, stmts:t+"=ath_float("+STRING(expr.v)+");\n", t:t}; }
+        // the literal's source digits, not STRING(v): that keeps only 6 significant
+        // digits, and prints "inf" (not C) for a literal past DBL_MAX
+        SHOULD vt == "FLT" { BEQUEATH {ctx:ctx, stmts:t+"=ath_float("+expr.src+");\n", t:t}; }
         SHOULD vt == "STR" { BEQUEATH {ctx:ctx, stmts:t+"=ath_sink(ath_str_cstr(\""+escStr(expr.v)+"\"));\n", t:t}; }
         SHOULD vt == "BOOL" {
             SHOULD expr.v { BEQUEATH {ctx:ctx, stmts:t+"=ath_bool(1);\n", t:t}; }
@@ -354,7 +386,7 @@ RITE genSylladexExpr(expr, ctx) {
         OR kind == "BOTTLE" OR kind == "JUJU" {
         SHOULD n != 1 { CONDEMN kind + " requires 1 argument"; }
         stmts = stmts + checkInt(ra.tmps_arr[0], kind+" size");
-        callArgs = "(int)("+ra.tmps_arr[0]+").as.integer";
+        callArgs = "ath_size_arg(("+ra.tmps_arr[0]+").as.integer,\""+kind+" size\")";
     }
     SHOULD kind == "TREE" {
         SHOULD n == 0 { callArgs = "0"; }
@@ -366,12 +398,12 @@ RITE genSylladexExpr(expr, ctx) {
     SHOULD kind == "HASHMAP" {
         SHOULD n == 1 {
             stmts = stmts + checkInt(ra.tmps_arr[0], "HASHMAP size");
-            callArgs = "(int)("+ra.tmps_arr[0]+").as.integer,NULL";
+            callArgs = "ath_size_arg(("+ra.tmps_arr[0]+").as.integer,\"HASHMAP size\"),NULL";
         }
         LEST SHOULD n == 2 {
             stmts = stmts + checkInt(ra.tmps_arr[0], "HASHMAP size");
             stmts = stmts + checkRite(ra.tmps_arr[1], "HASHMAP hash");
-            callArgs = "(int)("+ra.tmps_arr[0]+").as.integer,("+ra.tmps_arr[1]+").as.rite";
+            callArgs = "ath_size_arg(("+ra.tmps_arr[0]+").as.integer,\"HASHMAP size\"),("+ra.tmps_arr[1]+").as.rite";
         }
         LEST { CONDEMN "HASHMAP takes 1 or 2 arguments"; }
     }
@@ -381,7 +413,7 @@ RITE genSylladexExpr(expr, ctx) {
         stmts = stmts + checkInt(ra.tmps_arr[1], "TECHHOP shades");
         stmts = stmts + checkRite(ra.tmps_arr[2], "TECHHOP groove predicate");
         stmts = stmts + checkRite(ra.tmps_arr[3], "TECHHOP shade predicate");
-        callArgs = "(int)("+ra.tmps_arr[0]+").as.integer,(int)("+ra.tmps_arr[1]+").as.integer,("+
+        callArgs = "ath_size_arg(("+ra.tmps_arr[0]+").as.integer,\"TECHHOP grooves\"),ath_size_arg(("+ra.tmps_arr[1]+").as.integer,\"TECHHOP shades\"),("+
                    ra.tmps_arr[2]+").as.rite,("+ra.tmps_arr[3]+").as.rite";
     }
     BEQUEATH {ctx:ctx, stmts:stmts+
@@ -417,7 +449,7 @@ RITE genCallExpr(expr, ctx) {
     }
     SHOULD callee.t == "Ident" AND HAS(ctx.ar, callee.name) {
         // Async rite called from sync context: fire-and-forget with NULL continuation
-        BEQUEATH {ctx:ctx, stmts:raa+"_rite_async_"+callee.name+"("+ctx.sv+",NULL,"+STRING(argc)+",_args);\n"+t+"=ath_void();\n", t:t};
+        BEQUEATH {ctx:ctx, stmts:raa+"_rite_async_"+ctx.rp+callee.name+"("+ctx.sv+",NULL,"+STRING(argc)+",_args);\n"+t+"=ath_void();\n", t:t};
     }
     SHOULD callee.t == "Ident" AND HAS(ctx.sr, callee.name) {
         // A self-call passes the rite's own "_closure" (its definition scope):
@@ -427,7 +459,7 @@ RITE genCallExpr(expr, ctx) {
         // reachable only via that chain.
         BIRTH clo WITH ctx.sv;
         SHOULD ctx.sv == "_sc" AND callee.name == ctx.srn { clo = "_closure"; }
-        BEQUEATH {ctx:ctx, stmts:raa+t+"=ath_sink(_rite_"+callee.name+"("+clo+","+STRING(argc)+",_args));\n", t:t};
+        BEQUEATH {ctx:ctx, stmts:raa+t+"=ath_sink(_rite_"+ctx.rp+callee.name+"("+clo+","+STRING(argc)+",_args));\n", t:t};
     }
     BIRTH rc WITH genExpr(callee, ctx); ctx = rc.ctx;
     BEQUEATH {ctx:ctx, stmts:raa+rc.stmts+t+"=ath_sink(ath_call_sync("+ctx.sv+","+rc.t+","+STRING(argc)+",_args));\n", t:t};
@@ -614,6 +646,7 @@ RITE genSyncStmt(stmt, depth, ctx) {
             p+"        AthValue _err_v;\n"+
             p+"        ath_sink_flush("+sm+");\n"+
             p+"        _err_v = ath_sink(ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\"));\n"+
+            p+"        free("+ef+".error_msg); "+ef+".error_msg = NULL;\n"+
             p+"        ath_scope_define("+ctx.sv+",\""+stmt.errname+"\",_err_v,0);\n"+
             rs.s+
             p+"        ATH_SALVAGE_END("+ef+");\n"+
@@ -632,22 +665,22 @@ RITE genSyncStmt(stmt, depth, ctx) {
         SHOULD HAS(ctx.ar, stmt.name) {
             // If not already generated at top level, generate now (use pre-mode to avoid nesting)
             SHOULD NOT HAS(ctx.sr, stmt.name) {
-                BIRTH pmCtx WITH SET(ctx,"pm",ALIVE);
+                BIRTH pmCtx WITH detachBegin(ctx);
                 pmCtx = genAsyncRite(stmt, pmCtx);
-                ctx = SET(SET(pmCtx,"pm",ctx.pm),"sr",SET(pmCtx.sr,stmt.name,ALIVE));
+                ctx = SET(detachEnd(pmCtx, ctx),"sr",SET(pmCtx.sr,stmt.name,ALIVE));
             }
             BIRTH s WITH p+"ath_scope_define("+ctx.sv+",\""+stmt.name+"\","+
-                "ath_sink(ath_rite_val(ath_rite_new_async("+ctx.sv+",_rite_async_"+stmt.name+","+STRING(np)+"))),0);\n";
+                "ath_sink(ath_rite_val(ath_rite_new_async("+ctx.sv+",_rite_async_"+ctx.rp+stmt.name+","+STRING(np)+"))),0);\n";
             BEQUEATH {ctx:ctx, s:s};
         }
         // If not already generated at top level, generate now (use pre-mode to avoid nesting)
         SHOULD NOT HAS(ctx.sr, stmt.name) {
-            BIRTH pmCtx WITH SET(ctx,"pm",ALIVE);
+            BIRTH pmCtx WITH detachBegin(ctx);
             pmCtx = genSyncRite(stmt, pmCtx);
-            ctx = SET(SET(pmCtx,"pm",ctx.pm),"sr",SET(pmCtx.sr,stmt.name,ALIVE));
+            ctx = SET(detachEnd(pmCtx, ctx),"sr",SET(pmCtx.sr,stmt.name,ALIVE));
         }
         BIRTH s WITH p+"ath_scope_define("+ctx.sv+",\""+stmt.name+"\","+
-            "ath_sink(ath_rite_val(ath_rite_new_sync("+ctx.sv+",_rite_"+stmt.name+","+STRING(np)+"))),0);\n";
+            "ath_sink(ath_rite_val(ath_rite_new_sync("+ctx.sv+",_rite_"+ctx.rp+stmt.name+","+STRING(np)+"))),0);\n";
         BEQUEATH {ctx:ctx, s:s};
     }
 
@@ -927,7 +960,7 @@ RITE genSyncRite(stmt, ctx) {
     BIRTH saved_prm WITH ctx.prm;
     BIRTH saved_ia WITH ctx.ia;
 
-    ctx = emitFwd(ctx, "static AthValue _rite_"+name+"(AthScope*,int,AthValue*);");
+    ctx = emitFwd(ctx, "static AthValue _rite_"+ctx.rp+name+"(AthScope*,int,AthValue*);");
 
     // Clear fn/cl so BEQUEATH inside this sync rite emits sync-style goto _done.
     // srn/prm name this rite and its params so a self-tail-call in the body can
@@ -944,7 +977,7 @@ RITE genSyncRite(stmt, ctx) {
     // _sink0 marks the value sink at entry; _done increfs _ret (so it survives
     // the flush and the scope release, making every rite return a +1 the
     // caller sinks) then flushes this rite's expression garbage.
-    BIRTH fn WITH "static AthValue _rite_"+name+"(AthScope *_closure,int _argc,AthValue *_argv) {\n"+
+    BIRTH fn WITH "static AthValue _rite_"+ctx.rp+name+"(AthScope *_closure,int _argc,AthValue *_argv) {\n"+
         "    AthScope *_sc;\n"+
         "    AthValue *_t; AthValue _args[16]; AthValue _ret;\n"+
         "    int _sink0;\n"+
@@ -1091,6 +1124,7 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
         ctx2 = emitDef(ctx2, "            AthValue _err_v;");
         ctx2 = emitDef(ctx2, "            ath_sink_flush(_sm"+STRING(efn.v)+");");
         ctx2 = emitDef(ctx2, "            _err_v = ath_sink(ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\"));");
+        ctx2 = emitDef(ctx2, "            free("+ef+".error_msg); "+ef+".error_msg = NULL;");
         ctx2 = emitDef(ctx2, "            ath_scope_define("+sv+",\""+node.errname+"\",_err_v,0);");
         BIRTH sctx WITH SET(resetTc(ctx2),"sv",sv);
         BIRTH rs WITH genSyncStmtList(node.salvage, 0, 3, sctx);
@@ -1125,10 +1159,10 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
             BIRTH exports WITH collectModuleExports(modAnn.ast.stmts, 0);
             BIRTH rnm WITH freshN(ctx2); ctx2 = rnm.ctx;
             frameName = "_FMod"+STRING(rnm.v);
-            BIRTH pmCtx WITH SET(ctx2,"pm",ALIVE);
+            BIRTH pmCtx WITH enterModule(detachBegin(ctx2), frameName, modAnn);
             pmCtx = genAllRites(modAnn.ast.stmts, 0, modAnn.asyncRites, pmCtx);
             pmCtx = genModuleFrame(frameName, modName, exports, modAnn.ast.stmts, modAnn.asyncRites, pmCtx);
-            ctx2 = SET(pmCtx,"pm",ctx2.pm);
+            ctx2 = leaveModule(detachEnd(pmCtx, ctx2), ctx2);
             seg0 = ctx2.ms0;
             ctx2 = SET(ctx2,"mc",SET(ctx2.mc, path, {fn:frameName, s0:seg0}));
         }
@@ -1145,6 +1179,7 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
         ctx2 = emitDef(ctx2, "            ATH_ATTEMPT_END("+ef0+");");
         ctx2 = emitDef(ctx2, "        } ATH_SALVAGE_BEGIN("+ef0+") {");
         ctx2 = emitDef(ctx2, "            ath_eventloop_schedule((AthCont*)f,ath_sink(ath_str_cstr("+ef0+".error_msg?"+ef0+".error_msg:\"module import failed\")));");
+        ctx2 = emitDef(ctx2, "            free("+ef0+".error_msg); "+ef0+".error_msg = NULL;");
         ctx2 = emitDef(ctx2, "            ATH_SALVAGE_END("+ef0+");");
         ctx2 = emitDef(ctx2, "        }");
         ctx2 = emitDef(ctx2, "    }");
@@ -1174,6 +1209,7 @@ RITE genAsyncAttempt(node, post, fname, ctx) {
         ctx2 = emitDef(ctx2, "            AthValue _err_v;");
         ctx2 = emitDef(ctx2, "            ath_sink_flush(_sm"+STRING(efn.v)+");");
         ctx2 = emitDef(ctx2, "            _err_v = ath_sink(ath_str_cstr("+ef+".error_msg?"+ef+".error_msg:\"error\"));");
+        ctx2 = emitDef(ctx2, "            free("+ef+".error_msg); "+ef+".error_msg = NULL;");
         ctx2 = emitDef(ctx2, "            ath_scope_define("+sv+",\""+node.errname+"\",_err_v,0);");
         BIRTH sctx WITH SET(resetTc(ctx2),"sv",sv);
         BIRTH rs WITH genSyncStmtList(node.salvage, 0, 3, sctx);
@@ -1283,10 +1319,10 @@ RITE genModuleImport(stmt, post, fname, ctx) {
     BIRTH frameName WITH "_FMod"+STRING(rn.v);
 
     // Generate module rites and frame in pre-mode
-    BIRTH pmCtx WITH SET(ctx,"pm",ALIVE);
+    BIRTH pmCtx WITH enterModule(detachBegin(ctx), frameName, modAnn);
     pmCtx = genAllRites(modAnn.ast.stmts, 0, modAnn.asyncRites, pmCtx);
     pmCtx = genModuleFrame(frameName, modName, exports, modAnn.ast.stmts, modAnn.asyncRites, pmCtx);
-    ctx = SET(pmCtx,"pm",ctx.pm);
+    ctx = leaveModule(detachEnd(pmCtx, ctx), ctx);
 
     // Cache the module (s0 = entry segment, for ATTEMPT-wrapped imports)
     ctx = SET(ctx,"mc",SET(ctx.mc, path, {fn:frameName, s0:ctx.ms0}));
@@ -1439,14 +1475,14 @@ RITE genAsyncCallSplit(callExpr, post, fname, ctx) {
             // Tail-call: steal continuation, free current frame afterward (via standard cleanup)
             ctx = emitDef(ctx, ra.stmts+ra.assigns);
             ctx = emitDef(ctx, "    { AthCont *_k=f->base.next; f->base.next=NULL;");
-            ctx = emitDef(ctx, "      _rite_async_"+callee.name+"("+sv+",_k,"+STRING(argc)+",_args); }");
+            ctx = emitDef(ctx, "      _rite_async_"+ctx.rp+callee.name+"("+sv+",_k,"+STRING(argc)+",_args); }");
             BEQUEATH ctx;
         }
         // Non-tail: split to new segment
         BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
         BIRTH nextName WITH "_s"+STRING(rn.v)+"_"+fname;
         ctx = emitDef(ctx, ra.stmts+ra.assigns);
-        ctx = emitDef(ctx, "    f->base.resume="+nextName+"; _rite_async_"+callee.name+"("+sv+",(AthCont*)f,"+STRING(argc)+",_args);");
+        ctx = emitDef(ctx, "    f->base.resume="+nextName+"; _rite_async_"+ctx.rp+callee.name+"("+sv+",(AthCont*)f,"+STRING(argc)+",_args);");
         ctx = emitDef(ctx, "    return;");
         ctx = emitDef(ctx, "}");
         ctx = emitFwd(ctx, "static void "+nextName+"(AthCont*,AthValue);");
@@ -1489,9 +1525,9 @@ RITE genBranchAthLoop(stmt, encFname, ctx) {
 }
 
 RITE genBranchFrame(fname, brName, bodyStmts, execStmts, ctx) {
-    BIRTH saved_pm WITH ctx.pm;
+    BIRTH outer WITH ctx;
     BIRTH saved_sr WITH ctx.sr;
-    ctx = SET(ctx,"pm",ALIVE);
+    ctx = detachBegin(ctx);
 
     BIRTH allStmts WITH CONCAT(bodyStmts, execStmts);
 
@@ -1525,7 +1561,7 @@ RITE genBranchFrame(fname, brName, bodyStmts, execStmts, ctx) {
     ctx2 = emitDef(ctx2, "    ath_eventloop_set_current_branch(NULL);");
     ctx2 = emitDef(ctx2, "    "+fname+"_free(f);");
     ctx2 = emitDef(ctx2, "}");
-    BEQUEATH SET(SET(SET(SET(SET(ctx2,"cl",""),"fn",""),"pm",saved_pm),"sr",saved_sr),"cb",DEAD);
+    BEQUEATH SET(SET(SET(SET(detachEnd(ctx2, outer),"cl",""),"fn",""),"sr",saved_sr),"cb",DEAD);
 }
 
 // ===== Async Rite =====
@@ -1534,19 +1570,19 @@ RITE genAsyncRite(stmt, ctx) {
     BIRTH name WITH stmt.name;
     BIRTH params WITH stmt.params;
     BIRTH np WITH LENGTH(params);
-    BIRTH fname WITH "_FRite_"+name;
+    BIRTH fname WITH "_FRite_"+ctx.rp+name;
 
     BIRTH rn WITH freshN(ctx); ctx = rn.ctx;
     BIRTH seg0 WITH "_s"+STRING(rn.v)+"_"+fname;
 
     ctx = emitFwd(ctx, "typedef struct "+fname+" "+fname+";");
     ctx = emitFwd(ctx, "static void "+seg0+"(AthCont*,AthValue);");
-    ctx = emitFwd(ctx, "static void _rite_async_"+name+"(AthScope*,AthCont*,int,AthValue*);");
+    ctx = emitFwd(ctx, "static void _rite_async_"+ctx.rp+name+"(AthScope*,AthCont*,int,AthValue*);");
 
     ctx = emitDef(ctx, "struct "+fname+" { AthCont base; AthScope *scope; };");
     ctx = emitDef(ctx, "static void "+fname+"_free("+fname+" *f){ath_scope_decref(f->scope);free(f);}");
 
-    BIRTH entryFn WITH "static void _rite_async_"+name+
+    BIRTH entryFn WITH "static void _rite_async_"+ctx.rp+name+
         "(AthScope *_closure,AthCont *_k,int _argc,AthValue *_argv) {\n"+
         "    "+fname+" *f=("+fname+"*)malloc(sizeof("+fname+"));\n"+
         "    f->base.resume="+seg0+"; f->base.next=_k; f->base.refcount=1;\n"+
@@ -1675,8 +1711,36 @@ RITE mergeIntoSr(sr, keys, i) {
     BEQUEATH mergeIntoSr(SET(sr, keys[i], ALIVE), keys, i+1);
 }
 
+// Every rite compiles to one C function named after the rite (_rite_<name> or
+// _rite_async_<name>), and calls to it are bound by that name, so two RITEs with
+// the same name anywhere in one program -- a redefinition, or an inner rite
+// shadowing an outer one -- used to emit a C redefinition, a function nested in
+// another, or a call silently bound to the wrong rite (found by AFL++). Until
+// rite names are resolved lexically, a repeated name is a transpile error.
+RITE checkRiteNames(node, seen) {
+    SHOULD TYPEOF(node) == "ARRAY" { BEQUEATH checkRiteNameList(node, 0, seen); }
+    SHOULD TYPEOF(node) != "MAP" { BEQUEATH seen; }
+    SHOULD HAS(node, "t") AND node.t == "RiteDef" {
+        SHOULD HAS(seen, node.name) {
+            CONDEMN "Error at line " + STRING(node.l) + ": RITE " + node.name +
+                " is already defined at line " + STRING(seen[node.name]) +
+                " (a rite name may be defined only once per program)";
+        }
+        seen = SET(seen, node.name, node.l);
+    }
+    BEQUEATH checkRiteNameList(VALUES(node), 0, seen);
+}
+
+RITE checkRiteNameList(items, i, seen) {
+    SHOULD i >= LENGTH(items) { BEQUEATH seen; }
+    BIRTH v WITH items[i];
+    SHOULD TYPEOF(v) == "ARRAY" OR TYPEOF(v) == "MAP" { seen = checkRiteNames(v, seen); }
+    BEQUEATH checkRiteNameList(items, i+1, seen);
+}
+
 RITE generate(ast, asyncRites, pipeline) {
     BIRTH stmts WITH ast.stmts;
+    checkRiteNames(stmts, {});
     BIRTH syncRites WITH collectSyncRites(stmts, 0, asyncRites);
     BIRTH asyncRiteNames WITH collectAsyncRiteNames(stmts, 0, asyncRites);
     // Pre-populate sr with all top-level rite names (sync + async) so genSyncStmt doesn't re-generate rites that genAllRites already emitted.
@@ -1694,6 +1758,7 @@ RITE generate(ast, asyncRites, pipeline) {
 
     BEQUEATH hdr +
         JOIN(ctx3.fwds, "\n") + "\n\n" +
+        JOIN(ctx3.hoist, "\n") + "\n\n" +
         JOIN(ctx3.pre, "\n") + "\n\n" +
         JOIN(ctx3.defs, "\n");
 }

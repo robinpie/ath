@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 robinpie
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// Strings are byte arrays and may hold NUL bytes (BUFFER_TO_STRING of binary
+// data, e.g. packets). These builtins used to go through C-string helpers and
+// silently stopped at the first NUL: STRING(s) and "x" + s kept only the prefix,
+// JOIN dropped everything after a NUL in each element, INSCRIBE wrote a
+// truncated file, and PARSE_INT/PARSE_FLOAT accepted "12<NUL>junk".
+BIRTH b WITH BUFFER(5);
+SET_BYTE(b, 0, 97); SET_BYTE(b, 2, 98); SET_BYTE(b, 3, 44); SET_BYTE(b, 4, 99);
+BIRTH s WITH BUFFER_TO_STRING(b);             // "a\0b,c"
+UTTER(LENGTH(s));
+UTTER(LENGTH(STRING(s)), STRING(s) == s);
+UTTER(LENGTH(1 + s), LENGTH(s + 1.5), LENGTH(s + s));
+BIRTH parts WITH SPLIT(s, ",");
+UTTER(LENGTH(parts), LENGTH(parts[0]));
+UTTER(LENGTH(JOIN(parts, ",")), JOIN(parts, ",") == s);
+UTTER(LENGTH(JOIN([s, 7, s], "|")));
+INSCRIBE("../work/regression_nul_bytes.bin", s);
+UTTER(LENGTH(SCRY("../work/regression_nul_bytes.bin")), SCRY("../work/regression_nul_bytes.bin") == s);
+BIRTH nul WITH SUBSTRING(s, 1, 2);
+ATTEMPT { UTTER(PARSE_INT("12" + nul + "9")); } SALVAGE e { UTTER("PARSE_INT rejected"); }
+ATTEMPT { UTTER(PARSE_FLOAT("1.5" + nul + "9")); } SALVAGE e { UTTER("PARSE_FLOAT rejected"); }
+UTTER(PARSE_INT("-12"), PARSE_FLOAT("2.5"));
+THIS.DIE();

@@ -24,6 +24,7 @@
 #include "ath_cake.h"
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <stdio.h>
 
 /* ===== Value sink ===== */
@@ -62,12 +63,19 @@ AthString *ath_string_new(const char *data, int len) {
 }
 
 AthString *ath_string_from_cstr(const char *cstr) {
-    return ath_string_new(cstr, (int)strlen(cstr));
+    size_t n = strlen(cstr);
+    if (n > (size_t)INT_MAX) ath_runtime_error("string too large", 0, 0);
+    return ath_string_new(cstr, (int)n);
 }
 
 AthString *ath_string_concat(AthString *a, AthString *b) {
-    int total = a->length + b->length;
-    AthString *s = (AthString *)malloc(sizeof(AthString) + total);
+    int total;
+    AthString *s;
+    /* lengths are int: a sum past INT_MAX overflowed into a bogus allocation size */
+    if (a->length > INT_MAX - b->length)
+        ath_runtime_error("string too large", 0, 0);
+    total = a->length + b->length;
+    s = (AthString *)malloc(sizeof(AthString) + total);
     if (!s) ath_fatal("out of memory");
     s->refcount = 1;
     s->length = total;
@@ -663,7 +671,8 @@ char *ath_stringify(AthValue v) {
     }
     case ATH_FLOAT: {
         char tmp[64];
-        if (v.as.float_ == (long)v.as.float_ && v.as.float_ >= -1e15 && v.as.float_ <= 1e15)
+        /* range first: converting a NaN, infinite or out-of-range double to long is undefined */
+        if (v.as.float_ >= -1e15 && v.as.float_ <= 1e15 && v.as.float_ == (long)v.as.float_)
             sprintf(tmp, "%.1f", v.as.float_);
         else
             sprintf(tmp, "%g", v.as.float_);
@@ -716,7 +725,8 @@ char *ath_stringify(AthValue v) {
 static char *stringify_array(AthArray *a) {
     /* "[e1, e2, ...]" */
     char **parts;
-    int i, total = 3; /* "[]" + null */
+    int i;
+    size_t total = 3; /* "[]" + null; size_t: the parts of a big array can sum past INT_MAX */
     char *result, *p;
     if (!a || a->length == 0) {
         result = (char*)malloc(3); strcpy(result, "[]"); return result;
@@ -724,9 +734,10 @@ static char *stringify_array(AthArray *a) {
     parts = (char**)malloc(sizeof(char*) * a->length);
     for (i = 0; i < a->length; i++) {
         parts[i] = ath_stringify(a->data[i]);
-        total += (int)strlen(parts[i]) + 2; /* ", " */
+        total += strlen(parts[i]) + 2; /* ", " */
     }
     result = (char*)malloc(total + 4);
+    if (!result) ath_fatal("out of memory");
     p = result;
     *p++ = '[';
     for (i = 0; i < a->length; i++) {
@@ -742,7 +753,8 @@ static char *stringify_array(AthArray *a) {
 static char *stringify_map(AthMap *m) {
     /* "{k: v, ...}" */
     char **parts;
-    int i, j, total = 3, count = 0;
+    int i, j, count = 0;
+    size_t total = 3;   /* size_t: see stringify_array */
     char *result, *p;
     if (!m || m->count == 0) {
         result = (char*)malloc(3); strcpy(result, "{}"); return result;
@@ -754,11 +766,12 @@ static char *stringify_map(AthMap *m) {
             memcpy(parts[count*2], m->entries[i].key->data, m->entries[i].key->length);
             parts[count*2][m->entries[i].key->length] = '\0';
             parts[count*2+1] = ath_stringify(m->entries[i].value);
-            total += (int)strlen(parts[count*2]) + (int)strlen(parts[count*2+1]) + 4;
+            total += strlen(parts[count*2]) + strlen(parts[count*2+1]) + 4;
             count++;
         }
     }
     result = (char*)malloc(total + 4);
+    if (!result) ath_fatal("out of memory");
     p = result;
     *p++ = '{';
     for (j = 0; j < count; j++) {
@@ -775,22 +788,56 @@ static char *stringify_map(AthMap *m) {
 
 /* ===== Operators ===== */
 
+/* Integer arithmetic is defined to wrap (two's complement) and shift counts are taken modulo the integer width. Signed overflow and out-of-range shifts are undefined behaviour in C, so every integer operator goes through unsigned long; the results match what x86-64 hardware already produced, now on every target and at every optimisation level. */
+#define ATH_LONG_BITS ((int)(sizeof(long) * 8))
+int ath_clamp_int(long v) {
+    if (v > (long)INT_MAX) return INT_MAX;
+    if (v < (long)INT_MIN) return INT_MIN;
+    return (int)v;
+}
+
+int ath_size_arg(long v, const char *what) {
+    if (v > (long)INT_MAX) ath_runtime_error_fmt("%s too large", what);
+    return ath_clamp_int(v);
+}
+
+static long ath_wrap(unsigned long u) {
+    /* unsigned -> signed conversion of an out-of-range value is implementation-defined; do it explicitly */
+    if (u <= (unsigned long)LONG_MAX) return (long)u;
+    return -(long)(~u) - 1;
+}
+
+/* Take ownership of a malloc'd stringify result and wrap it; NULL if it is too long for an AthString. */
+static AthString *string_from_stringified(char *buf) {
+    size_t n = strlen(buf);
+    AthString *s = n > (size_t)INT_MAX ? NULL : ath_string_new(buf, (int)n);
+    free(buf);
+    return s;
+}
+
 AthValue ath_add(AthValue a, AthValue b) {
     /* both already strings: concat directly, no stringify round-trip */
     if (a.type == ATH_STRING && b.type == ATH_STRING)
         return ath_str_val(ath_string_concat(a.as.string, b.as.string));
     /* string coercion: if either is string, convert both */
     if (a.type == ATH_STRING || b.type == ATH_STRING) {
-        char *sa = ath_stringify(a), *sb = ath_stringify(b);
-        AthString *s = ath_string_new(sa, (int)strlen(sa));
-        AthString *t = ath_string_from_cstr(sb);
-        AthString *result = ath_string_concat(s, t);
-        free(sa); free(sb);
-        ath_string_decref(s); ath_string_decref(t);
+        /* the string side is used as-is (stringifying it would stop at an embedded NUL) */
+        AthString *sa = a.type == ATH_STRING ? (ath_string_incref(a.as.string), a.as.string)
+                                             : string_from_stringified(ath_stringify(a));
+        AthString *sb = b.type == ATH_STRING ? (ath_string_incref(b.as.string), b.as.string)
+                                             : string_from_stringified(ath_stringify(b));
+        AthString *result;
+        if (!sa || !sb || sa->length > INT_MAX - sb->length) {   /* checked here so nothing leaks */
+            if (sa) ath_string_decref(sa);
+            if (sb) ath_string_decref(sb);
+            ath_runtime_error("string too large", 0, 0);
+        }
+        result = ath_string_concat(sa, sb);
+        ath_string_decref(sa); ath_string_decref(sb);
         return ath_str_val(result);
     }
     if (a.type == ATH_INTEGER && b.type == ATH_INTEGER)
-        return ath_int(a.as.integer + b.as.integer);
+        return ath_int(ath_wrap((unsigned long)a.as.integer + (unsigned long)b.as.integer));
     if (a.type == ATH_FLOAT || b.type == ATH_FLOAT) {
         double fa = (a.type==ATH_FLOAT) ? a.as.float_ : (double)a.as.integer;
         double fb = (b.type==ATH_FLOAT) ? b.as.float_ : (double)b.as.integer;
@@ -802,7 +849,7 @@ AthValue ath_add(AthValue a, AthValue b) {
 
 AthValue ath_sub(AthValue a, AthValue b) {
     if (a.type == ATH_INTEGER && b.type == ATH_INTEGER)
-        return ath_int(a.as.integer - b.as.integer);
+        return ath_int(ath_wrap((unsigned long)a.as.integer - (unsigned long)b.as.integer));
     if ((a.type==ATH_FLOAT||a.type==ATH_INTEGER) && (b.type==ATH_FLOAT||b.type==ATH_INTEGER)) {
         double fa = (a.type==ATH_FLOAT) ? a.as.float_ : (double)a.as.integer;
         double fb = (b.type==ATH_FLOAT) ? b.as.float_ : (double)b.as.integer;
@@ -814,7 +861,7 @@ AthValue ath_sub(AthValue a, AthValue b) {
 
 AthValue ath_mul(AthValue a, AthValue b) {
     if (a.type == ATH_INTEGER && b.type == ATH_INTEGER)
-        return ath_int(a.as.integer * b.as.integer);
+        return ath_int(ath_wrap((unsigned long)a.as.integer * (unsigned long)b.as.integer));
     if ((a.type==ATH_FLOAT||a.type==ATH_INTEGER) && (b.type==ATH_FLOAT||b.type==ATH_INTEGER)) {
         double fa = (a.type==ATH_FLOAT) ? a.as.float_ : (double)a.as.integer;
         double fb = (b.type==ATH_FLOAT) ? b.as.float_ : (double)b.as.integer;
@@ -827,6 +874,8 @@ AthValue ath_mul(AthValue a, AthValue b) {
 AthValue ath_div(AthValue a, AthValue b) {
     if (a.type == ATH_INTEGER && b.type == ATH_INTEGER) {
         if (b.as.integer == 0) ath_runtime_error("division by zero", 0, 0);
+        /* LONG_MIN / -1 traps (SIGFPE) on x86; wrap it to LONG_MIN like the other operators */
+        if (b.as.integer == -1) return ath_int(ath_wrap(0UL - (unsigned long)a.as.integer));
         return ath_int(a.as.integer / b.as.integer);
     }
     if ((a.type==ATH_FLOAT||a.type==ATH_INTEGER) && (b.type==ATH_FLOAT||b.type==ATH_INTEGER)) {
@@ -842,6 +891,7 @@ AthValue ath_div(AthValue a, AthValue b) {
 AthValue ath_mod(AthValue a, AthValue b) {
     if (a.type == ATH_INTEGER && b.type == ATH_INTEGER) {
         if (b.as.integer == 0) ath_runtime_error("modulo by zero", 0, 0);
+        if (b.as.integer == -1) return ath_int(0); /* LONG_MIN % -1 also traps */
         return ath_int(a.as.integer % b.as.integer);
     }
     ath_runtime_error("'%%' requires integer operands", 0, 0);
@@ -849,7 +899,7 @@ AthValue ath_mod(AthValue a, AthValue b) {
 }
 
 AthValue ath_neg(AthValue a) {
-    if (a.type == ATH_INTEGER) return ath_int(-a.as.integer);
+    if (a.type == ATH_INTEGER) return ath_int(ath_wrap(0UL - (unsigned long)a.as.integer));
     if (a.type == ATH_FLOAT)   return ath_float(-a.as.float_);
     ath_runtime_error("unary '-' requires numeric operand", 0, 0);
     return ath_void();
@@ -882,13 +932,13 @@ AthValue ath_bnot(AthValue a) {
 AthValue ath_lshift(AthValue a, AthValue b) {
     if (a.type != ATH_INTEGER || b.type != ATH_INTEGER)
         ath_runtime_error("'<<' requires integer operands", 0, 0);
-    return ath_int(a.as.integer << (int)b.as.integer);
+    return ath_int(ath_wrap((unsigned long)a.as.integer << ((unsigned long)b.as.integer & (unsigned long)(ATH_LONG_BITS - 1))));
 }
 
 AthValue ath_rshift(AthValue a, AthValue b) {
     if (a.type != ATH_INTEGER || b.type != ATH_INTEGER)
         ath_runtime_error("'>>' requires integer operands", 0, 0);
-    return ath_int((long)((unsigned long)a.as.integer >> (int)b.as.integer));
+    return ath_int(ath_wrap((unsigned long)a.as.integer >> ((unsigned long)b.as.integer & (unsigned long)(ATH_LONG_BITS - 1))));
 }
 
 static int ath_values_equal(AthValue a, AthValue b) {
@@ -1032,7 +1082,7 @@ AthValue ath_index(AthValue obj, AthValue idx) {
         int i;
         if (idx.type != ATH_INTEGER)
             ath_runtime_error("array index must be INTEGER", 0, 0);
-        i = (int)idx.as.integer;
+        i = ath_clamp_int(idx.as.integer);
         if (i < 0 || i >= obj.as.array->length)
             ath_runtime_error("array index out of bounds", 0, 0);
         /* +1: ath_index always returns an owned reference (sunk by codegen) */
@@ -1044,7 +1094,7 @@ AthValue ath_index(AthValue obj, AthValue idx) {
         AthString *s;
         if (idx.type != ATH_INTEGER)
             ath_runtime_error("string index must be INTEGER", 0, 0);
-        i = (int)idx.as.integer;
+        i = ath_clamp_int(idx.as.integer);
         if (i < 0 || i >= obj.as.string->length)
             ath_runtime_error("string index out of bounds", 0, 0);
         s = ath_string_new(&obj.as.string->data[i], 1);
@@ -1100,7 +1150,7 @@ void ath_index_set(AthValue obj, AthValue idx, AthValue val) {
         int i;
         if (idx.type != ATH_INTEGER)
             ath_runtime_error("array index must be INTEGER", 0, 0);
-        i = (int)idx.as.integer;
+        i = ath_clamp_int(idx.as.integer);
         if (i < 0 || i >= obj.as.array->length)
             ath_runtime_error("array index out of bounds for assignment", 0, 0);
         ath_value_decref(obj.as.array->data[i]);

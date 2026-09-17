@@ -72,7 +72,9 @@ RITE scanNumber(src, pos, line, col) {
     p = dr.pos; c = dr.col; acc = acc + dr.acc;
     SHOULD p < LENGTH(src) AND src[p] == "." AND p+1 < LENGTH(src) AND isDigit(src[p+1]) {
         BIRTH dr2 WITH scanDigits(src, p+1, c+1, "");
-        BEQUEATH {tok: {t: "FLT", v: PARSE_FLOAT(acc + "." + dr2.acc), l: line, c: col},
+        // src keeps the literal's own digits: codegen emits them verbatim, since
+        // STRING(v) prints only 6 significant digits (3.14159265 became 3.14159).
+        BEQUEATH {tok: {t: "FLT", v: PARSE_FLOAT(acc + "." + dr2.acc), src: acc + "." + dr2.acc, l: line, c: col},
                   pos: dr2.pos, col: dr2.col};
     }
     SHOULD p < LENGTH(src) AND src[p] == "m" AND p+1 < LENGTH(src) AND src[p+1] == "s" {

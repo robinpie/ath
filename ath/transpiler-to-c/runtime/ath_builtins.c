@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
 #include <time.h>
 
 /* ===== Helper macros ===== */
@@ -252,10 +253,14 @@ AthValue ath_builtin_INSCRIBE(AthScope *s, int argc, AthValue *argv) {
     f = fopen(argv[0].as.string->data, "wb");
     if (!f) ath_runtime_error_fmt("INSCRIBE: cannot open file '%s'",
                                    argv[0].as.string->data);
-    content = ath_stringify(argv[1]);
-    fwrite(content, 1, strlen(content), f);
+    if (argv[1].type == ATH_STRING) {   /* write every byte, NULs included */
+        fwrite(argv[1].as.string->data, 1, (size_t)argv[1].as.string->length, f);
+    } else {
+        content = ath_stringify(argv[1]);
+        fwrite(content, 1, strlen(content), f);
+        free(content);
+    }
     fclose(f);
-    free(content);
     return ath_void();
 }
 
@@ -296,7 +301,8 @@ AthValue ath_builtin_PARSE_INT(AthScope *s, int argc, AthValue *argv) {
     if (strchr(argv[0].as.string->data, '.'))
         ath_runtime_error("PARSE_INT: cannot parse float string as integer", 0, 0);
     v = strtol(argv[0].as.string->data, &end, 10);
-    if (end == argv[0].as.string->data || *end != '\0')
+    /* the parse must consume the whole string: *end == '\0' alone would accept "12\0junk" */
+    if (end == argv[0].as.string->data || end != argv[0].as.string->data + argv[0].as.string->length)
         ath_runtime_error_fmt("PARSE_INT: cannot parse '%s'",
                                argv[0].as.string->data);
     return ath_int(v);
@@ -308,7 +314,7 @@ AthValue ath_builtin_PARSE_FLOAT(AthScope *s, int argc, AthValue *argv) {
     (void)s; REQUIRE_ARGC(1, "PARSE_FLOAT");
     REQUIRE_STRING(argv[0], "PARSE_FLOAT", "value");
     v = strtod(argv[0].as.string->data, &end);
-    if (end == argv[0].as.string->data || *end != '\0')
+    if (end == argv[0].as.string->data || end != argv[0].as.string->data + argv[0].as.string->length)
         ath_runtime_error_fmt("PARSE_FLOAT: cannot parse '%s'",
                                argv[0].as.string->data);
     return ath_float(v);
@@ -318,7 +324,12 @@ AthValue ath_builtin_STRING(AthScope *s, int argc, AthValue *argv) {
     char *str;
     AthValue result;
     (void)s; REQUIRE_ARGC(1, "STRING");
+    if (argv[0].type == ATH_STRING) {   /* already a string: returned whole (+1), NULs and all */
+        ath_value_incref(argv[0]);
+        return argv[0];
+    }
     str = ath_stringify(argv[0]);
+    if (strlen(str) > (size_t)INT_MAX) { free(str); ath_runtime_error("STRING: result string too large", 0, 0); }
     result = ath_str_cstr(str);
     free(str);
     return result;
@@ -327,7 +338,16 @@ AthValue ath_builtin_STRING(AthScope *s, int argc, AthValue *argv) {
 AthValue ath_builtin_INT(AthScope *s, int argc, AthValue *argv) {
     (void)s; REQUIRE_ARGC(1, "INT");
     if (argv[0].type == ATH_INTEGER) return argv[0];
-    if (argv[0].type == ATH_FLOAT)   return ath_int((long)argv[0].as.float_);
+    if (argv[0].type == ATH_FLOAT) {
+        double d = argv[0].as.float_;
+        /* Truncation must land inside long: converting a NaN, an infinity or an
+           out-of-range double is undefined behaviour, so those raise instead.
+           (double)LONG_MIN is exact (a power of two); the upper bound is its
+           negation, which long cannot hold. */
+        if (!(d > (double)LONG_MIN - 1.0 || d == (double)LONG_MIN) || !(d < -(double)LONG_MIN))
+            ath_runtime_error("INT: FLOAT is out of INTEGER range", 0, 0);
+        return ath_int((long)d);
+    }
     ath_runtime_error_fmt("INT: expected numeric, got %s", ath_typeof_str(argv[0]));
     return ath_void();
 }
@@ -345,7 +365,7 @@ AthValue ath_builtin_CHAR(AthScope *s, int argc, AthValue *argv) {
     int cp, len = 0;
     (void)s; REQUIRE_ARGC(1, "CHAR");
     REQUIRE_INT(argv[0], "CHAR", "codepoint");
-    cp = (int)argv[0].as.integer;
+    cp = ath_clamp_int(argv[0].as.integer);
     /* Encode as UTF-8 */
     if (cp < 0x80) {
         buf[len++] = (char)cp;
@@ -374,16 +394,22 @@ AthValue ath_builtin_CODE(AthScope *s, int argc, AthValue *argv) {
     if (argv[0].as.string->length == 0)
         ath_runtime_error("CODE: string must not be empty", 0, 0);
     p = (const unsigned char *)argv[0].as.string->data;
-    /* Decode first UTF-8 codepoint */
-    if (*p < 0x80) {
-        cp = *p;
-    } else if (*p < 0xE0) {
-        cp = ((*p & 0x1F) << 6) | (p[1] & 0x3F);
-    } else if (*p < 0xF0) {
-        cp = ((*p & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
-    } else {
-        cp = ((*p & 0x07) << 18) | ((p[1] & 0x3F) << 12) |
-             ((p[2] & 0x3F) << 6) | (p[3] & 0x3F);
+    /* Decode first UTF-8 codepoint. Strings are byte arrays, so a sequence that is truncated by the string's length (e.g. SUBSTRING cut through a multibyte char) or has a non-continuation byte where one is required yields the raw lead byte instead of reading past the end. */
+    {
+        int need, i, len = argv[0].as.string->length;
+        if (*p < 0x80)      { cp = *p;          need = 0; }
+        else if (*p < 0xC0) { cp = *p;          need = -1; } /* stray continuation byte */
+        else if (*p < 0xE0) { cp = *p & 0x1F;   need = 1; }
+        else if (*p < 0xF0) { cp = *p & 0x0F;   need = 2; }
+        else if (*p < 0xF8) { cp = *p & 0x07;   need = 3; }
+        else                { cp = *p;          need = -1; }
+        if (need > 0) {
+            if (len < need + 1) return ath_int((long)*p);
+            for (i = 1; i <= need; i++) {
+                if ((p[i] & 0xC0) != 0x80) return ath_int((long)*p);
+                cp = (cp << 6) | (p[i] & 0x3F);
+            }
+        }
     }
     return ath_int((long)cp);
 }
@@ -456,8 +482,8 @@ AthValue ath_builtin_SLICE(AthScope *s, int argc, AthValue *argv) {
     REQUIRE_INT(argv[1], "SLICE", "start");
     REQUIRE_INT(argv[2], "SLICE", "end");
     src = argv[0].as.array;
-    start = (int)argv[1].as.integer;
-    end   = (int)argv[2].as.integer;
+    start = ath_clamp_int(argv[1].as.integer);
+    end   = ath_clamp_int(argv[2].as.integer);
     if (start < 0) start = 0;
     if (end > src->length) end = src->length;
     if (start > end) start = end;
@@ -610,7 +636,9 @@ AthValue ath_builtin_SPLIT(AthScope *s, int argc, AthValue *argv) {
 AthValue ath_builtin_JOIN(AthScope *s, int argc, AthValue *argv) {
     AthArray *arr;
     const char *delim;
-    int delim_len, total = 0, i;
+    int delim_len, i;
+    size_t total = 0;   /* size_t: element lengths can sum past INT_MAX */
+    char **parts;       /* stringified non-STRING elements (NULL for STRINGs) */
     char *buf, *p;
     AthValue result;
     (void)s; REQUIRE_ARGC(2, "JOIN");
@@ -619,25 +647,43 @@ AthValue ath_builtin_JOIN(AthScope *s, int argc, AthValue *argv) {
     arr       = argv[0].as.array;
     delim     = argv[1].as.string->data;
     delim_len = argv[1].as.string->length;
-    /* compute total size */
+    if (arr->length == 0) return ath_str_cstr("");
+    parts = (char **)calloc((size_t)arr->length, sizeof(char *));
+    if (!parts) ath_fatal("out of memory");
+    /* STRING elements are copied by length, so embedded NULs survive; anything
+       else goes through its printed form. Stringifying cannot raise. */
     for (i = 0; i < arr->length; i++) {
-        char *s2 = ath_stringify(arr->data[i]);
-        total += (int)strlen(s2);
-        free(s2);
-        if (i < arr->length-1) total += delim_len;
+        if (arr->data[i].type == ATH_STRING) {
+            total += (size_t)arr->data[i].as.string->length;
+        } else {
+            parts[i] = ath_stringify(arr->data[i]);
+            total += strlen(parts[i]);
+        }
+        if (i < arr->length - 1) total += (size_t)delim_len;
+    }
+    if (total > (size_t)INT_MAX) {
+        for (i = 0; i < arr->length; i++) free(parts[i]);
+        free(parts);
+        ath_runtime_error("JOIN: result string too large", 0, 0);
     }
     buf = (char*)malloc(total + 1);
+    if (!buf) ath_fatal("out of memory");
     p = buf;
     for (i = 0; i < arr->length; i++) {
-        char *s2 = ath_stringify(arr->data[i]);
-        int l = (int)strlen(s2);
-        memcpy(p, s2, l); p += l;
-        free(s2);
-        if (i < arr->length-1) { memcpy(p, delim, delim_len); p += delim_len; }
+        if (parts[i]) {
+            size_t l = strlen(parts[i]);
+            memcpy(p, parts[i], l); p += l;
+            free(parts[i]);
+        } else {
+            memcpy(p, arr->data[i].as.string->data, (size_t)arr->data[i].as.string->length);
+            p += arr->data[i].as.string->length;
+        }
+        if (i < arr->length-1) { memcpy(p, delim, (size_t)delim_len); p += delim_len; }
     }
+    free(parts);
     *p = '\0';
     {
-        AthString *str = ath_string_new(buf, total);
+        AthString *str = ath_string_new(buf, (int)total);
         result = ath_str_val(str);
         free(buf);
         return result;
@@ -651,8 +697,8 @@ AthValue ath_builtin_SUBSTRING(AthScope *s, int argc, AthValue *argv) {
     REQUIRE_INT(argv[1], "SUBSTRING", "start");
     REQUIRE_INT(argv[2], "SUBSTRING", "end");
     len   = argv[0].as.string->length;
-    start = (int)argv[1].as.integer;
-    end   = (int)argv[2].as.integer;
+    start = ath_clamp_int(argv[1].as.integer);
+    end   = ath_clamp_int(argv[2].as.integer);
     if (start < 0) start = 0;
     if (end > len) end = len;
     if (start > end) start = end;
@@ -708,11 +754,25 @@ AthValue ath_builtin_TRIM(AthScope *s, int argc, AthValue *argv) {
     }
 }
 
+/* grow a REPLACE result buffer to hold at least `need` bytes; size_t so doubling cannot overflow int */
+static char *replace_reserve(char *buf, size_t *cap, size_t need) {
+    char *nb;
+    if (need <= *cap) return buf;
+    if (need > (size_t)INT_MAX + 1) {   /* the result would not fit an AthString */
+        free(buf);
+        ath_runtime_error("REPLACE: result string too large", 0, 0);
+    }
+    while (*cap < need) *cap *= 2;
+    nb = (char *)realloc(buf, *cap);
+    if (!nb) { free(buf); ath_fatal("out of memory"); }
+    return nb;
+}
+
 AthValue ath_builtin_REPLACE(AthScope *s, int argc, AthValue *argv) {
     const char *src, *old, *new_;
     int src_len, old_len, new_len;
     char *result;
-    int result_len = 0, result_cap;
+    size_t result_len = 0, result_cap;
     int i;
     (void)s; REQUIRE_ARGC(3, "REPLACE");
     REQUIRE_STRING(argv[0], "REPLACE", "string");
@@ -728,36 +788,28 @@ AthValue ath_builtin_REPLACE(AthScope *s, int argc, AthValue *argv) {
         ath_value_incref(argv[0]);
         return argv[0];
     }
-    result_cap = src_len + 64;
+    result_cap = (size_t)src_len + 64;
     result = (char*)malloc(result_cap);
+    if (!result) ath_fatal("out of memory");
     for (i = 0; i <= src_len - old_len; ) {
         if (memcmp(src + i, old, old_len) == 0) {
-            while (result_len + new_len + 1 > result_cap) {
-                result_cap *= 2;
-                result = (char*)realloc(result, result_cap);
-            }
+            result = replace_reserve(result, &result_cap, result_len + (size_t)new_len + 1);
             memcpy(result + result_len, new_, new_len);
             result_len += new_len;
             i += old_len;
         } else {
-            if (result_len + 2 > result_cap) {
-                result_cap *= 2;
-                result = (char*)realloc(result, result_cap);
-            }
+            result = replace_reserve(result, &result_cap, result_len + 2);
             result[result_len++] = src[i++];
         }
     }
     /* append remaining */
     while (i < src_len) {
-        if (result_len + 2 > result_cap) {
-            result_cap *= 2;
-            result = (char*)realloc(result, result_cap);
-        }
+        result = replace_reserve(result, &result_cap, result_len + 2);
         result[result_len++] = src[i++];
     }
     result[result_len] = '\0';
     {
-        AthString *str = ath_string_new(result, result_len);
+        AthString *str = ath_string_new(result, (int)result_len);
         AthValue v = ath_str_val(str);
         free(result);
         return v;
@@ -772,15 +824,30 @@ AthValue ath_builtin_RANDOM(AthScope *s, int argc, AthValue *argv) {
 }
 
 AthValue ath_builtin_RANDOM_INT(AthScope *s, int argc, AthValue *argv) {
-    long min_v, max_v, range;
+    long min_v, max_v;
+    unsigned long span;
     (void)s; REQUIRE_ARGC(2, "RANDOM_INT");
     REQUIRE_INT(argv[0], "RANDOM_INT", "min");
     REQUIRE_INT(argv[1], "RANDOM_INT", "max");
     min_v = argv[0].as.integer;
     max_v = argv[1].as.integer;
     if (min_v > max_v) ath_runtime_error("RANDOM_INT: min > max", 0, 0);
-    range = max_v - min_v + 1;
-    return ath_int(min_v + (long)(rand() % (int)range));
+    /* The span is computed in unsigned arithmetic: max - min + 1 overflows a
+       long for wide ranges, and a span of 2^32 used to truncate to (int)0 and
+       divide by zero. A span of 0 here means the full 2^width range. rand()
+       gives at least 15 bits, so enough draws are folded together to cover
+       the span before reducing it. */
+    span = (unsigned long)max_v - (unsigned long)min_v + 1UL;
+    {
+        unsigned long r = 0, reach = 0, u;
+        do {
+            r = (r << 15) ^ (unsigned long)rand();
+            reach = (reach << 15) | 0x7FFFUL;
+        } while (span == 0 ? reach != ~0UL : reach < span - 1);
+        if (span != 0) r %= span;
+        u = (unsigned long)min_v + r;   /* lies in [min, max]: convert back without overflow */
+        return ath_int(u <= (unsigned long)LONG_MAX ? (long)u : -(long)(~u) - 1);
+    }
 }
 
 AthValue ath_builtin_TIME(AthScope *s, int argc, AthValue *argv) {
@@ -797,6 +864,7 @@ AthValue ath_builtin_BUFFER(AthScope *s, int argc, AthValue *argv) {
     REQUIRE_INT(argv[0], "BUFFER", "size");
     n = argv[0].as.integer;
     if (n < 0) ath_runtime_error("BUFFER: size must be non-negative", 0, 0);
+    if (n > (long)INT_MAX) ath_runtime_error_fmt("BUFFER: size %ld too large", n);
     b = ath_buffer_new((int)n);
     return ath_buffer_val(b);
 }
@@ -904,8 +972,9 @@ AthValue ath_builtin_RECKON(AthScope *s, int argc, AthValue *argv) {
         off = 0;
         len = b ? b->length : 0;
     }
-    if (off < 0 || len < 0 || (b && off + len > b->length) || (!b && (off || len)))
-        ath_runtime_error_fmt("RECKON: range [%ld, %ld) out of buffer bounds", off, off + len);
+    /* compared without computing off + len first: that sum can overflow */
+    if (off < 0 || len < 0 || off > (b ? b->length : 0) || len > (b ? b->length : 0) - off)
+        ath_runtime_error_fmt("RECKON: range at offset %ld, length %ld out of buffer bounds", off, len);
     end = off + len;
     for (i = off; i + 1 < end; i += 2)
         sum += ((unsigned long)b->bytes[i] << 8) | (unsigned long)b->bytes[i + 1];

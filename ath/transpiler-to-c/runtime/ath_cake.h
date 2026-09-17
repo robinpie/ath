@@ -92,6 +92,9 @@ void ath_recipe_decref(AthRecipe *r);
    on failure. */
 AthValue ath_cake_load(const char *path);
 
+/* Same as ath_cake_load, but parses NUL-terminated source text already in memory. `label` stands in for the path in error messages. The caller keeps ownership of `src`. */
+AthValue ath_cake_load_source(const char *src, const char *label);
+
 /* Build a libffi struct ffi_type from a recipe layout, for by-value FFI. The
    returned ffi_type (and its elements array) is heap-allocated; free it with
    ath_cake_ffi_type_free. Returns NULL and raises a runtime error if the recipe

@@ -46,6 +46,11 @@ static int ck_stride(CkType *elem) {
     return ((elem->size + a - 1) / a) * a;
 }
 
+/* does the length-delimited segment equal the NUL-terminated name? */
+static int ck_seg_eq(const char *seg, int seglen, const char *name) {
+    return strncmp(seg, name, (size_t)seglen) == 0 && name[seglen] == '\0';
+}
+
 static CkPath ck_resolve_path(AthRecipe *top, const char *path) {
     CkPath out;
     AthRecipe *rec = top;
@@ -53,7 +58,8 @@ static CkPath ck_resolve_path(AthRecipe *top, const char *path) {
     int offset = 0;
     int imperial = top->imperial;
     const char *p = path;
-    char seg[128];
+    const char *seg;   /* current segment: [seg, seg+seglen), not NUL-terminated */
+    int seglen;
 
     out.valid = 0; out.reserved = 0; out.is_flavor = 0;
     out.offset = 0; out.leaf = NULL; out.leaf_recipe = NULL; out.imperial = 0;
@@ -61,10 +67,12 @@ static CkPath ck_resolve_path(AthRecipe *top, const char *path) {
     if (!path || !*path) return out;
 
     for (;;) {
-        int i = 0, a, found;
-        while (*p && *p != '.') { if (i < 127) seg[i++] = *p; p++; }
-        seg[i] = '\0';
-        if (i == 0) return out;
+        int a, found;
+        /* Segments are compared in place rather than copied into a fixed buffer: a truncating copy made long ingredient names unreachable, and could resolve a path to a different field sharing the truncated prefix. */
+        seg = p;
+        while (*p && *p != '.') p++;
+        seglen = (int)(p - seg);
+        if (seglen == 0) return out;
 
         /* A nested-recipe field transparently becomes its recipe when another
            segment follows. */
@@ -74,7 +82,7 @@ static CkPath ck_resolve_path(AthRecipe *top, const char *path) {
 
         if (type == NULL) {
             if (rec->kind == CK_KIND_UNION) {
-                if (strcmp(seg, "FLAVOR") == 0) {
+                if (ck_seg_eq(seg, seglen, "FLAVOR")) {
                     out.is_flavor = 1;
                     out.offset = offset;
                     out.valid = (*p == '\0');
@@ -82,7 +90,7 @@ static CkPath ck_resolve_path(AthRecipe *top, const char *path) {
                 }
                 found = 0;
                 for (a = 0; a < rec->n_arms; a++) {
-                    if (strcmp(rec->arms[a].name, seg) == 0) {
+                    if (ck_seg_eq(seg, seglen, rec->arms[a].name)) {
                         offset += rec->arms[a].payload_offset;
                         rec = rec->arms[a].recipe;
                         type = NULL;
@@ -95,7 +103,7 @@ static CkPath ck_resolve_path(AthRecipe *top, const char *path) {
             } else {
                 found = 0;
                 for (a = 0; a < rec->n_ingredients; a++) {
-                    if (strcmp(rec->ingredients[a].name, seg) == 0) {
+                    if (ck_seg_eq(seg, seglen, rec->ingredients[a].name)) {
                         if (rec->ingredients[a].is_reserved) {
                             out.reserved = 1;
                             return out;
@@ -110,8 +118,13 @@ static CkPath ck_resolve_path(AthRecipe *top, const char *path) {
                 if (!found) return out;
             }
         } else if (type->tag == CK_T_ARRAY) {
-            char *end;
-            long k = strtol(seg, &end, 10);
+            char idx[24], *end;
+            long k;
+            /* an index is plain decimal digits; anything longer than fits here is out of range anyway */
+            if (seglen >= (int)sizeof idx) return out;
+            memcpy(idx, seg, (size_t)seglen);
+            idx[seglen] = '\0';
+            k = strtol(idx, &end, 10);
             if (*end != '\0') return out;
             if (k < 0 || k >= type->array_count) return out;
             offset += (int)k * ck_stride(type->elem);
@@ -362,8 +375,9 @@ AthValue ath_builtin_SCOOP(AthScope *s, int argc, AthValue *argv) {
         return ath_int((long)b->bytes[rp.offset]);
     }
     if (rp.leaf_recipe) {
-        AthBuffer *out = ath_buffer_new(rp.leaf_recipe->size);
-        ck_check_bounds(b, rp.offset, rp.leaf_recipe->size);
+        AthBuffer *out;
+        ck_check_bounds(b, rp.offset, rp.leaf_recipe->size);   /* before allocating: it may raise */
+        out = ath_buffer_new(rp.leaf_recipe->size);
         if (rp.leaf_recipe->size > 0)
             memcpy(out->bytes, b->bytes + rp.offset, (size_t)rp.leaf_recipe->size);
         return ath_buffer_val(out);

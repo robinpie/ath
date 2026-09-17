@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <limits.h>
 
 /* ===== Helpers ===== */
 
@@ -31,6 +32,17 @@ static AthSylladex *syl_alloc(AthSylladexKind kind) {
     s->refcount = 1;
     s->kind = kind;
     return s;
+}
+
+/* Largest slot count a sylladex may hold: the byte size of the slot array must
+   not overflow size_t (a real risk on 32-bit hosts, where sizeof(AthValue)*n
+   wraps for n near 2^28 and under-allocates). */
+#define SYL_MAX_SLOTS ((int)((((size_t)-1) / sizeof(AthValue)) < (size_t)INT_MAX \
+                             ? (((size_t)-1) / sizeof(AthValue)) : (size_t)INT_MAX))
+
+static void syl_check_slots(long n, const char *kind) {
+    if (n > (long)SYL_MAX_SLOTS)
+        ath_runtime_error_fmt("%s size too large", kind);
 }
 
 static AthValue *alloc_void_slots(int n) {
@@ -55,6 +67,7 @@ static void decref_slots(AthValue *slots, int n) {
 AthSylladex *ath_syl_stack_new(int n) {
     AthSylladex *s;
     if (n < 0) ath_runtime_error("STACK size must be non-negative", 0, 0);
+    syl_check_slots(n, "STACK");
     s = syl_alloc(ATH_SYL_STACK);
     s->as.stack.size  = n;
     s->as.stack.slots = alloc_void_slots(n);
@@ -64,6 +77,7 @@ AthSylladex *ath_syl_stack_new(int n) {
 AthSylladex *ath_syl_queue_new(int n) {
     AthSylladex *s;
     if (n < 0) ath_runtime_error("QUEUE size must be non-negative", 0, 0);
+    syl_check_slots(n, "QUEUE");
     s = syl_alloc(ATH_SYL_QUEUE);
     s->as.queue.size  = n;
     s->as.queue.slots = alloc_void_slots(n);
@@ -82,6 +96,7 @@ AthSylladex *ath_syl_hashmap_new(int n, struct AthRite *hash_rite_or_NULL) {
     AthSylladex *s;
     int i;
     if (n <= 0) ath_runtime_error("HASHMAP size must be positive", 0, 0);
+    syl_check_slots(n, "HASHMAP");
     s = syl_alloc(ATH_SYL_HASHMAP);
     s->as.hashmap.size = n;
     s->as.hashmap.keys = (struct AthString **)calloc(n, sizeof(struct AthString *));
@@ -96,6 +111,7 @@ AthSylladex *ath_syl_hashmap_new(int n, struct AthRite *hash_rite_or_NULL) {
 AthSylladex *ath_syl_ouija_new(int n) {
     AthSylladex *s;
     if (n <= 0) ath_runtime_error("OUIJA size must be positive", 0, 0);
+    syl_check_slots(n, "OUIJA");
     s = syl_alloc(ATH_SYL_OUIJA);
     s->as.ouija.size  = n;
     s->as.ouija.slots = alloc_void_slots(n);
@@ -105,6 +121,7 @@ AthSylladex *ath_syl_ouija_new(int n) {
 AthSylladex *ath_syl_bottle_new(int n) {
     AthSylladex *s;
     if (n <= 0) ath_runtime_error("BOTTLE size must be positive", 0, 0);
+    syl_check_slots(n, "BOTTLE");
     s = syl_alloc(ATH_SYL_BOTTLE);
     s->as.bottle.size  = n;
     s->as.bottle.slots = alloc_void_slots(n);
@@ -119,6 +136,9 @@ AthSylladex *ath_syl_techhop_new(int g, int s_dim,
     int total, i;
     if (g <= 0 || s_dim <= 0)
         ath_runtime_error("TECHHOP dimensions must be positive", 0, 0);
+    /* grooves * shades is checked before it is computed: the product overflowed int */
+    if (g > SYL_MAX_SLOTS / s_dim)
+        ath_runtime_error("TECHHOP size too large", 0, 0);
     if (!gp || !sp)
         ath_runtime_error("TECHHOP requires two predicate rites", 0, 0);
     s = syl_alloc(ATH_SYL_TECHHOP);
@@ -138,6 +158,7 @@ AthSylladex *ath_syl_techhop_new(int g, int s_dim,
 AthSylladex *ath_syl_juju_new(int n) {
     AthSylladex *s;
     if (n <= 0) ath_runtime_error("JUJU size must be positive", 0, 0);
+    syl_check_slots(n, "JUJU");
     s = syl_alloc(ATH_SYL_JUJU);
     s->as.juju.size     = n;
     s->as.juju.slots    = alloc_void_slots(n);
@@ -458,8 +479,9 @@ int ath_syl_is_truthy(AthSylladex *s) {
 /* Render a value, but quote strings to match spec output. */
 static char *stringify_quoted(AthValue v) {
     if (v.type == ATH_STRING) {
-        int len = v.as.string->length;
+        size_t len = (size_t)v.as.string->length;
         char *buf = (char *)malloc(len + 3);
+        if (!buf) ath_fatal("out of memory");
         buf[0] = '"';
         memcpy(buf + 1, v.as.string->data, len);
         buf[len + 1] = '"';
@@ -469,12 +491,14 @@ static char *stringify_quoted(AthValue v) {
     return ath_stringify(v);
 }
 
-/* Append src to *out at offset *off, growing *cap as needed. */
-static void str_append(char **out, int *off, int *cap, const char *src) {
-    int n = (int)strlen(src);
-    while (*off + n + 1 > *cap) {
-        *cap = (*cap) * 2;
-        if (*cap < *off + n + 1) *cap = *off + n + 16;
+/* Append src to *out at offset *off, growing *cap as needed. Sizes are size_t:
+   with int, a result past 2 GB wrapped *off + n + 1 negative, skipped the grow
+   and wrote past the buffer. */
+static void str_append(char **out, size_t *off, size_t *cap, const char *src) {
+    size_t n = strlen(src);
+    if (n > ((size_t)-1) / 2 - *off) ath_fatal("out of memory");
+    if (*off + n + 1 > *cap) {
+        while (*off + n + 1 > *cap) *cap *= 2;
         *out = (char *)realloc(*out, *cap);
         if (!*out) ath_fatal("out of memory");
     }
@@ -485,7 +509,8 @@ static void str_append(char **out, int *off, int *cap, const char *src) {
 
 static char *stringify_slots_quoted(const char *prefix,
                                     AthValue *slots, int n) {
-    int cap = 64, off = 0, i;
+    size_t cap = 64, off = 0;
+    int i;
     char *out = (char *)malloc(cap);
     out[0] = '\0';
     str_append(&out, &off, &cap, prefix);
@@ -502,7 +527,8 @@ static char *stringify_slots_quoted(const char *prefix,
 }
 
 static char *stringify_tree(AthSylladex *s) {
-    int cap = 64, off = 0, i;
+    size_t cap = 64, off = 0;
+    int i;
     char *out = (char *)malloc(cap);
     out[0] = '\0';
     if (!s->as.tree.root) {
@@ -535,7 +561,8 @@ static char *stringify_tree(AthSylladex *s) {
 }
 
 static char *stringify_hashmap(AthSylladex *s) {
-    int cap = 64, off = 0, i, n = s->as.hashmap.size;
+    size_t cap = 64, off = 0;
+    int i, n = s->as.hashmap.size;
     char *out = (char *)malloc(cap);
     out[0] = '\0';
     str_append(&out, &off, &cap, "HASHMAP[");
@@ -565,7 +592,8 @@ static char *stringify_hashmap(AthSylladex *s) {
 }
 
 static char *stringify_bottle(AthSylladex *s) {
-    int cap = 64, off = 0, i, n = s->as.bottle.size;
+    size_t cap = 64, off = 0;
+    int i, n = s->as.bottle.size;
     char *out = (char *)malloc(cap);
     out[0] = '\0';
     str_append(&out, &off, &cap, "BOTTLE[");
@@ -586,7 +614,8 @@ static char *stringify_bottle(AthSylladex *s) {
 }
 
 static char *stringify_techhop(AthSylladex *s) {
-    int cap = 64, off = 0, g, sh;
+    size_t cap = 64, off = 0;
+    int g, sh;
     char *out = (char *)malloc(cap);
     out[0] = '\0';
     str_append(&out, &off, &cap, "TECHHOP[");
@@ -607,7 +636,8 @@ static char *stringify_techhop(AthSylladex *s) {
 }
 
 static char *stringify_juju(AthSylladex *s) {
-    int cap = 64, off = 0, i, n = s->as.juju.size;
+    size_t cap = 64, off = 0;
+    int i, n = s->as.juju.size;
     char *out = (char *)malloc(cap);
     out[0] = '\0';
     str_append(&out, &off, &cap, "JUJU[");
@@ -778,8 +808,12 @@ static int hashmap_index_for_key(AthSylladex *s, AthValue key) {
         h = default_hash_str(kstr, klen);
         free(kstr);
     }
-    if (h < 0) h = -h;
-    idx = (int)(h % s->as.hashmap.size);
+    /* abs(h) % size, taken in unsigned arithmetic: -LONG_MIN overflows, and a
+       still-negative h gave a negative slot index (heap out-of-bounds write) */
+    {
+        unsigned long mag = h < 0 ? 0UL - (unsigned long)h : (unsigned long)h;
+        idx = (int)(mag % (unsigned long)s->as.hashmap.size);
+    }
     return idx;
 }
 
@@ -820,7 +854,7 @@ static int int_arg(AthValue v, const char *what) {
     if (v.type != ATH_INTEGER)
         ath_runtime_error_fmt("%s must be INTEGER, got %s",
                               what, ath_typeof_str(v));
-    return (int)v.as.integer;
+    return ath_clamp_int(v.as.integer);
 }
 
 static void cap_stack(AthSylladex *s, AthValue value) {

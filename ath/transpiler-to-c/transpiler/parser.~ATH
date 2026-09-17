@@ -853,7 +853,7 @@ RITE parsePrimary(toks, pos) {
     BIRTH l WITH toks[pos].l;
     BIRTH v WITH toks[pos].v;
     SHOULD ty == "INT"  { BEQUEATH {node:{t:"Lit",vt:"INT", v:v,l:l}, pos:pos+1}; }
-    SHOULD ty == "FLT"  { BEQUEATH {node:{t:"Lit",vt:"FLT", v:v,l:l}, pos:pos+1}; }
+    SHOULD ty == "FLT"  { BEQUEATH {node:{t:"Lit",vt:"FLT", v:v, src:toks[pos].src, l:l}, pos:pos+1}; }
     SHOULD ty == "STR"  { BEQUEATH {node:{t:"Lit",vt:"STR", v:v,l:l}, pos:pos+1}; }
     SHOULD ty == "BOOL" { BEQUEATH {node:{t:"Lit",vt:"BOOL",v:v,l:l}, pos:pos+1}; }
     SHOULD ty == "VOID" { BEQUEATH {node:{t:"Lit",vt:"VOID",v:VOID,l:l}, pos:pos+1}; }

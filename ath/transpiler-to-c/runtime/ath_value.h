@@ -225,4 +225,15 @@ int      ath_is_truthy(AthValue v);
 char    *ath_stringify(AthValue v);   /* malloc'd; caller frees */
 const char *ath_typeof_str(AthValue v);
 
+/* Narrow an INTEGER to int, saturating at INT_MIN/INT_MAX. Use it for indices,
+   sizes and counts: a plain (int) cast of a 64-bit long wraps, so arr[4294967296]
+   would silently address arr[0]; saturating keeps such values out of range. */
+int ath_clamp_int(long v);
+
+/* Narrow an INTEGER size/count argument to int. Values above INT_MAX raise a
+   catchable "<what> too large" error (clamping would turn a wrapped size into a
+   multi-gigabyte allocation); negative values saturate and are left for the
+   caller's own non-negative check. */
+int ath_size_arg(long v, const char *what);
+
 #endif /* ATH_VALUE_H */
